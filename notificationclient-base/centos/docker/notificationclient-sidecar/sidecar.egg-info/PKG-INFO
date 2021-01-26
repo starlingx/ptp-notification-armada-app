@@ -1,0 +1,11 @@
+Metadata-Version: 1.0
+Name: sidecar
+Version: 0.1
+Summary: sidecar offers a container image for vdu to
+ interact with notification service to get updates of resource status
+Home-page: UNKNOWN
+Author: Bin Yang
+Author-email: bin.yang@windriver.com
+License: Apache License 2.0
+Description: UNKNOWN
+Platform: UNKNOWN
