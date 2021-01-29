@@ -1,0 +1,40 @@
+#
+# Copyright (c) 2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registration
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      imagePullSecrets:
+      - name: {{ .Values.registration.imagePullSecrets }}
+{{- if .Values.registration.affinity }}
+      affinity:
+{{ toYaml .Values.registration.affinity | indent 8 }}
+{{- end }}
+      containers:
+      - name: rabbitmq
+        image: "{{ .Values.registration.image.repository }}:{{ .Values.registration.image.tag }}"
+        env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: "admin"
+            - name: RABBITMQ_DEFAULT_PASS
+              value: "admin"
+            - name: RABBITMQ_DEFAULT_PORT
+              value: "5672"
+---

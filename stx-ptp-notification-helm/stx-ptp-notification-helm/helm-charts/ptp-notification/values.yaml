@@ -1,0 +1,77 @@
+#
+# Copyright (c) 2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Default values for notification services.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# global vars for parent and subcharts.
+# registration.endpoint.host: registration.{namespace}.svc.{cluster-domain}
+
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+resources:
+  cpu: 1
+  memory: 2Gi
+
+global:
+  namespace: notification
+
+registration:
+  imagePullSecrets: default-registry-key
+  image:
+    repository: rabbitmq
+    tag: 3-management
+    pullPolicy: IfNotPresent
+  endpoint:
+    host: "registration.notification.svc.cluster.local"
+    port: 5672
+    user: admin
+    pass: admin
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: ptp-registration
+            operator: In
+            values:
+            - "true"
+
+notification:
+  endpoint:
+    port: 5672
+    user: admin
+    pass: admin
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: ptp-notification
+            operator: In
+            values:
+            - "true"
+
+location:
+  image:
+    repository: locationservice
+    tag: 1.0.1
+    pullPolicy: IfNotPresent
+
+ptptracking:
+  imagePullSecrets: admin-registry-secret
+  image:
+    repository: ptptrackingfunction
+    tag: 1.0.1
+    pullPolicy: IfNotPresent
+  device:
+    simulated: false
+    holdover_seconds: 30
+    poll_freq_seconds: 2
