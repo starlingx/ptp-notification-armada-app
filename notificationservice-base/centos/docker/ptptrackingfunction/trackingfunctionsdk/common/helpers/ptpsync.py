@@ -1,5 +1,157 @@
 #! /usr/bin/python3
+#
+# This script provides the PTP synchronization status
+# for PTP NIC configured as subordinate (slave mode)
+# It relies on Linux ptp4l (PMC) module in order to work
+# Sync status provided as: 'Locked', 'Holdover', 'Freerun'
+#
+#
+import errno, os
+import os.path
+import sys
+import subprocess
+import datetime
+import constants
+import logging
 
-'''ptp_status API stub'''
+LOG = logging.getLogger(__name__)
+
+# dictionary includes PMC commands used and keywords of intrest
+ptp_oper_dict = {
+    #[cmd, anchor keywords,...]
+    1: ["'GET PORT_DATA_SET'", constants.PORT_STATE],
+    2: ["'GET TIME_STATUS_NP'", constants.GM_PRESENT, constants.MASTER_OFFSET],
+    3: ["'GET PARENT_DATA_SET'", constants.GM_CLOCK_CLASS],
+    4: ["'GET TIME_PROPERTIES_DATA_SET'", constants.TIME_TRACEABLE]
+}
+
+# run subprocess and returns out, err, errcode
+def run_shell2(dir, ctx, args):
+    cwd = os.getcwd()
+    os.chdir(dir)
+
+    process = subprocess.Popen(args, shell=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = process.communicate()
+    errcode = process.returncode
+
+    os.chdir(cwd)
+
+    return out, err, errcode
+
+
+
+def check_critical_resources():
+    pmc = False
+    ptp4l = False
+    phc2sys = False
+    ptp4lconf = False
+
+    if os.path.isfile('/usr/sbin/pmc'):
+        pmc = True
+    if os.path.isfile('/var/run/ptp4l.pid'):
+        ptp4l = True
+    if os.path.isfile('/var/run/phc2sys.pid'):
+        phc2sys = True
+    if os.path.isfile('/ptp/ptp4l.conf'):
+        ptp4lconf = True
+    return pmc, ptp4l, phc2sys, ptp4lconf
+
+def check_results(result):
+    # sync state is in 'Locked' state and will be overwritten if
+    # it is not the case
+    sync_state = constants.LOCKED_PHC_STATE
+    # determine the current sync state
+    if result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT:
+        sync_state = constants.FREERUN_PHC_STATE
+    if result[constants.PORT_STATE].lower() != constants.SLAVE_MODE:
+        sync_state = constants.FREERUN_PHC_STATE
+    if result[constants.TIME_TRACEABLE] != constants.TIME_IS_TRACEABLE1 and result[constants.TIME_TRACEABLE].lower != constants.TIME_IS_TRACEABLE2:
+        sync_state = constants.FREERUN_PHC_STATE
+    if result[constants.GM_CLOCK_CLASS] not in [constants.CLOCK_CLASS_VALUE1, constants.CLOCK_CLASS_VALUE2, constants.CLOCK_CLASS_VALUE3]:
+        sync_state = constants.FREERUN_PHC_STATE
+    return sync_state
+
+def ptpsync():
+    result = {}
+
+    ptp_dict_to_use = ptp_oper_dict
+    len_dic = len(ptp_dict_to_use)
+
+    for key in range(1,len_dic+1):
+        cmd = ptp_dict_to_use[key][0]
+        cmd = "pmc -b 0 -u -f /ptp/ptp4l.conf " + cmd
+
+        search_word = ptp_dict_to_use[key][1:]
+
+        out, err, errcode = run_shell2('.', None, cmd)
+        if errcode != 0:
+            LOG.warning('pmc command returned unknown result')
+            sys.exit(0)
+        out = str(out)
+        try:
+            out = out.split("\\n\\t\\t")
+        except:
+            LOG.warning('cannot split "out" into a list')
+            sys.exit(0)
+        for state in out:
+            try:
+                state = state.split()
+            except:
+                LOG.warning('cannot split "state" into a list')
+                sys.exit(0)
+            if len(state) <= 1:
+                LOG.warning('not received the expected list length')
+                sys.exit(0)
+            for item in search_word:
+                 if state[0] == item:
+                     result.update({state[0]:state[1]})
+
+    return result
+
 def ptp_status(holdover_time, freq, sync_state, event_time):
-        return new_event, sync_state, event_time
+    result = {}
+
+    # holdover_time - time phc can maintain clock
+    # freq - the frequently for monitoring the ptp status
+    # sync_state - the current ptp state
+    # event_time - the last time that ptp status was changed
+    ####################################
+    # event states:                    #
+    #   Locked —> Holdover —> Freerun  #
+    #     Holdover —> Locked           #
+    #     Freerun —> Locked            #
+    ####################################
+    current_time = datetime.datetime.now().timestamp()
+    time_in_holdover = current_time - event_time
+    previous_sync_state = sync_state
+    # max holdover time is calculated to be in a 'safety' zoon
+    max_holdover_time = (holdover_time - freq * 2)
+
+    pmc, ptp4l, phc2sys, ptp4lconf = check_critical_resources()
+    # run pmc command if preconditions met
+    if pmc and ptp4l and phc2sys and ptp4lconf:
+        result = ptpsync()
+        sync_state = check_results(result)
+    else:
+        sync_state = constants.FREERUN_PHC_STATE
+
+    # determine if transition into holdover mode (cannot be in holdover if system clock is not in sync)
+    if sync_state == constants.FREERUN_PHC_STATE and phc2sys:
+        if previous_sync_state in [constants.UNKNOWN_PHC_STATE, constants.FREERUN_PHC_STATE]:
+            sync_state = constants.FREERUN_PHC_STATE
+        elif previous_sync_state == constants.LOCKED_PHC_STATE:
+            sync_state = constants.HOLDOVER_PHC_STATE
+        elif previous_sync_state == constants.HOLDOVER_PHC_STATE and time_in_holdover < max_holdover_time:
+            sync_state = constants.HOLDOVER_PHC_STATE
+        else:
+            sync_state == constants.FREERUN_PHC_STATE
+
+    # determine if ptp sync state has changed since the last one
+    if sync_state != previous_sync_state:
+        new_event = "true"
+        event_time = datetime.datetime.now().timestamp()
+    else:
+        new_event = "false"
+
+    return new_event, sync_state, event_time
