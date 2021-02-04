@@ -1,0 +1,181 @@
+#
+# Copyright (c) 2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "notification.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    release: {{ .Release.Name }}
+    app: {{ include "notification.name" . }}
+    chart: {{ .Chart.Name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ include "notification.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      namespace: {{ .Values.global.namespace }}
+      labels:
+        app: {{ include "notification.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      imagePullSecrets:
+      - name: {{ .Values.ptptracking.imagePullSecrets}}
+      {{ if .Values.ptptracking.device.simulated }}
+      {{ else }}
+{{- if .Values.notification.affinity }}
+      affinity:
+{{ toYaml .Values.notification.affinity | indent 8 }}
+{{- end }}
+      {{ end }}
+      containers:
+      - name: {{ .Chart.Name }}-rabbitmq
+        image: rabbitmq:3-management
+        env:
+          - name: THIS_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: THIS_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: THIS_NAMESPACE
+            value: {{ .Values.global.namespace }}
+          - name: RABBITMQ_DEFAULT_USER
+            value: "admin"
+          - name: RABBITMQ_DEFAULT_PASS
+            value: "admin"
+          - name: RABBITMQ_DEFAULT_PORT
+            value: "5672"
+      - name: {{ .Chart.Name }}-location
+        image: "{{ .Values.location.image.repository }}:{{ .Values.location.image.tag }}"
+        imagePullPolicy: {{ .Values.location.image.pullPolicy }}
+        tty: true
+        stdin: true
+        env:
+          - name: THIS_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: THIS_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: THIS_NAMESPACE
+            value: {{ .Values.global.namespace }}
+          - name: REGISTRATION_HOST
+            value: "{{ .Values.registration.endpoint.host }}"
+          - name: REGISTRATION_USER
+            value: "{{ .Values.registration.endpoint.user }}"
+          - name: REGISTRATION_PASS
+            value: "{{ .Values.registration.endpoint.pass }}"
+          - name: REGISTRATION_PORT
+            value: "{{ .Values.registration.endpoint.port }}"
+          - name: NOTIFICATIONSERVICE_USER
+            value: "{{ .Values.notification.endpoint.user }}"
+          - name: NOTIFICATIONSERVICE_PASS
+            value: "{{ .Values.notification.endpoint.pass }}"
+          - name: NOTIFICATIONSERVICE_PORT
+            value: "{{ .Values.notification.endpoint.port }}"
+
+        command: ["/bin/bash", "/mnt/locationservice_start.sh"]
+        volumeMounts:
+          - name: scripts
+            mountPath: /mnt
+        resources:
+          limits:
+            cpu: {{ .Values.resources.cpu }}
+            memory: {{ .Values.resources.memory }}
+      - name: {{ .Chart.Name }}-ptptracking
+        image: "{{ .Values.ptptracking.image.repository }}:{{ .Values.ptptracking.image.tag }}"
+        imagePullPolicy: {{ .Values.ptptracking.image.pullPolicy }}
+        tty: true
+        stdin: true
+        env:
+          - name: THIS_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: THIS_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: THIS_NAMESPACE
+            value: {{ .Values.global.namespace }}
+          - name: PTP_DEVICE_SIMULATED
+            value: "{{ .Values.ptptracking.device.simulated }}"
+          - name: PTP_HOLDOVER_SECONDS
+            value: "{{ .Values.ptptracking.device.holdover_seconds }}"
+          - name: PTP_POLL_FREQ_SECONDS
+            value: "{{ .Values.ptptracking.device.poll_freq_seconds }}"
+          - name: NOTIFICATIONSERVICE_USER
+            value: "admin"
+          - name: NOTIFICATIONSERVICE_PASS
+            value: "admin"
+          - name: NOTIFICATIONSERVICE_PORT
+            value: "5672"
+          - name: REGISTRATION_USER
+            value: "admin"
+          - name: REGISTRATION_PASS
+            value: "admin"
+          - name: REGISTRATION_PORT
+            value: "5672"
+          - name: REGISTRATION_HOST
+            value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
+        command: ["/bin/bash", "/mnt/ptptracking_start.sh"]
+        securityContext:
+          privileged: true
+          capabilities:
+              add:
+              - CAP_SYS_ADMIN
+        volumeMounts:
+          - name: scripts
+            mountPath: /mnt
+      {{ if .Values.ptptracking.device.simulated }}
+      {{ else }}
+          - name: ptpdir
+            mountPath: /var/run/
+            readOnly: false
+          - name: varrun
+            mountPath: /var/run/ptp4l
+            readOnly: false
+          - name: pmc
+            mountPath: /usr/sbin/pmc
+            readOnly: false
+      {{ end }}
+          - name: conf
+            mountPath: /ptp/
+            readOnly: true
+        resources:
+          limits:
+            cpu: {{ .Values.resources.cpu }}
+            memory: {{ .Values.resources.memory }}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ .Chart.Name }}-scripts-configmap
+        - name: ptpdir
+          hostPath:
+            path: /var/run/
+            type: Directory
+      {{ if .Values.ptptracking.device.simulated }}
+      {{ else }}
+        - name: varrun
+          hostPath:
+            path: /var/run/ptp4l
+            type: Socket
+      {{ end }}
+        - name: pmc
+          hostPath:
+            path: /usr/sbin/pmc
+        - name: conf
+          hostPath:
+            path: /etc/
+            type: Directory

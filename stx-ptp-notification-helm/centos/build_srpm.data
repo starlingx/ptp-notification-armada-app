@@ -1,0 +1,11 @@
+SRC_DIR="stx-ptp-notification-helm"
+
+OPT_DEP_LIST="$STX_BASE/ptp-notification-armada-app/python-k8sapp-ptp-notification"
+
+COPY_LIST_TO_TAR="\
+    $STX_BASE/helm-charts/psp-rolebinding/psp-rolebinding/helm-charts \
+"
+# Keep the SRCREV in sync with python-k8sapp-ptp-notification so the app version is
+# the same as the plugin version
+TIS_BASE_SRCREV=c525a7fe479103bc316792c11b5289ebcca8a2a7
+TIS_PATCH_VER=GITREVCOUNT
