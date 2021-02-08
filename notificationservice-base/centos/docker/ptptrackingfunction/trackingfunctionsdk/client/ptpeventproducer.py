@@ -102,7 +102,7 @@ class PtpEventProducer(object):
                 break
             except Exception as ex:
                 LOG.warning("Failed to publish ptp status:{0}@Topic:{1} due to: {2}".format(
-                    ptpstatus, topic, str(ex)))
+                    ptpstatus, topic_all, str(ex)))
                 retry = retry - 1
                 isretrystopped = False if retry > 0 else True
 
