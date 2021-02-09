@@ -73,5 +73,5 @@ ptptracking:
     pullPolicy: IfNotPresent
   device:
     simulated: false
-    holdover_seconds: 30
+    holdover_seconds: 15
     poll_freq_seconds: 2
