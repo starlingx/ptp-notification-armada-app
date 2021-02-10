@@ -61,14 +61,14 @@ notification:
 
 location:
   image:
-    repository: locationservice-base
+    repository: starlingx/locationservice-base
     tag: stx.5.0-v1.0.1
     pullPolicy: IfNotPresent
 
 ptptracking:
   imagePullSecrets: admin-registry-secret
   image:
-    repository: notificationservice-base
+    repository: starlingx/notificationservice-base
     tag: stx.5.0-v1.0.1
     pullPolicy: IfNotPresent
   device:
