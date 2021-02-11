@@ -37,8 +37,9 @@ rabbituser = os.environ.get("REGISTRATION_USER",'admin')
 rabbitpasswd = os.environ.get("REGISTRATION_PASS",'admin')
 rabbitip = "registration.{0}.svc.cluster.local".format(THIS_NAMESPACE)
 rabbitport = os.environ.get("REGISTRATION_PORT",'5672')
-# 'rabbit://admin:admin@172.16.192.78:5672/'
-rabbitendpoint = "rabbit://{0}:{1}@{2}:{3}".format(
+# 'rabbit://admin:admin@[127.0.0.1]:5672/'
+# 'rabbit://admin:admin@[::1]:5672/'
+rabbitendpoint = "rabbit://{0}:{1}@[{2}]:{3}".format(
     rabbituser, rabbitpasswd, rabbitip, rabbitport)
 
 class LocationInfoEndpoint(object):
@@ -94,7 +95,7 @@ rabbituser = os.environ.get("REGISTRATION_USER",'admin')
 rabbitpasswd = os.environ.get("REGISTRATION_PASS",'admin')
 rabbitip = "registration.{0}.svc.cluster.local".format(THIS_NAMESPACE)
 rabbitport = os.environ.get("REGISTRATION_PORT",'5672')
-rabbitendpoint = "rabbit://{0}:{1}@{2}:{3}".format(
+rabbitendpoint = "rabbit://{0}:{1}@[{2}]:{3}".format(
     rabbituser, rabbitpasswd, rabbitip, rabbitport)
 
 oslo_messaging.set_transport_defaults('notification_exchange')
@@ -149,7 +150,7 @@ REGISTRATION_HOST = os.environ.get("REGISTRATION_HOST",'registration.notificatio
 THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME",'controller-0')
 THIS_POD_IP = os.environ.get("THIS_POD_IP",'127.0.0.1')
 
-REGISTRATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@{2}:{3}'.format(
+REGISTRATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@[{2}]:{3}'.format(
   REGISTRATION_USER, REGISTRATION_PASS, REGISTRATION_HOST, REGISTRATION_PORT)
 
 sqlalchemy_conf_json=json.dumps({})

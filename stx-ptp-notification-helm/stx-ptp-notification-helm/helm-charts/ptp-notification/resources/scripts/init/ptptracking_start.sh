@@ -42,14 +42,16 @@ REGISTRATION_PASS = os.environ.get("REGISTRATION_PASS", "admin")
 REGISTRATION_PORT = os.environ.get("REGISTRATION_PORT", "5672")
 REGISTRATION_HOST = os.environ.get("REGISTRATION_HOST",'registration.notification.svc.cluster.local')
 
-REGISTRATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@{2}:{3}'.format(
+# 'rabbit://admin:admin@[127.0.0.1]:5672/'
+# 'rabbit://admin:admin@[::1]:5672/'
+REGISTRATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@[{2}]:{3}'.format(
   REGISTRATION_USER, REGISTRATION_PASS, REGISTRATION_HOST, REGISTRATION_PORT)
 
 NOTIFICATION_BROKER_USER = os.environ.get("NOTIFICATIONSERVICE_USER", "admin")
 NOTIFICATION_BROKER_PASS = os.environ.get("NOTIFICATIONSERVICE_PASS", "admin")
 NOTIFICATION_BROKER_PORT = os.environ.get("NOTIFICATIONSERVICE_PORT", "5672")
 
-NOTIFICATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@{2}:{3}'.format(
+NOTIFICATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@[{2}]:{3}'.format(
   NOTIFICATION_BROKER_USER, NOTIFICATION_BROKER_PASS, THIS_POD_IP, NOTIFICATION_BROKER_PORT)
 
 PTP_DEVICE_SIMULATED = os.environ.get("PTP_DEVICE_SIMULATED", False)
@@ -80,6 +82,7 @@ sqlalchemy_conf = {
     'pool_recycle'  : 3600,
     'encoding'      : 'utf-8'
 }
+
 sqlalchemy_conf_json = json.dumps(sqlalchemy_conf)
 default_daemoncontrol = DaemonControl(sqlalchemy_conf_json, json.dumps(context))
 
