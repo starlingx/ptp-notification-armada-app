@@ -16,6 +16,7 @@ from notificationclientsdk.model.dto.subscription import SubscriptionInfo
 
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
 from notificationclientsdk.services.ptp import PtpService
+from notificationclientsdk.exception import client_exception
 
 from sidecar.repository.notification_control import notification_control
 from sidecar.repository.dbcontext_default import defaults
@@ -63,14 +64,22 @@ class SubscriptionsController(rest.RestController):
             LOG.info('created subscription: {0}'.format(subscription.to_dict()))
 
             return subscription
+        except client_exception.InvalidSubscription as ex:
+            abort(400)
+        except client_exception.InvalidEndpoint as ex:
+            abort(400)
+        except client_exception.NodeNotAvailable as ex:
+            abort(404)
+        except client_exception.ResourceNotAvailable as ex:
+            abort(404)
         except oslo_messaging.exceptions.MessagingTimeout as ex:
             abort(404)
         except HTTPException as ex:
             LOG.warning("Client side error:{0},{1}".format(type(ex), str(ex)))
-            raise ex
+            abort(400)
         except HTTPServerError as ex:
             LOG.error("Server side error:{0},{1}".format(type(ex), str(ex)))
-            raise ex
+            abort(500)
         except Exception as ex:
             LOG.error("Exception:{0}@{1}".format(type(ex),str(ex)))
             abort(500)

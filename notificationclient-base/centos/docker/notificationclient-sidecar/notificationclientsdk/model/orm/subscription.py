@@ -8,6 +8,7 @@ class Subscription(OrmBase):
     UriLocation = Column(String(512))
     ResourceType = Column(String(64))
     EndpointUri = Column(String(512))
+    InitialDeliveryTimestamp = Column(Float)
     Status = Column(Integer)
     CreateTime = Column(Float)
     LastUpdateTime = Column(Float)

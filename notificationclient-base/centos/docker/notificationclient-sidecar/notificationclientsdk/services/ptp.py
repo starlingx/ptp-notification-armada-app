@@ -11,6 +11,8 @@ from notificationclientsdk.client.notificationservice import NotificationService
 from notificationclientsdk.services.daemon import DaemonControl
 from notificationclientsdk.common.helpers import subscription_helper
 
+from notificationclientsdk.exception import client_exception
+
 LOG = logging.getLogger(__name__)
 
 from notificationclientsdk.common.helpers import log_helper
@@ -46,7 +48,7 @@ class PtpService(object):
         broker_node_name = subscription_dto.ResourceQualifier.NodeName
         default_node_name = NodeInfoHelper.default_node_name(broker_node_name)
         nodeinfos = NodeInfoHelper.enumerate_nodes(broker_node_name)
-        # 1, check node availability from DB
+        # check node availability from DB
         if not nodeinfos or not default_node_name in nodeinfos:
             # update nodeinfo
             try:
@@ -55,17 +57,9 @@ class PtpService(object):
             except oslo_messaging.exceptions.MessagingTimeout as ex:
                 LOG.warning("node {0} cannot be reached due to {1}".format(
                     default_node_name, str(ex)))
-                raise ex
+                raise client_exception.NodeNotAvailable(broker_node_name)
 
-        # 2, add to DB
-        entry = self.subscription_repo.add(subscription_orm)
-        # must commit the transaction to make it visible to daemon worker
-        self.subscription_repo.commit()
-
-        # 3, refresh daemon
-        self.daemon_control.refresh()
-
-        # 4, get initial resource status
+        # get initial resource status
         if default_node_name:
             ptpstatus = None
             try:
@@ -74,24 +68,28 @@ class PtpService(object):
             except oslo_messaging.exceptions.MessagingTimeout as ex:
                 LOG.warning("ptp status is not available @node {0} due to {1}".format(
                     default_node_name, str(ex)))
-                # remove the entry
-                self.subscription_repo.delete_one(SubscriptionId = entry.SubscriptionId)
-                self.subscription_repo.commit()
-                self.daemon_control.refresh()
-                raise ex
+                raise client_exception.ResourceNotAvailable(broker_node_name, subscription_dto.ResourceType)
 
-            # 5, initial delivery of ptp status
+            # construct subscription entry
+            subscription_orm.InitialDeliveryTimestamp = ptpstatus.get('EventTimestamp', None)
+            entry = self.subscription_repo.add(subscription_orm)
+
+            # Delivery the initial notification of ptp status
             subscription_dto2 = SubscriptionInfo(entry)
             try:
                 subscription_helper.notify(subscription_dto2, ptpstatus)
                 LOG.info("initial ptpstatus is delivered successfully")
             except Exception as ex:
-                LOG.warning("initial ptpstatus is not delivered:{0}".format(type(ex), str(ex)))
-                # remove the entry
-                self.subscription_repo.delete_one(SubscriptionId = entry.SubscriptionId)
+                LOG.warning("initial ptpstatus is not delivered:{0}".format(str(ex)))
+                raise client_exception.InvalidEndpoint(subscription_dto.EndpointUri)
+
+            try:
+                # commit the subscription entry
                 self.subscription_repo.commit()
                 self.daemon_control.refresh()
-                subscription_dto2 = None
+            except Exception as ex:
+                LOG.warning("subscription is not added successfully:{0}".format(str(ex)))
+                raise ex
         return subscription_dto2
 
     def remove_subscription(self, subscriptionid):

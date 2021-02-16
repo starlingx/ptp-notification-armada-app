@@ -118,6 +118,7 @@ class NotificationWorker:
 
     def __init_node_sync_channel(self):
         self.__node_sync_event = mp.Event()
+        self.__node_sync_q = Queue.Queue()
         # initial to be set
         self.__node_sync_event.set()
 
@@ -203,12 +204,14 @@ class NotificationWorker:
                 nodeinfo_repo.add(entry)
                 node_resource_updated = True
                 node_changed = True
+                self.__node_sync_q.put(node_name)
                 LOG.debug("Add NodeInfo: {0}".format(entry.NodeName))
             elif not entry.Timestamp or entry.Timestamp < location_info['Timestamp']:
                 # update the entry
                 if entry.ResourceTypes != location_info2.ResourceTypes:
                     node_resource_updated = True
                 nodeinfo_repo.update(entry.NodeName, **location_info2.to_orm())
+                self.__node_sync_q.put(node_name)
                 LOG.debug("Update NodeInfo: {0}".format(entry.NodeName))
             else:
                 # do nothing
@@ -234,6 +237,35 @@ class NotificationWorker:
                 self.signal_node_sync_event()
             self.signal_events()
         pass
+
+    def __get_lastest_delivery_timestamp(self, node_name, subscriptionid):
+        last_delivery_stat = self.notification_stat.get(node_name,{}).get(subscriptionid,{})
+        last_delivery_time = last_delivery_stat.get('EventTimestamp', None)
+        return last_delivery_time
+
+    def __update_delivery_timestamp(self, node_name, subscriptionid, this_delivery_time):
+        if not self.notification_stat.get(node_name, None):
+            self.notification_stat[node_name] = {
+                subscriptionid: {
+                    'EventTimestamp': this_delivery_time
+                    }
+                }
+            LOG.debug("delivery time @node: {0},subscription:{1} is added".format(
+                node_name, subscriptionid))
+        elif not self.notification_stat[node_name].get(subscriptionid, None):
+            self.notification_stat[node_name][subscriptionid] = {
+                'EventTimestamp': this_delivery_time
+                }
+            LOG.debug("delivery time @node: {0},subscription:{1} is added".format(
+                node_name, subscriptionid))
+        else:
+            last_delivery_stat = self.notification_stat.get(node_name,{}).get(subscriptionid,{})
+            last_delivery_time = last_delivery_stat.get('EventTimestamp', None)
+            if (last_delivery_time >= this_delivery_time):
+                return
+            last_delivery_stat['EventTimestamp'] = this_delivery_time
+            LOG.debug("delivery time @node: {0},subscription:{1} is updated".format(
+                node_name, subscriptionid))
 
     def handle_notification_delivery(self, notification_info):
         LOG.debug("start notification delivery")
@@ -267,40 +299,22 @@ class NotificationWorker:
 
                 subscription_dto2 = SubscriptionInfo(entry)
                 try:
-                    last_delivery_stat = self.notification_stat.get(node_name,{}).get(subscriptionid,{})
-                    last_delivery_time = last_delivery_stat.get('EventTimestamp', None)
+                    last_delivery_time = self.__get_lastest_delivery_timestamp(node_name, subscriptionid)
                     if last_delivery_time and last_delivery_time >= this_delivery_time:
                         # skip this entry since already delivered
                         LOG.debug("Ignore the notification for: {0}".format(entry.SubscriptionId))
-                        raise Exception("notification timestamp indicate it is not lastest")
+                        continue
 
                     subscription_helper.notify(subscription_dto2, notification_info)
                     LOG.debug("notification is delivered successfully to {0}".format(
                         entry.SubscriptionId))
 
-                    if not self.notification_stat.get(node_name, None):
-                        self.notification_stat[node_name] = {
-                            subscriptionid: {
-                                'EventTimestamp': this_delivery_time
-                                }
-                            }
-                        LOG.debug("delivery time @node: {0},subscription:{1} is added".format(
-                            node_name, subscriptionid))
-                    elif not self.notification_stat[node_name].get(subscriptionid, None):
-                        self.notification_stat[node_name][subscriptionid] = {
-                            'EventTimestamp': this_delivery_time
-                            }
-                        LOG.debug("delivery time @node: {0},subscription:{1} is added".format(
-                            node_name, subscriptionid))
-                    else:
-                        last_delivery_stat['EventTimestamp'] = this_delivery_time
-                        LOG.debug("delivery time @node: {0},subscription:{1} is updated".format(
-                            node_name, subscriptionid))
+                    self.__update_delivery_timestamp(node_name, subscriptionid, this_delivery_time)
 
                 except Exception as ex:
                     LOG.warning("notification is not delivered to {0}:{1}".format(
                         entry.SubscriptionId, str(ex)))
-                    # remove the entry
+                    # proceed to next entry
                     continue
                 finally:
                     pass
@@ -321,7 +335,9 @@ class NotificationWorker:
     def process_sync_node_event(self):
         LOG.debug("Start processing sync node event")
         need_to_sync_node_again = False
-        for broker_node_name, node_resources in self.node_resources_map.items():
+
+        while not self.__node_sync_q.empty():
+            broker_node_name = self.__node_sync_q.get(False)
             try:
                 result = self.syncup_node(broker_node_name)
                 if not result:
@@ -460,6 +476,11 @@ class NotificationWorker:
                         node_map = {}
                         self.node_resources_map[current_node_name] = node_map
                     node_map[resource_type] = self.node_resources_iteration
+                    # update the initial delivery timestamp as well
+
+                    self.__update_delivery_timestamp(
+                        NodeInfoHelper.default_node_name(broker_node_name),
+                        s.SubscriptionId, s.InitialDeliveryTimestamp)
 
             # delete all entry with Status == 0
             subscription_repo.delete(Status=0)
@@ -610,16 +631,27 @@ class NotificationWorker:
     def __refresh_watchers_from_map(self):
         try:
             LOG.debug("refresh with {0} nodes".format(len(self.node_resources_map)))
+            node_to_sync = []
             for broker_node_name, node_resources in self.node_resources_map.items():
                 LOG.debug("check to watch resources@{0} :{1}".format(broker_node_name, node_resources))
+                need_to_sync_node = False
                 for resource_type, iteration in node_resources.items():
                     # enable watchers
                     if iteration == self.node_resources_iteration:
                         self.__start_watch_resource(broker_node_name, resource_type)
+                        need_to_sync_node = True
                     else:
                         self.__stop_watch_resource(broker_node_name, resource_type)
+                if need_to_sync_node:
+                    node_to_sync.append(broker_node_name)
             self.__refresh_location_watcher()
             self.__cleanup_map()
+            if node_to_sync:
+                # trigger the node sync up event
+                for node_name in node_to_sync:
+                    self.__node_sync_q.put(node_name)
+                self.signal_node_sync_event()
+                self.signal_events()
         except Exception as ex:
             LOG.debug("exception: {0}".format(str(ex)))
             pass
