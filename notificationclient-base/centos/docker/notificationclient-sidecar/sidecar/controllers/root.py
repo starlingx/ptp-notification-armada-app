@@ -1,6 +1,6 @@
 #coding=utf-8
 
-from pecan import expose, redirect, rest, route, response
+from pecan import expose, rest, abort
 from webob.exc import status_map
 import os
 
@@ -18,12 +18,24 @@ class HealthController(rest.RestController):
     def get(self):
         return {'health': True}
 
+    @expose("json")
+    def _lookup(self, primary_key, *remainder):
+        abort(404)
+
 class V1Controller(rest.RestController):
 
     @wsexpose(wtypes.text)
     def get(self):
         return 'v1controller'
 
+    @expose("json")
+    def _lookup(self, primary_key, *remainder):
+        if primary_key:
+            if 'ptp' == primary_key.lower():
+                return PtpController(), remainder
+            elif 'subscriptions' == primary_key.lower():
+                return SubscriptionsController(), remainder
+        abort(404)
 
 class ocloudDaemonController(rest.RestController):
 
@@ -38,6 +50,12 @@ class ocloudDaemonController(rest.RestController):
     def get(self):
         return 'ocloudNotification'
 
+    @expose("json")
+    def _lookup(self, primary_key, *remainder):
+        if primary_key:
+            if 'v1' == primary_key.lower():
+                return V1Controller(), remainder
+        abort(404)
 
 class RootController(object):
 
@@ -54,12 +72,11 @@ class RootController(object):
         message = getattr(status_map.get(status), 'explanation', '')
         return dict(status=status, message=message)
 
-
-route(RootController, 'health', HealthController())
-
-route(RootController, 'ocloudNotifications', ocloudDaemonController())
-route(RootController, 'ocloudnotifications', ocloudDaemonController())
-
-route(V1Controller, 'PTP', PtpController())
-route(V1Controller, 'ptp', PtpController())
-route(V1Controller, 'subscriptions', SubscriptionsController())
+    @expose("json")
+    def _lookup(self, primary_key, *remainder):
+        if primary_key:
+            if 'ocloudnotifications' == primary_key.lower():
+                return ocloudDaemonController(), remainder
+            elif 'health' == primary_key.lower():
+                return HealthController(), remainder
+        abort(404)
