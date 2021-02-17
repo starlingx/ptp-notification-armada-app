@@ -18,7 +18,7 @@ LOG = logging.getLogger(__name__)
 
 # dictionary includes PMC commands used and keywords of intrest
 ptp_oper_dict = {
-    #[cmd, anchor keywords,...]
+    #[pmc cmd, ptp keywords,...]
     1: ["'GET PORT_DATA_SET'", constants.PORT_STATE],
     2: ["'GET TIME_STATUS_NP'", constants.GM_PRESENT, constants.MASTER_OFFSET],
     3: ["'GET PARENT_DATA_SET'", constants.GM_CLOCK_CLASS],
@@ -57,10 +57,15 @@ def check_critical_resources():
         ptp4lconf = True
     return pmc, ptp4l, phc2sys, ptp4lconf
 
-def check_results(result):
+def check_results(result, total_ptp_keywords):
     # sync state is in 'Locked' state and will be overwritten if
     # it is not the case
     sync_state = constants.LOCKED_PHC_STATE
+    # check for a healthy result
+    if len(result) != total_ptp_keywords:
+        sync_state = constants.FREERUN_PHC_STATE
+        LOG.warning('results are not complete, returning FREERUN')
+        return sync_state
     # determine the current sync state
     if result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT:
         sync_state = constants.FREERUN_PHC_STATE
@@ -74,6 +79,7 @@ def check_results(result):
 
 def ptpsync():
     result = {}
+    total_ptp_keywords = 0
 
     ptp_dict_to_use = ptp_oper_dict
     len_dic = len(ptp_dict_to_use)
@@ -82,7 +88,8 @@ def ptpsync():
         cmd = ptp_dict_to_use[key][0]
         cmd = "pmc -b 0 -u -f /ptp/ptp4l.conf " + cmd
 
-        search_word = ptp_dict_to_use[key][1:]
+        ptp_keyword = ptp_dict_to_use[key][1:]
+        total_ptp_keywords += len(ptp_keyword)
 
         out, err, errcode = run_shell2('.', None, cmd)
         if errcode != 0:
@@ -103,11 +110,11 @@ def ptpsync():
             if len(state) <= 1:
                 LOG.warning('not received the expected list length')
                 sys.exit(0)
-            for item in search_word:
+            for item in ptp_keyword:
                  if state[0] == item:
                      result.update({state[0]:state[1]})
 
-    return result
+    return result, total_ptp_keywords
 
 def ptp_status(holdover_time, freq, sync_state, event_time):
     result = {}
@@ -131,8 +138,8 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
     pmc, ptp4l, phc2sys, ptp4lconf = check_critical_resources()
     # run pmc command if preconditions met
     if pmc and ptp4l and phc2sys and ptp4lconf:
-        result = ptpsync()
-        sync_state = check_results(result)
+        result, total_ptp_keywords = ptpsync()
+        sync_state = check_results(result, total_ptp_keywords)
     else:
         sync_state = constants.FREERUN_PHC_STATE
 
