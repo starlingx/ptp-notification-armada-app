@@ -1,6 +1,6 @@
 #coding=utf-8
 from pecan import conf
-from pecan import expose, redirect, rest, route, response, abort
+from pecan import expose, rest, response, abort
 from webob.exc import HTTPException, HTTPNotFound, HTTPBadRequest, HTTPClientError, HTTPServerError
 
 import os
