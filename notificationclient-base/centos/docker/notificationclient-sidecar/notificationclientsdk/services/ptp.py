@@ -1,5 +1,6 @@
 import oslo_messaging
 import logging
+import json
 
 from notificationclientsdk.repository.node_repo import NodeRepo
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
@@ -30,6 +31,20 @@ class PtpService(object):
         return
 
     def query(self, broker_node_name):
+        default_node_name = NodeInfoHelper.default_node_name(broker_node_name)
+        nodeinfo_repo = NodeRepo(autocommit=False)
+        nodeinfo = nodeinfo_repo.get_one(Status=1, NodeName=default_node_name)
+        # check node availability from DB
+        if not nodeinfo:
+            raise client_exception.NodeNotAvailable(broker_node_name)
+        else:
+            supported_resource_types = json.loads(nodeinfo.ResourceTypes or '[]')
+            if ResourceType.TypePTP in supported_resource_types:
+                return self._query(default_node_name)
+            else:
+                raise client_exception.ResourceNotAvailable(default_node_name, ResourceType.TypePTP)
+
+    def _query(self, broker_node_name):
         broker_host = "notificationservice-{0}".format(broker_node_name)
         broker_transport_endpoint = "rabbit://{0}:{1}@{2}:{3}".format(
             self.daemon_control.daemon_context['NOTIFICATION_BROKER_USER'],
@@ -63,7 +78,7 @@ class PtpService(object):
         if default_node_name:
             ptpstatus = None
             try:
-                ptpstatus = self.query(default_node_name)
+                ptpstatus = self._query(default_node_name)
                 LOG.info("initial ptpstatus:{0}".format(ptpstatus))
             except oslo_messaging.exceptions.MessagingTimeout as ex:
                 LOG.warning("ptp status is not available @node {0} due to {1}".format(

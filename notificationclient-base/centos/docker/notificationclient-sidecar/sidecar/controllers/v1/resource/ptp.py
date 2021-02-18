@@ -8,8 +8,10 @@ from wsmeext.pecan import wsexpose
 
 import os
 import logging
+import oslo_messaging
 
 from notificationclientsdk.services.ptp import PtpService
+from notificationclientsdk.exception import client_exception
 
 from sidecar.repository.notification_control import notification_control
 
@@ -31,6 +33,15 @@ class CurrentStateController(rest.RestController):
             ptpstatus = ptpservice.query(THIS_NODE_NAME)
             # response.status = 200
             return ptpstatus
+        except client_exception.NodeNotAvailable as ex:
+            LOG.warning("Node is not available:{0}".format(str(ex)))
+            abort(404)
+        except client_exception.ResourceNotAvailable as ex:
+            LOG.warning("Resource is not available:{0}".format(str(ex)))
+            abort(404)
+        except oslo_messaging.exceptions.MessagingTimeout as ex:
+            LOG.warning("Resource is not reachable:{0}".format(str(ex)))
+            abort(404)
         except HTTPException as ex:
             LOG.warning("Client side error:{0},{1}".format(type(ex), str(ex)))
             # raise ex
