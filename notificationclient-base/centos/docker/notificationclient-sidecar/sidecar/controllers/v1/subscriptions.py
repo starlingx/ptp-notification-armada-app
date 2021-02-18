@@ -6,8 +6,6 @@ from webob.exc import HTTPException, HTTPNotFound, HTTPBadRequest, HTTPClientErr
 import os
 import logging
 
-import oslo_messaging
-
 from wsme import types as wtypes
 from wsmeext.pecan import wsexpose
 
@@ -71,8 +69,6 @@ class SubscriptionsController(rest.RestController):
         except client_exception.NodeNotAvailable as ex:
             abort(404)
         except client_exception.ResourceNotAvailable as ex:
-            abort(404)
-        except oslo_messaging.exceptions.MessagingTimeout as ex:
             abort(404)
         except HTTPException as ex:
             LOG.warning("Client side error:{0},{1}".format(type(ex), str(ex)))

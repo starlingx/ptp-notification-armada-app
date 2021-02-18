@@ -65,14 +65,8 @@ class PtpService(object):
         nodeinfos = NodeInfoHelper.enumerate_nodes(broker_node_name)
         # check node availability from DB
         if not nodeinfos or not default_node_name in nodeinfos:
-            # update nodeinfo
-            try:
-                nodeinfo = self.locationservice_client.update_location(
-                    default_node_name, timeout=5, retry=2)
-            except oslo_messaging.exceptions.MessagingTimeout as ex:
-                LOG.warning("node {0} cannot be reached due to {1}".format(
-                    default_node_name, str(ex)))
-                raise client_exception.NodeNotAvailable(broker_node_name)
+            LOG.warning("Node {0} is not available yet".format(default_node_name))
+            raise client_exception.NodeNotAvailable(broker_node_name)
 
         # get initial resource status
         if default_node_name:
