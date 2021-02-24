@@ -1,5 +1,11 @@
 #! /usr/bin/python3
 #
+# Copyright (c) 2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#
 # This script provides the PTP synchronization status
 # for PTP NIC configured as subordinate (slave mode)
 # It relies on Linux ptp4l (PMC) module in order to work

@@ -1,3 +1,9 @@
+#
+# Copyright (c) 2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 # phc states constants
 FREERUN_PHC_STATE = "Freerun"
 LOCKED_PHC_STATE = "Locked"
