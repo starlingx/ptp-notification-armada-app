@@ -1,3 +1,9 @@
+#
+# Copyright (c) 2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 import sqlalchemy
 from sqlalchemy import MetaData
 from sqlalchemy.ext.declarative import declarative_base

@@ -1,4 +1,10 @@
 #coding=utf-8
+#
+# Copyright (c) 2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 from pecan import conf
 from pecan import expose, rest, response, abort
 from webob.exc import HTTPException, HTTPNotFound, HTTPBadRequest, HTTPClientError, HTTPServerError

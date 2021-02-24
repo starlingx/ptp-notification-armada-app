@@ -1,3 +1,9 @@
+#
+# Copyright (c) 2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 import os
 SIDECAR_API_PORT = os.environ.get("SIDECAR_API_PORT", "8080")
 SIDECAR_API_HOST = os.environ.get("SIDECAR_API_HOST", "127.0.0.1")
