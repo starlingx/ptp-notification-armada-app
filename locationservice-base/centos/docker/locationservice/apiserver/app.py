@@ -1,3 +1,9 @@
+#
+# Copyright (c) 2021 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 from pecan import make_app
 from apiserver.repository.notification_control import notification_control
 
