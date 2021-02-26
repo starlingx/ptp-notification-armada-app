@@ -27,7 +27,7 @@ registration:
   imagePullSecrets: default-registry-key
   image:
     repository: rabbitmq
-    tag: 3-management
+    tag: 3.8.11-management
     pullPolicy: IfNotPresent
   endpoint:
     host: "registration.notification.svc.cluster.local"
