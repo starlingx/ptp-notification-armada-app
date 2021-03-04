@@ -45,6 +45,9 @@ registration:
             - "true"
 
 notification:
+  image:
+    repository: rabbitmq
+    tag: 3.8.11-management
   endpoint:
     port: 5672
     user: admin
@@ -66,7 +69,7 @@ location:
     pullPolicy: IfNotPresent
 
 ptptracking:
-  imagePullSecrets: admin-registry-secret
+  imagePullSecrets: default-registry-key
   image:
     repository: starlingx/notificationservice-base
     tag: stx.5.0-v1.0.3
