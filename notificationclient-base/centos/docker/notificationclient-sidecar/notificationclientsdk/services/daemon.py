@@ -615,16 +615,21 @@ class NotificationWorker:
             self.signal_node_resources_event()
             self.signal_events()
 
-    def __start_watch_all_nodes(self):
+    def __start_watch_all_nodes(self, retry_interval=5):
         try:
-            if not self.locationservice_client.is_listening_on_location(
+            while not self.locationservice_client.is_listening_on_location(
                 NodeInfoHelper.BROKER_NODE_ALL):
                 # start watching on the location announcement
                 self.locationservice_client.add_location_listener(
                     NodeInfoHelper.BROKER_NODE_ALL,
                     location_handler=self.__NodeInfoWatcher)
-                LOG.debug("Start watching location announcement of notificationservice@{0}"
-                .format(NodeInfoHelper.BROKER_NODE_ALL))
+                LOG.debug(
+                    "Start watching location announcement of notificationservice@{0}"
+                    .format(NodeInfoHelper.BROKER_NODE_ALL))
+                if not self.locationservice_client.is_listening_on_location(
+                    NodeInfoHelper.BROKER_NODE_ALL):
+                    # retry later and forever
+                    time.sleep(retry_interval)
             self.locationservice_client.trigger_location_annoucement(timeout=20, retry=10)
         except Exception as ex:
             LOG.debug("exception: {0}".format(str(ex)))
