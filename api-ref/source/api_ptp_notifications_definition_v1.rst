@@ -91,7 +91,7 @@ Manange Subscriptions
 Query subscription resources
 ******************************
 
-.. rest_method:: rest_method:: GET /ocloudNotifications/v1/subscriptions
+.. rest_method:: GET /ocloudNotifications/v1/subscriptions
 
 **Normal response codes**
 
@@ -141,7 +141,7 @@ This operation does not accept a request body.
 Query individual subscription resource
 ****************************************
 
-.. rest_method:: rest_method:: GET /ocloudNotifications/v1/{SubscriptionId}
+.. rest_method:: GET /ocloudNotifications/v1/{SubscriptionId}
 
 **Normal response codes**
 
@@ -189,7 +189,7 @@ This operation does not accept a request body
 Delete individual subscription resource
 ****************************************
 
-.. rest_method:: rest_method:: DELETE /ocloudNotifications/v1/{SubscriptionId}
+.. rest_method:: DELETE /ocloudNotifications/v1/{SubscriptionId}
 
 **Normal response codes**
 
@@ -217,7 +217,7 @@ Pull Status Notifications
 Pull PTP status notifications
 ******************************
 
-.. rest_method:: rest_method:: GET /ocloudNotifications/{ResourceType}/CurrentState
+.. rest_method:: GET /ocloudNotifications/{ResourceType}/CurrentState
 
 **Normal response codes**
 
@@ -242,7 +242,7 @@ This operation does not accept a request body.
    :header: "Parameter", "Style", "Type", "Description"
    :widths: 20, 20, 20, 60
 
-   "EventData", "plain", ""xsd:string, "Describes the synchronization state for PTP, State: ``Freerun``, ``Locked``, ``Holdover``."
+   "EventData", "plain", "xsd:string", "Describes the synchronization state for PTP, State: ``Freerun``, ``Locked``, ``Holdover``."
    "EventTimestamp", "plain", "xsd:float", "This is the time that the event was detected (elapsed seconds since epoch time)."
    "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API"
    "ResourceType", "plain", "xsd:string", "The resource to subscribe to, currently only ``PTP`` is supported."
@@ -296,7 +296,7 @@ badRequest (400), itemNotFound (404), tiemout(408)
    :header: "Parameter", "Style", "Type", "Description"
    :widths: 20, 20, 20, 60
 
-   "EventData", "plain", ""xsd:string, "Describes the synchronization state for PTP, State: ``Freerun``, ``Locked``, ``Holdover``."
+   "EventData", "plain", "xsd:string", "Describes the synchronization state for PTP, State: ``Freerun``, ``Locked``, ``Holdover``."
    "EventTimestamp", "plain", "xsd:float", "This is the time that the event was detected (elapsed seconds since epoch time)."
    "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API"
    "ResourceType", "plain", "xsd:string", "The resource to subscribe to, currently only ``PTP`` is supported."
