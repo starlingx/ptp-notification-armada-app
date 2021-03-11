@@ -7,6 +7,7 @@
 import os
 import json
 import time
+import threading
 import oslo_messaging
 from oslo_config import cfg
 from notificationclientsdk.common.helpers import rpc_helper
@@ -25,12 +26,41 @@ class BrokerClientBase(object):
         self.listeners = {}
         self.broker_endpoint = RpcEndpointInfo(broker_transport_endpoint)
         self.transport = rpc_helper.get_transport(self.broker_endpoint)
+        self._workerevent = threading.Event()
+        self._workerlock = threading.Lock()
+        self._workerterminated = False
+        # spawn a thread to retry on setting up listener
+        self._workerthread = threading.Thread(target=self._refresher, args=())
+        self._workerthread.start()
+
         LOG.debug("Created Broker client:{0}".format(broker_name))
 
     def __del__(self):
+        self._workerterminated = True
+        self._workerevent.set()
         self.transport.cleanup()
         del self.transport
         return
+
+    def _refresher(self, retry_interval=5):
+        while not self._workerterminated:
+            self._workerevent.wait()
+            self._workerevent.clear()
+            allset = False
+            with self._workerlock:
+                allset = self._refresh()
+            if self._workerevent.is_set():
+                continue
+            if not allset:
+                # retry later
+                time.sleep(retry_interval)
+                # retry on next loop
+                self._workerevent.set()
+
+    def __is_listening(self, context):
+        isactive = context and context.get(
+            'active', False) and context.get('rpcserver', False)
+        return isactive
 
     def __create_listener(self, context):
         target = oslo_messaging.Target(
@@ -42,6 +72,7 @@ class BrokerClientBase(object):
         return server
 
     def _refresh(self):
+        allset = True
         for topic, servers in self.listeners.items():
             for servername, context in servers.items():
                 try:
@@ -57,44 +88,52 @@ class BrokerClientBase(object):
                         rpcserver.wait()
                         context.pop('rpcserver')
                         LOG.debug("Stopped rpcserver@{0}@{1}".format(context['topic'], context['server']))
-                except:
-                    LOG.error("Failed to update listener for topic/server:{0}/{1}"
-                    .format(topic, servername))
+                except Exception as ex:
+                    LOG.error("Failed to update listener for topic/server:{0}/{1}, reason:{2}"
+                    .format(topic, servername, str(ex)))
+                    allset = False
                     continue
+        return allset
+
+    def _trigger_refresh_listener(self, context):
+        self._workerevent.set()
+        # # sleep to re-schedule to run worker thread
+        # time.sleep(2)
 
     def add_listener(self, topic, server, listener_endpoints=None):
         context = self.listeners.get(topic,{}).get(server, {})
-        if not context:
-            context = {
-                'endpoints': listener_endpoints,
-                'topic': topic,
-                'server': server,
-                'active': True
-                }
-            if not self.listeners.get(topic, None):
-                self.listeners[topic] = {}
-            self.listeners[topic][server] = context
-        else:
-            context['endpoints'] = listener_endpoints
-            context['active'] = True
+        with self._workerlock:
+            if not context:
+                context = {
+                    'endpoints': listener_endpoints,
+                    'topic': topic,
+                    'server': server,
+                    'active': True
+                    }
+                if not self.listeners.get(topic, None):
+                    self.listeners[topic] = {}
+                self.listeners[topic][server] = context
+            else:
+                context['endpoints'] = listener_endpoints
+                context['active'] = True
 
-        self._refresh()
+        self._trigger_refresh_listener(context)
 
     def remove_listener(self, topic, server):
         context = self.listeners.get(topic,{}).get(server, {})
-        if context:
-            context['active'] = False
-        self._refresh()
+        with self._workerlock:
+            if context:
+                context['active'] = False
+        self._trigger_refresh_listener(context)
 
     def is_listening(self, topic, server):
         context = self.listeners.get(topic,{}).get(server, {})
-        return context.get('active', False)
+        return self.__is_listening(context)
 
     def any_listener(self):
         for topic, servers in self.listeners.items():
             for servername, context in servers.items():
-                isactive = context.get('active', False)
-                if isactive:
+                if self.__is_listening(context):
                     return True
         return False
 
