@@ -1,5 +1,9 @@
 ---
 - project:
+    templates:
+      - publish-stx-docs
+      - stx-api-ref-jobs
+    #  - stx-release-notes-jobs
     check:
       jobs:
         - openstack-tox-linters
