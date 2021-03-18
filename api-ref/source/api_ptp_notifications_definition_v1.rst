@@ -2,15 +2,15 @@
 PTP Status Notifications API Definition v1
 ============================================
 
-This document defines how an hosted application can subscribe for receving PTP
-status notifications from StarlingX platform and also how to pull notifications
+This document defines how a hosted application can subscribe to receive PTP
+status notifications from the StarlingX platform and also how to pull notifications
 on demand.
 
 The interaction between the application and the platform is done with the
-use of a Sidecar, resides in the same pod.
+use of a Sidecar residing in the same pod.
 
 The port of the Sidecar is exposed to the application by a downward API and
-the address is localhost of the pod where the application and the Sidecar
+the address is the localhost of the pod where the application and the Sidecar
 are running on. For example: http://127.0.0.1:{port}
 
 --------------------
@@ -46,7 +46,7 @@ badRequest (400), itemNotFound (404), conflict(409)
    :widths: 20, 20, 20, 60
 
    "ResourceType", "plain", "xsd:string", "The resource to subscribe to, currently only ``PTP`` is supported."
-   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides: ``*`` for all worker nodes, ``.`` for worker node where the application resides, node name specified by the downward API"
+   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides: ``*`` for all worker nodes, ``.`` for worker node where the application resides, node name specified by the downward API."
    "EndpointUri", "plain", "xsd:string", "Endpoint URI (a.k.a callback URI), e.g. http://127.0.0.1:8080/resourcestatus/ptp"
 
 **Response parameters**
@@ -58,7 +58,7 @@ badRequest (400), itemNotFound (404), conflict(409)
    "SubscriptionId", "plain", "csapi:UUID", "Identifier for the created subscription resource."
    "UriLocation", "plain", "xsd:string", "The URI location to query the subscription resource created."
    "ResourceType", "plain", "xsd:string", "The resource to subscribe to, currently only ``PTP`` is supported."
-   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API"
+   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API."
    "EndpointUri", "plain", "xsd:string", "Endpoint URI (a.k.a callback URI), e.g. http://127.0.0.1:8080/resourcestatus/ptp"
 
 ::
@@ -84,7 +84,7 @@ badRequest (400), itemNotFound (404), conflict(409)
    }
 
 ----------------------
-Manange Subscriptions
+Manage Subscriptions
 ----------------------
 
 ******************************
@@ -110,7 +110,7 @@ itemNotFound (404)
    "SubscriptionId", "plain", "csapi:UUID", "Identifier for the created subscription resource."
    "UriLocation", "plain", "xsd:string", "The URI location to query the subscription resource created."
    "ResourceType", "plain", "xsd:string", "The resource to subscribe to, currently only ``PTP`` is supported."
-   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API"
+   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API."
    "EndpointUri", "plain", "xsd:string", "Endpoint URI (a.k.a callback URI), e.g. http://127.0.0.1:8080/resourcestatus/ptp"
 
 ::
@@ -168,7 +168,7 @@ itemNotFound (404)
    "SubscriptionId", "plain", "csapi:UUID", "Identifier for the created subscription resource."
    "UriLocation", "plain", "xsd:string", "The URI location to query the subscription resource created."
    "ResourceType", "plain", "xsd:string", "The resource to subscribe to, currently only ``PTP`` is supported."
-   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API"
+   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API."
    "EndpointUri", "plain", "xsd:string", "Endpoint URI (a.k.a callback URI), e.g. http://127.0.0.1:8080/resourcestatus/ptp"
 
 ::
@@ -244,7 +244,7 @@ This operation does not accept a request body.
 
    "EventData", "plain", "xsd:string", "Describes the synchronization state for PTP, State: ``Freerun``, ``Locked``, ``Holdover``."
    "EventTimestamp", "plain", "xsd:float", "This is the time that the event was detected (elapsed seconds since epoch time)."
-   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API"
+   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API."
    "ResourceType", "plain", "xsd:string", "The resource to subscribe to, currently only ``PTP`` is supported."
 
 ::
@@ -298,7 +298,7 @@ badRequest (400), itemNotFound (404), tiemout(408)
 
    "EventData", "plain", "xsd:string", "Describes the synchronization state for PTP, State: ``Freerun``, ``Locked``, ``Holdover``."
    "EventTimestamp", "plain", "xsd:float", "This is the time that the event was detected (elapsed seconds since epoch time)."
-   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API"
+   "ResourceQualifier", "plain", "xsd:string", "The node name where PTP resides, ``NodeName``: ``*`` for all worker nodes, ``.`` for worker node where the application resides, ``node name`` specified by the downward API."
    "ResourceType", "plain", "xsd:string", "The resource to subscribe to, currently only ``PTP`` is supported."
 
 ::
