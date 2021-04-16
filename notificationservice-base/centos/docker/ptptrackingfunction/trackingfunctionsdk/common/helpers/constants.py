@@ -11,6 +11,7 @@ HOLDOVER_PHC_STATE = "Holdover"
 UNKNOWN_PHC_STATE = "Unknown"
 # PMC command constants
 PORT_STATE = "portState"
+PORT = "port{}"
 GM_PRESENT = "gmPresent"
 MASTER_OFFSET = "master_offset"
 GM_CLOCK_CLASS = "gm.ClockClass"
