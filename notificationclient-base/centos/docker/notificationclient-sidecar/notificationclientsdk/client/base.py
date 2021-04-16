@@ -33,13 +33,20 @@ class BrokerClientBase(object):
         self._workerthread = threading.Thread(target=self._refresher, args=())
         self._workerthread.start()
 
-        LOG.debug("Created Broker client:{0}".format(broker_name))
+        LOG.debug("Created Broker client:{0},{1}".format(broker_name, broker_transport_endpoint))
 
     def __del__(self):
+        self.cleanup()
+
+    def cleanup(self):
+        self.clean_listeners()
         self._workerterminated = True
-        self._workerevent.set()
-        self.transport.cleanup()
-        del self.transport
+        if self._workerevent:
+            self._workerevent.set()
+        if self.transport:
+            self.transport.cleanup()
+            del self.transport
+            self.transport = None
         return
 
     def _refresher(self, retry_interval=5):
@@ -95,7 +102,7 @@ class BrokerClientBase(object):
                     continue
         return allset
 
-    def _trigger_refresh_listener(self, context):
+    def _trigger_refresh_listener(self):
         self._workerevent.set()
         # # sleep to re-schedule to run worker thread
         # time.sleep(2)
@@ -117,14 +124,14 @@ class BrokerClientBase(object):
                 context['endpoints'] = listener_endpoints
                 context['active'] = True
 
-        self._trigger_refresh_listener(context)
+        self._trigger_refresh_listener()
 
     def remove_listener(self, topic, server):
         context = self.listeners.get(topic,{}).get(server, {})
         with self._workerlock:
             if context:
                 context['active'] = False
-        self._trigger_refresh_listener(context)
+        self._trigger_refresh_listener()
 
     def is_listening(self, topic, server):
         context = self.listeners.get(topic,{}).get(server, {})
@@ -136,6 +143,18 @@ class BrokerClientBase(object):
                 if self.__is_listening(context):
                     return True
         return False
+
+    def __is_connected(self, context):
+        return context.get('rpcserver', None) is not None if context else False
+
+    def clean_listeners(self):
+        for topic, servers in self.listeners.items():
+            for server, context in servers.items():
+                self.remove_listener(topic, server)
+                self._trigger_refresh_listener()
+                LOG.debug("listener {0}@{1} {2} stopped".format(
+                    topic, server,
+                    'is' if self.__is_connected(context) else 'is not yet'))
 
     def call(self, topic, server, api_name, timeout=None, retry=None, **api_kwargs):
         target = oslo_messaging.Target(

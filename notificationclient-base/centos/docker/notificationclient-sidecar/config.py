@@ -7,6 +7,9 @@
 import os
 SIDECAR_API_PORT = os.environ.get("SIDECAR_API_PORT", "8080")
 SIDECAR_API_HOST = os.environ.get("SIDECAR_API_HOST", "127.0.0.1")
+DATASTORE_PATH = os.environ.get("DATASTORE_PATH", "/opt/datastore")
+LOGGING_LEVEL = os.environ.get("LOGGING_LEVEL", "INFO")
+
 # Server Specific Configurations
 server = {
     'port': SIDECAR_API_PORT,
@@ -29,14 +32,14 @@ app = {
 logging = {
     'root': {'level': 'INFO', 'handlers': ['console']},
     'loggers': {
-        'sidecar': {'level': 'DEBUG', 'handlers': ['console'], 'propagate': False},
-        'pecan': {'level': 'DEBUG', 'handlers': ['console'], 'propagate': False},
+        'sidecar': {'level': LOGGING_LEVEL, 'handlers': ['console'], 'propagate': False},
+        'pecan': {'level': LOGGING_LEVEL, 'handlers': ['console'], 'propagate': False},
         'py.warnings': {'handlers': ['console']},
         '__force_dict__': True
     },
     'handlers': {
         'console': {
-            'level': 'DEBUG',
+            'level': LOGGING_LEVEL,
             'class': 'logging.StreamHandler',
             'formatter': 'color'
         }
@@ -57,7 +60,7 @@ logging = {
 
 # Bindings and options to pass to SQLAlchemy's ``create_engine``
 sqlalchemy = {
-    'url'           : 'sqlite:///sidecar.db',
+    'url'           : "sqlite:////{0}/sidecar.db".format(DATASTORE_PATH),
     'echo'          : False,
     'echo_pool'     : False,
     'pool_recycle'  : 3600,

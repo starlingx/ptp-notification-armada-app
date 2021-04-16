@@ -45,9 +45,10 @@ class NotificationServiceClient(BrokerClientBase):
             return time.time()
 
     '''Init client to notification service'''
-    def __init__(self, target_node_name, notificationservice_transport_endpoint):
+    def __init__(self, target_node_name, notificationservice_transport_endpoint, broker_pod_ip):
         self.Id = id(self)
         self.target_node_name = target_node_name
+        self.broker_pod_ip = broker_pod_ip
         super(NotificationServiceClient, self).__init__(
             '{0}'.format(target_node_name),
             notificationservice_transport_endpoint)
@@ -89,3 +90,6 @@ class NotificationServiceClient(BrokerClientBase):
         server="{0}-EventListener-{1}".format(resource_type, self.Id)
         return super(NotificationServiceClient, self).is_listening(
             topic, server)
+
+    def is_broker_ip(self, broker_pod_ip):
+        return self.broker_pod_ip == broker_pod_ip
