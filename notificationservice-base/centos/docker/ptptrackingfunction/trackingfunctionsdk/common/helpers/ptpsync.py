@@ -136,7 +136,7 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
     #     Freerun —> Locked            #
     ####################################
     current_time = datetime.datetime.now().timestamp()
-    time_in_holdover = current_time - event_time
+    time_in_holdover = round(current_time - event_time) 
     previous_sync_state = sync_state
     # max holdover time is calculated to be in a 'safety' zoon
     max_holdover_time = (holdover_time - freq * 2)
