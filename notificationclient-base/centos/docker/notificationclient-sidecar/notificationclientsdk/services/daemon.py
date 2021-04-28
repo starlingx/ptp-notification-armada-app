@@ -46,6 +46,12 @@ class DaemonControl(object):
         self.refresh()
         pass
 
+    def __del__(self):
+        if self.locationservice_client:
+            self.locationservice_client.cleanup()
+            self.locationservice_client = None
+        return
+
     def refresh(self):
         self.subscription_event.set()
         self.event.set()
