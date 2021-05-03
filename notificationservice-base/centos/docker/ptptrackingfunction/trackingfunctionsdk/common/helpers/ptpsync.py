@@ -20,6 +20,7 @@ import datetime
 import logging
 from trackingfunctionsdk.common.helpers import constants
 
+
 LOG = logging.getLogger(__name__)
 
 # dictionary includes PMC commands used and keywords of intrest
@@ -45,8 +46,6 @@ def run_shell2(dir, ctx, args):
 
     return out, err, errcode
 
-
-
 def check_critical_resources():
     pmc = False
     ptp4l = False
@@ -63,7 +62,7 @@ def check_critical_resources():
         ptp4lconf = True
     return pmc, ptp4l, phc2sys, ptp4lconf
 
-def check_results(result, total_ptp_keywords):
+def check_results(result, total_ptp_keywords, port_count):
     # sync state is in 'Locked' state and will be overwritten if
     # it is not the case
     sync_state = constants.LOCKED_PHC_STATE
@@ -75,7 +74,9 @@ def check_results(result, total_ptp_keywords):
     # determine the current sync state
     if result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT:
         sync_state = constants.FREERUN_PHC_STATE
-    if result[constants.PORT_STATE].lower() != constants.SLAVE_MODE:
+    for port in range(1, port_count + 1):
+        if result[constants.PORT.format(port)].lower() == constants.SLAVE_MODE: break
+    else:
         sync_state = constants.FREERUN_PHC_STATE
     if result[constants.TIME_TRACEABLE] != constants.TIME_IS_TRACEABLE1 and result[constants.TIME_TRACEABLE].lower != constants.TIME_IS_TRACEABLE2:
         sync_state = constants.FREERUN_PHC_STATE
@@ -86,6 +87,7 @@ def check_results(result, total_ptp_keywords):
 def ptpsync():
     result = {}
     total_ptp_keywords = 0
+    port_count = 0
 
     ptp_dict_to_use = ptp_oper_dict
     len_dic = len(ptp_dict_to_use)
@@ -118,13 +120,20 @@ def ptpsync():
                 sys.exit(0)
             for item in ptp_keyword:
                  if state[0] == item:
-                     result.update({state[0]:state[1]})
-
-    return result, total_ptp_keywords
+                     if item == constants.PORT_STATE:
+                         port_count += 1
+                         result.update({constants.PORT.format(port_count):state[1]})
+                     else:
+                         result.update({state[0]:state[1]})
+    # making sure at least one port is available
+    if port_count == 0:
+        port_count = 1
+    # adding the possible ports minus one keyword not used, "portState"
+    total_ptp_keywords = total_ptp_keywords + port_count - 1
+    return result, total_ptp_keywords, port_count
 
 def ptp_status(holdover_time, freq, sync_state, event_time):
     result = {}
-
     # holdover_time - time phc can maintain clock
     # freq - the frequently for monitoring the ptp status
     # sync_state - the current ptp state
@@ -144,11 +153,10 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
     pmc, ptp4l, phc2sys, ptp4lconf = check_critical_resources()
     # run pmc command if preconditions met
     if pmc and ptp4l and phc2sys and ptp4lconf:
-        result, total_ptp_keywords = ptpsync()
-        sync_state = check_results(result, total_ptp_keywords)
+        result, total_ptp_keywords, port_count = ptpsync()
+        sync_state = check_results(result, total_ptp_keywords, port_count)
     else:
         sync_state = constants.FREERUN_PHC_STATE
-
     # determine if transition into holdover mode (cannot be in holdover if system clock is not in sync)
     if sync_state == constants.FREERUN_PHC_STATE and phc2sys:
         if previous_sync_state in [constants.UNKNOWN_PHC_STATE, constants.FREERUN_PHC_STATE]:
@@ -166,5 +174,4 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
         event_time = datetime.datetime.now().timestamp()
     else:
         new_event = "false"
-
     return new_event, sync_state, event_time
