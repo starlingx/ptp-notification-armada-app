@@ -72,7 +72,7 @@ ptptracking:
   imagePullSecrets: default-registry-key
   image:
     repository: starlingx/notificationservice-base
-    tag: stx.5.0-v1.0.3
+    tag: stx.5.0-v1.0.4
     pullPolicy: IfNotPresent
   device:
     simulated: false
