@@ -89,10 +89,6 @@ spec:
         volumeMounts:
           - name: scripts
             mountPath: /mnt
-        resources:
-          limits:
-            cpu: {{ .Values.resources.cpu }}
-            memory: {{ .Values.resources.memory }}
       - name: {{ .Chart.Name }}-ptptracking
         image: "{{ .Values.ptptracking.image.repository }}:{{ .Values.ptptracking.image.tag }}"
         imagePullPolicy: {{ .Values.ptptracking.image.pullPolicy }}
@@ -153,10 +149,6 @@ spec:
           - name: conf
             mountPath: /ptp/
             readOnly: true
-        resources:
-          limits:
-            cpu: {{ .Values.resources.cpu }}
-            memory: {{ .Values.resources.memory }}
       volumes:
         - name: scripts
           configMap:

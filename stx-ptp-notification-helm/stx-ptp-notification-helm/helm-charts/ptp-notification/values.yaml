@@ -16,10 +16,6 @@ replicaCount: 1
 nameOverride: ""
 fullnameOverride: ""
 
-resources:
-  cpu: 1
-  memory: 2Gi
-
 global:
   namespace: notification
 
