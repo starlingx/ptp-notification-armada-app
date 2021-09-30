@@ -23,6 +23,10 @@ spec:
     spec:
       imagePullSecrets:
       - name: {{ .Values.registration.imagePullSecrets }}
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
 {{- if .Values.registration.affinity }}
       affinity:
 {{ toYaml .Values.registration.affinity | indent 8 }}
