@@ -1,0 +1,27 @@
+Source: python3-k8sapp-ptp-notification
+Section: libs
+Priority: optional
+Maintainer: StarlingX Developers <starlingx-discuss@lists.starlingx.io>
+Build-Depends: debhelper-compat (= 13),
+ dh-python,
+ python3-all,
+ python3-pbr,
+ python3-setuptools,
+ python3-wheel
+Standards-Version: 4.5.1
+Homepage: https://www.starlingx.io
+
+Package: python3-k8sapp-ptp-notification
+Section: libs
+Architecture: any
+Depends: ${misc:Depends}, ${python3:Depends}
+Description: StarlingX Sysinv PTP Notification Extensions
+ This package contains sysinv plugins for the PTP notification K8S app.
+
+Package: python3-k8sapp-ptp-notification-wheels
+Section: libs
+Architecture: any
+Depends: ${misc:Depends}, ${python3:Depends}, python3-wheel
+Description: StarlingX Sysinv PTP Notification Extension Wheels
+ This package contains python wheels for the PTP notification K8S
+ app plugins.
