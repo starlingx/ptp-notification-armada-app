@@ -16,6 +16,8 @@ GM_PRESENT = "gmPresent"
 MASTER_OFFSET = "master_offset"
 GM_CLOCK_CLASS = "gm.ClockClass"
 TIME_TRACEABLE = "timeTraceable"
+CLOCK_IDENTITY = "clockIdentity"
+GRANDMASTER_IDENTITY = "grandmasterIdentity"
 # expected values for valid ptp state
 SLAVE_MODE = "slave"
 TIME_IS_TRACEABLE1 = "1"

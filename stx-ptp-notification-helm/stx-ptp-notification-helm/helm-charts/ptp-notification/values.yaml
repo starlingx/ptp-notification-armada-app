@@ -66,6 +66,9 @@ location:
 
 ptptracking:
   imagePullSecrets: default-registry-key
+  ptp4lSocket: /var/run/ptp4l
+  ptp4lServiceName: ptp4l
+  phc2sysServiceName: phc2sys
   image:
     repository: starlingx/notificationservice-base
     tag: stx.5.0-v1.0.4

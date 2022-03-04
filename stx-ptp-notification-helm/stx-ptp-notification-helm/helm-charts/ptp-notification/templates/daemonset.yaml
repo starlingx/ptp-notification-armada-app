@@ -125,6 +125,10 @@ spec:
             value: "5672"
           - name: REGISTRATION_HOST
             value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
+          - name: PTP4L_SERVICE_NAME
+            value: "{{ .Values.ptptracking.ptp4lServiceName }}"
+          - name: PHC2SYS_SERVICE_NAME
+            value: "{{ .Values.ptptracking.phc2sysServiceName }}"
         command: ["/bin/bash", "/mnt/ptptracking_start.sh"]
         securityContext:
           privileged: true
@@ -140,7 +144,7 @@ spec:
             mountPath: /var/run/
             readOnly: false
           - name: varrun
-            mountPath: /var/run/ptp4l
+            mountPath: {{ .Values.ptptracking.ptp4lSocket }}
             readOnly: false
           - name: pmc
             mountPath: /usr/sbin/pmc
@@ -161,7 +165,7 @@ spec:
       {{ else }}
         - name: varrun
           hostPath:
-            path: /var/run/ptp4l
+            path: {{ .Values.ptptracking.ptp4lSocket }}
             type: Socket
       {{ end }}
         - name: pmc
