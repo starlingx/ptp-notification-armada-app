@@ -71,7 +71,7 @@ ptptracking:
   phc2sysServiceName: phc2sys
   image:
     repository: starlingx/notificationservice-base
-    tag: stx.5.0-v1.0.4
+    tag: stx.7.0-v1.0.5
     pullPolicy: IfNotPresent
   device:
     simulated: false
