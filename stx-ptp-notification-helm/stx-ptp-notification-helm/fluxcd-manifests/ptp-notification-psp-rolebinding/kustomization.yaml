@@ -1,0 +1,17 @@
+#
+# Copyright (c) 2022 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+namespace: notification
+resources:
+  - helmrelease.yaml
+secretGenerator:
+  - name: ptp-notification-psp-rolebinding-static-overrides
+    files:
+      - ptp-notification-psp-rolebinding-static-overrides.yaml
+  - name: ptp-notification-psp-rolebinding-system-overrides
+    files:
+      - ptp-notification-psp-rolebinding-system-overrides.yaml
+generatorOptions:
+  disableNameSuffixHash: true
