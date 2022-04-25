@@ -217,7 +217,7 @@ Pull Status Notifications
 Pull PTP status notifications
 ******************************
 
-.. rest_method:: GET /ocloudNotifications/{ResourceType}/CurrentState
+.. rest_method:: GET /ocloudNotifications/v1/{ResourceType}/CurrentState
 
 **Normal response codes**
 
