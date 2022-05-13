@@ -1,2 +1,2 @@
 stx-ptp-notification-helm
-stx-ptp-notification-helm-fluxcd
+stx-ptp-notification-helm-armada

@@ -15,7 +15,7 @@
 # Build variables
 %global helm_folder /usr/lib/helm
 
-Summary: StarlingX PTP Notification Armada Helm Charts
+Summary: StarlingX PTP Notification FluxCD Helm Charts
 Name: stx-ptp-notification-helm
 Version: 1.0
 Release: %{tis_patch_ver}%{?_tis_dist}
@@ -36,13 +36,13 @@ BuildRequires: python-k8sapp-ptp-notification-wheels
 %description
 StarlingX PTP Notification Helm Charts
 
-%package fluxcd
-Summary: StarlingX PTP Notification Application FluxCD Helm Charts
+%package armada
+Summary: StarlingX PTP Notification Application Armada Helm Charts
 Group: base
 License: Apache-2.0
 
-%description fluxcd
-StarlingX PTP Notification Application FluxCD Helm Charts
+%description armada
+StarlingX PTP Notification Application Armada Helm Charts
 
 %prep
 %setup -n %{name}-%{version}
@@ -63,8 +63,8 @@ kill %1
 
 # Create a chart tarball compliant with sysinv kube-app.py
 %define app_staging %{_builddir}/staging
-%define app_tarball_armada %{app_name}-%{version}-%{tis_patch_ver}.tgz
-%define app_tarball_fluxcd %{app_name}-fluxcd-%{version}-%{tis_patch_ver}.tgz
+%define app_tarball_armada %{app_name}-armada-%{version}-%{tis_patch_ver}.tgz
+%define app_tarball_fluxcd %{app_name}-%{version}-%{tis_patch_ver}.tgz
 %define armada_app_path %{_builddir}/%{app_tarball_armada}
 %define fluxcd_app_path %{_builddir}/%{app_tarball_fluxcd}
 
@@ -111,10 +111,10 @@ install -d -m 755 %{buildroot}/%{app_folder}
 install -p -D -m 755 %armada_app_path %{buildroot}/%{app_folder}
 install -p -D -m 755 %fluxcd_app_path %{buildroot}/%{app_folder}
 
-%files
+%files armada
 %defattr(-,root,root,-)
 %{app_folder}/%{app_tarball_armada}
 
-%files fluxcd
+%files
 %defattr(-,root,root,-)
 %{app_folder}/%{app_tarball_fluxcd}
