@@ -1,1 +1,10 @@
-# Nothing
+sqlalchemy~=1.4.36
+wsme
+oslo.messaging
+pecan~=1.4.1
+WebTest
+WebOb~=1.8.7
+requests~=2.27.1
+mock
+PyYAML
+pygtail~=0.12.0

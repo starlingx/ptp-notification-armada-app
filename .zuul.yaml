@@ -8,10 +8,12 @@
       jobs:
         - openstack-tox-linters
         - k8sapp-ptp-notification-tox-pylint
+        - ptp-notification-tox-py36
     gate:
       jobs:
         - openstack-tox-linters
         - k8sapp-ptp-notification-tox-pylint
+        - ptp-notification-tox-py36
     post:
       jobs:
         - stx-ptp-notification-armada-app-upload-git-mirror
@@ -28,6 +30,15 @@
       - name: git_mirror_credentials
         secret: stx-ptp-notification-armada-app-github-secret
         pass-to-parent: true
+
+- job:
+    name: ptp-notification-tox-py36
+    parent: tox-py36
+    description: |
+      Run py36 test for ptp-notification
+    nodeset: ubuntu-bionic
+    vars:
+      tox_envlist: py36
 
 - job:
     name: k8sapp-ptp-notification-tox-pylint

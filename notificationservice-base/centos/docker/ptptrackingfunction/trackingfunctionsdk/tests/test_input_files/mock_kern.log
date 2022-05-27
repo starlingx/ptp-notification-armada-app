@@ -1,0 +1,12 @@
+2022-06-03T19:36:08.021 controller-0 kernel: info [   11.122139] ice 0000:18:00.0: ttyGNSS_1800_0 registered
+2022-06-03T19:36:08.021 controller-0 kernel: info [   11.122142] ice 0000:18:00.0: GNSS TTY init successful
+2022-06-03T19:36:08.021 controller-0 kernel: warning [   11.134103] ice 0000:18:00.0: <DPLL0> state changed to: locked_ho_ack, pin GNSS-1PPS
+2022-06-03T19:36:08.021 controller-0 kernel: warning [   11.148040] ice 0000:18:00.0: <DPLL1> state changed to: locked_ho_ack, pin GNSS-1PPS
+2022-06-03T19:36:08.022 controller-0 kernel: info [   14.405736] ice 0000:1a:00.0: ttyGNSS_1a00_0 registered
+2022-06-03T19:36:08.022 controller-0 kernel: info [   14.405737] ice 0000:1a:00.0: GNSS TTY init successful
+2022-06-03T19:50:05.958 controller-0 kernel: info [    4.609339] ice 0000:18:00.0: ttyGNSS_1800_0 registered
+2022-06-03T19:50:05.958 controller-0 kernel: info [    4.609362] ice 0000:18:00.0: GNSS TTY init successful
+2022-06-03T19:50:05.958 controller-0 kernel: warning [    4.621518] ice 0000:18:00.0: <DPLL0> state changed to: locked_ho_ack, pin GNSS-1PPS
+2022-06-03T19:50:05.959 controller-0 kernel: warning [    4.635511] ice 0000:18:00.0: <DPLL1> state changed to: locked_ho_ack, pin GNSS-1PPS
+2022-06-03T19:50:05.959 controller-0 kernel: info [    7.995939] ice 0000:1a:00.0: ttyGNSS_1a00_0 registered
+2022-06-03T19:50:05.959 controller-0 kernel: info [    7.995941] ice 0000:1a:00.0: GNSS TTY init successful
