@@ -3,7 +3,7 @@ FROM ${BASE}
 
 ARG STX_REPO_FILE=/etc/yum.repos.d/stx.repo
 
-ENV KUBE_LATEST_VERSION="v1.18.3"
+ENV KUBE_LATEST_VERSION="v1.23.1"
 
 RUN set -ex ;\
     yum install --disablerepo=* \

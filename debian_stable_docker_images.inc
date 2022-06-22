@@ -1,0 +1,3 @@
+notificationservice-base
+locationservice-base
+notificationclient-base
