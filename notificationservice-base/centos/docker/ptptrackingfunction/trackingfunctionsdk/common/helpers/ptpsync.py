@@ -20,13 +20,11 @@ import datetime
 import logging
 from trackingfunctionsdk.common.helpers import constants
 
-
 LOG = logging.getLogger(__name__)
-
 
 # dictionary includes PMC commands used and keywords of intrest
 ptp_oper_dict = {
-    #[pmc cmd, ptp keywords,...]
+    # [pmc cmd, ptp keywords,...]
     1: ["'GET PORT_DATA_SET'", constants.PORT_STATE],
     2: ["'GET TIME_STATUS_NP'", constants.GM_PRESENT, constants.MASTER_OFFSET],
     3: ["'GET PARENT_DATA_SET'", constants.GM_CLOCK_CLASS, constants.GRANDMASTER_IDENTITY],
@@ -37,19 +35,21 @@ ptp_oper_dict = {
 ptp4l_service_name = os.environ.get('PTP4L_SERVICE_NAME', 'ptp4l')
 phc2sys_service_name = os.environ.get('PHC2SYS_SERVICE_NAME', 'phc2sys')
 
+
 # run subprocess and returns out, err, errcode
 def run_shell2(dir, ctx, args):
     cwd = os.getcwd()
     os.chdir(dir)
 
     process = subprocess.Popen(args, shell=True,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = process.communicate()
     errcode = process.returncode
 
     os.chdir(cwd)
 
     return out, err, errcode
+
 
 def check_critical_resources():
     pmc = False
@@ -66,6 +66,7 @@ def check_critical_resources():
     if os.path.isfile('/ptp/ptpinstance/ptp4l-%s.conf' % ptp4l_service_name):
         ptp4lconf = True
     return pmc, ptp4l, phc2sys, ptp4lconf
+
 
 def check_results(result, total_ptp_keywords, port_count):
     # sync state is in 'Locked' state and will be overwritten if
@@ -95,10 +96,11 @@ def check_results(result, total_ptp_keywords, port_count):
         sync_state = constants.FREERUN_PHC_STATE
     if (result[constants.GM_CLOCK_CLASS] not in
             [constants.CLOCK_CLASS_VALUE1,
-            constants.CLOCK_CLASS_VALUE2,
-            constants.CLOCK_CLASS_VALUE3]):
+             constants.CLOCK_CLASS_VALUE2,
+             constants.CLOCK_CLASS_VALUE3]):
         sync_state = constants.FREERUN_PHC_STATE
     return sync_state
+
 
 def ptpsync():
     result = {}
@@ -108,7 +110,7 @@ def ptpsync():
     ptp_dict_to_use = ptp_oper_dict
     len_dic = len(ptp_dict_to_use)
 
-    for key in range(1,len_dic+1):
+    for key in range(1, len_dic + 1):
         cmd = ptp_dict_to_use[key][0]
         cmd = "pmc -b 0 -u -f /ptp/ptpinstance/ptp4l-" + ptp4l_service_name + ".conf " + cmd
 
@@ -135,20 +137,21 @@ def ptpsync():
                 LOG.warning('not received the expected list length')
                 sys.exit(0)
             for item in ptp_keyword:
-                 if state[0] == item:
-                     if item == constants.PORT_STATE:
-                         port_count += 1
-                         result.update({constants.PORT.format(port_count):state[1]})
-                     else:
-                         state[1] = state[1].replace('\\n','')
-                         state[1] = state[1].replace('\'','')
-                         result.update({state[0]:state[1]})
+                if state[0] == item:
+                    if item == constants.PORT_STATE:
+                        port_count += 1
+                        result.update({constants.PORT.format(port_count): state[1]})
+                    else:
+                        state[1] = state[1].replace('\\n', '')
+                        state[1] = state[1].replace('\'', '')
+                        result.update({state[0]: state[1]})
     # making sure at least one port is available
     if port_count == 0:
         port_count = 1
     # adding the possible ports minus one keyword not used, "portState"
     total_ptp_keywords = total_ptp_keywords + port_count - 1
     return result, total_ptp_keywords, port_count
+
 
 def ptp_status(holdover_time, freq, sync_state, event_time):
     result = {}

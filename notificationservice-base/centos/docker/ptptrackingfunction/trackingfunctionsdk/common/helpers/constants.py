@@ -33,6 +33,16 @@ GNSS_LOCKED_HO_ACK = 'locked_ho_ack'
 GNSS_DPLL_0 = "DPLL0"
 GNSS_DPLL_1 = "DPLL1"
 
+UTC_OFFSET = "37"
+PTP_CONFIG_PATH = "/ptp/ptpinstance/"
+PHC_CTL_PATH = "/usr/sbin/phc_ctl"
+PHC2SYS_DEFAULT_CONFIG = "/ptp/ptpinstance/phc2sys-phc2sys-legacy.conf"
+PHC2SYS_CONF_PATH = "/ptp/ptpinstance/"
+
+CLOCK_REALTIME = "CLOCK_REALTIME"
+
+PHC2SYS_TOLERANCE_LOW = 36999999000
+PHC2SYS_TOLERANCE_HIGH = 37000001000
 
 # testing values
 CGU_PATH_VALID = "/sys/kernel/debug/ice/0000:18:00.0/cgu"
