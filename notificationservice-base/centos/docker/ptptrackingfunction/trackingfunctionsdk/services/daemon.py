@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,7 +14,13 @@ import logging
 import multiprocessing as mp
 import threading
 
-from trackingfunctionsdk.common.helpers import rpc_helper
+from trackingfunctionsdk.client.ptpeventproducer import PtpEventProducer
+from trackingfunctionsdk.common.helpers import ptpsync
+from trackingfunctionsdk.common.helpers import log_helper
+from trackingfunctionsdk.common.helpers.dmesg_watcher import DmesgWatcher
+from trackingfunctionsdk.common.helpers.gnss_monitor import GnssMonitor
+from trackingfunctionsdk.model.dto.ptpstate import PtpState
+from trackingfunctionsdk.model.dto.resourcetype import ResourceType
 from trackingfunctionsdk.model.dto.rpc_endpoint import RpcEndpointInfo
 from trackingfunctionsdk.model.dto.resourcetype import ResourceType
 from trackingfunctionsdk.model.dto.ptpstate import PtpState
@@ -84,11 +90,13 @@ class PtpWatcherDefault:
         self.ptptracker_context['last_event_time'] = self.init_time
         self.ptptracker_context_lock = threading.Lock()
 
-        self.ptp_device_simulated = "true" == self.ptptracker_context.get('device_simulated', "False").lower()
+        self.ptp_device_simulated = "true" == self.ptptracker_context.get('device_simulated',
+                                                                          "False").lower()
 
         self.event_timeout = float(self.ptptracker_context['poll_freq_seconds'])
 
         self.node_name = self.daemon_context['THIS_NODE_NAME']
+
         self.namespace = self.daemon_context.get('THIS_NAMESPACE', 'notification')
 
         broker_transport_endpoint = self.daemon_context['NOTIFICATION_TRANSPORT_ENDPOINT']
@@ -105,6 +113,13 @@ class PtpWatcherDefault:
         self.__ptprequest_handler = PtpWatcherDefault.PtpRequestHandlerDefault(self)
         self.forced_publishing = False
 
+        self.watcher = DmesgWatcher()
+        observer_list = [GnssMonitor(i) for i in self.daemon_context['GNSS_CONFIGS']]
+        for observer in observer_list:
+            self.watcher.attach(observer)
+
+        self.watcher_thread = threading.Thread(target=self.watcher.run_watcher)
+
     def signal_ptp_event(self):
         if self.event:
             self.event.set()
@@ -115,8 +130,10 @@ class PtpWatcherDefault:
     def run(self):
         # start location listener
         self.__start_listener()
+        # Start dmesg watcher
+        self.watcher_thread.start()
         while True:
-            # annouce the location
+            # announce the location
             forced = self.forced_publishing
             self.forced_publishing = False
             self.__publish_ptpstatus(forced)
@@ -208,7 +225,7 @@ class DaemonControl(object):
         if not process_worker:
             process_worker = ProcessWorkerDefault
 
-        self. sqlalchemy_conf_json = sqlalchemy_conf_json
+        self.sqlalchemy_conf_json = sqlalchemy_conf_json
         self.daemon_context_json = daemon_context_json
         self.process_worker = process_worker
         return

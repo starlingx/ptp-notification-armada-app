@@ -26,3 +26,13 @@ GM_IS_PRESENT = "true"
 CLOCK_CLASS_VALUE1 = "6"
 CLOCK_CLASS_VALUE2 = "7"
 CLOCK_CLASS_VALUE3 = "135"
+# ts2phc constants
+NMEA_SERIALPORT = "ts2phc.nmea_serialport"
+GNSS_PIN = "GNSS-1PPS"
+GNSS_LOCKED_HO_ACK = 'locked_ho_ack'
+GNSS_DPLL_0 = "DPLL0"
+GNSS_DPLL_1 = "DPLL1"
+
+
+# testing values
+CGU_PATH_VALID = "/sys/kernel/debug/ice/0000:18:00.0/cgu"
