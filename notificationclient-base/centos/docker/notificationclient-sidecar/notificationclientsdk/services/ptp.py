@@ -12,7 +12,8 @@ import kombu
 from notificationclientsdk.repository.node_repo import NodeRepo
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
 from notificationclientsdk.model.dto.resourcetype import ResourceType
-from notificationclientsdk.model.dto.subscription import SubscriptionInfo
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
 from notificationclientsdk.model.orm.subscription import Subscription as SubscriptionOrm
 from notificationclientsdk.client.notificationservice import NotificationServiceClient
@@ -112,7 +113,11 @@ class PtpService(object):
 
     def add_subscription(self, subscription_dto):
         subscription_orm = SubscriptionOrm(**subscription_dto.to_orm())
-        broker_name = subscription_dto.ResourceQualifier.NodeName
+        if hasattr(subscription_dto, 'ResourceAddress'):
+            _,nodename,_ = subscription_helper.parse_resource_address(subscription_dto.ResourceAddress)
+            broker_name = nodename
+        elif hasattr(subscription_dto, 'ResourceType'):
+            broker_name = subscription_dto.ResourceQualifier.NodeName
         default_node_name = NodeInfoHelper.default_node_name(broker_name)
 
         broker_pod_ip, supported_resource_types = self.__get_node_info(default_node_name)
@@ -138,7 +143,11 @@ class PtpService(object):
             entry = self.subscription_repo.add(subscription_orm)
 
             # Delivery the initial notification of ptp status
-            subscription_dto2 = SubscriptionInfo(entry)
+            if hasattr(subscription_dto, 'ResourceType'):
+                subscription_dto2 = SubscriptionInfoV0(entry)
+            else:
+                subscription_dto2 = SubscriptionInfoV1(entry)
+
             try:
                 subscription_helper.notify(subscription_dto2, ptpstatus)
                 LOG.info("initial ptpstatus is delivered successfully")

@@ -11,7 +11,8 @@ import logging
 import multiprocessing as mp
 import threading
 
-from notificationclientsdk.model.dto.subscription import SubscriptionInfo
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
 from notificationclientsdk.model.dto.resourcetype import ResourceType
 
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
@@ -47,27 +48,36 @@ class NotificationHandler(NotificationHandlerBase):
             self.notification_lock.acquire()
             subscription_repo = SubscriptionRepo(autocommit=True)
             resource_type = notification_info.get('ResourceType', None)
-            node_name = notification_info.get('ResourceQualifier', {}).get('NodeName', None)
-            if not resource_type:
-                raise Exception("abnormal notification@{0}".format(node_name))
+            resource_address = notification_info.get('ResourceAddress', None)
+            # Get nodename from resource address
+            if resource_address:
+                _,node_name,_ = subscription_helper.parse_resource_address(resource_address)
+            else:
+                node_name = notification_info.get('ResourceQualifier', {}).get('NodeName', None)
+                if not resource_type:
+                    raise Exception("abnormal notification@{0}".format(node_name))
 
-            if not resource_type in self.__supported_resource_types:
-                raise Exception("notification with unsupported resource type:{0}".format(resource_type))
+                if not resource_type in self.__supported_resource_types:
+                    raise Exception("notification with unsupported resource type:{0}".format(resource_type))
 
             this_delivery_time = notification_info['EventTimestamp']
 
             entries = subscription_repo.get(ResourceType=resource_type, Status=1)
             for entry in entries:
                 subscriptionid = entry.SubscriptionId
-                ResourceQualifierJson = entry.ResourceQualifierJson or '{}'
-                ResourceQualifier = json.loads(ResourceQualifierJson)
-                # qualify by NodeName
-                entry_node_name = ResourceQualifier.get('NodeName', None)
+                if entry.ResourceAddress:
+                    _,entry_node_name,_ = subscription_helper.parse_resource_address(entry.ResourceAddress)
+                    subscription_dto2 = SubscriptionInfoV1(entry)
+                else:
+                    ResourceQualifierJson = entry.ResourceQualifierJson or '{}'
+                    ResourceQualifier = json.loads(ResourceQualifierJson)
+                    # qualify by NodeName
+                    entry_node_name = ResourceQualifier.get('NodeName', None)
+                    subscription_dto2 = SubscriptionInfoV0(entry)
                 node_name_matched = NodeInfoHelper.match_node_name(entry_node_name, node_name)
                 if not node_name_matched:
                     continue
 
-                subscription_dto2 = SubscriptionInfo(entry)
                 try:
                     last_delivery_time = self.__get_latest_delivery_timestamp(node_name, subscriptionid)
                     if last_delivery_time and last_delivery_time >= this_delivery_time:

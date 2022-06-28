@@ -7,6 +7,7 @@
 
 import os
 import json
+import re
 
 import requests
 import logging
@@ -51,4 +52,14 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
             raise ex
 
     return result
+
+def parse_resource_address(resource_address):
+    # The format of resource address is:
+    # /{clusterName}/{siteName}(/optional/hierarchy/..)/{nodeName}/{resource}
+    # Assume no optional hierarchy for now
+    clusterName = resource_address.split('/')[1]
+    nodeName = resource_address.split('/')[2]
+    resource_path = re.split('[/]', resource_address, 3)[3]
+
+    return clusterName, nodeName, resource_path
 
