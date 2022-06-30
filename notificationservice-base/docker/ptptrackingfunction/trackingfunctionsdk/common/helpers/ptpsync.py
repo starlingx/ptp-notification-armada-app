@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,6 +14,7 @@
 #
 import errno, os
 import os.path
+import re
 import sys
 import subprocess
 import datetime
@@ -196,3 +197,17 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
     else:
         new_event = "false"
     return new_event, sync_state, event_time
+
+def parse_resource_address(resource_address):
+    # The format of resource address is:
+    # /{clusterName}/{siteName}(/optional/hierarchy/..)/{nodeName}/{resource}
+    # Assume no optional hierarchy for now
+    clusterName = resource_address.split('/')[1]
+    nodeName = resource_address.split('/')[2]
+    resource_path = '/' + re.split('[/]', resource_address, 3)[3]
+    return clusterName, nodeName, resource_path
+
+def format_resource_address(node_name, resource):
+    # Return a resource_address
+    resource_address = '/./' + node_name + resource
+    return resource_address

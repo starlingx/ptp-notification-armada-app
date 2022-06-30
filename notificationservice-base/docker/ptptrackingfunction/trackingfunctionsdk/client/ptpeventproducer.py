@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -37,7 +37,7 @@ class PtpEventProducer(object):
                 return None
 
         def TriggerDelivery(self, ctx, **rpc_kwargs):
-            LOG.debug ("PtpEventProducer TriggerDelivery called %s" %rpc_kwargs)
+            LOG.debug("PtpEventProducer TriggerDelivery called %s" %rpc_kwargs)
             if self.handler:
                 return self.handler.trigger_delivery(**rpc_kwargs)
             else:
@@ -71,10 +71,10 @@ class PtpEventProducer(object):
         result2 = self.publish_status_all(ptpstatus, retry) if self.registration_broker_client else result
         return result1, result2
 
-    def publish_status_local(self, ptpstatus, retry=3):
+    def publish_status_local(self, ptpstatus, source, retry=3):
         if not self.local_broker_client:
             return False
-        topic='PTP-Event-{0}'.format(self.node_name)
+        topic='{0}-Event-{1}'.format(source, self.node_name)
         server = None
         isretrystopped = False
         while not isretrystopped:

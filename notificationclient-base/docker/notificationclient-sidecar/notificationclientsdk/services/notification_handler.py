@@ -1,6 +1,5 @@
-
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,9 +9,10 @@ import logging
 
 import multiprocessing as mp
 import threading
+import time
 
-from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV2
 from notificationclientsdk.model.dto.resourcetype import ResourceType
 
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
@@ -48,32 +48,38 @@ class NotificationHandler(NotificationHandlerBase):
             self.notification_lock.acquire()
             subscription_repo = SubscriptionRepo(autocommit=True)
             resource_type = notification_info.get('ResourceType', None)
-            resource_address = notification_info.get('ResourceAddress', None)
             # Get nodename from resource address
-            if resource_address:
-                _,node_name,_ = subscription_helper.parse_resource_address(resource_address)
-            else:
+            if resource_type:
                 node_name = notification_info.get('ResourceQualifier', {}).get('NodeName', None)
                 if not resource_type:
                     raise Exception("abnormal notification@{0}".format(node_name))
-
                 if not resource_type in self.__supported_resource_types:
                     raise Exception("notification with unsupported resource type:{0}".format(resource_type))
+                this_delivery_time = notification_info['EventTimestamp']
+            else:
+                source = notification_info.get('source', None)
+                values = notification_info.get('data', {}).get('values', [])
+                resource_address = values[0].get('ResourceAddress', None)
+                if not resource_address:
+                    raise Exception("No resource address in notification source".format(source))
+                _,node_name,_ = subscription_helper.parse_resource_address(resource_address)
+                this_delivery_time = notification_info['time']
+                # Change time from float to ascii format
+                notification_info['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
+                                                          time.gmtime(this_delivery_time))
 
-            this_delivery_time = notification_info['EventTimestamp']
-
-            entries = subscription_repo.get(ResourceType=resource_type, Status=1)
+            entries = subscription_repo.get(Status=1)
             for entry in entries:
                 subscriptionid = entry.SubscriptionId
                 if entry.ResourceAddress:
                     _,entry_node_name,_ = subscription_helper.parse_resource_address(entry.ResourceAddress)
-                    subscription_dto2 = SubscriptionInfoV1(entry)
+                    subscription_dto2 = SubscriptionInfoV2(entry)
                 else:
                     ResourceQualifierJson = entry.ResourceQualifierJson or '{}'
                     ResourceQualifier = json.loads(ResourceQualifierJson)
                     # qualify by NodeName
                     entry_node_name = ResourceQualifier.get('NodeName', None)
-                    subscription_dto2 = SubscriptionInfoV0(entry)
+                    subscription_dto2 = SubscriptionInfoV1(entry)
                 node_name_matched = NodeInfoHelper.match_node_name(entry_node_name, node_name)
                 if not node_name_matched:
                     continue

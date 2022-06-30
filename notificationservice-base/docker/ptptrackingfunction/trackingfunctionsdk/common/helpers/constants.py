@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -46,3 +46,20 @@ PHC2SYS_TOLERANCE_HIGH = 37000001000
 
 # testing values
 CGU_PATH_VALID = "/sys/kernel/debug/ice/0000:18:00.0/cgu"
+
+SPEC_VERSION = "1.0"
+DATA_VERSION = "1.0"
+DATA_TYPE_NOTIFICATION = "notification"
+DATA_TYPE_METRIC = "metric"
+VALUE_TYPE_ENUMERATION = "enumeration"
+VALUE_TYPE_METRIC = "metric"
+
+SOURCE_SYNC_ALL = '/sync'
+SOURCE_SYNC_GNSS_SYNC_STATUS = '/sync/gnss-status/gnss-sync-status'
+SOURCE_SYNC_PTP_CLOCK_CLASS = '/sync/ptp-status/clock-class'
+SOURCE_SYNC_PTP_LOCK_STATE = '/sync/ptp-status/lock-state'
+SOURCE_SYNC_OS_CLOCK = '/sync/sync-status/os-clock-sync-state'
+SOURCE_SYNC_SYNC_STATE = '/sync/sync-status/sync-state'
+SOURCE_SYNCE_CLOCK_QUALITY = '/sync/synce-status/clock-quality'
+SOURCE_SYNCE_LOCK_STATE_EXTENDED = '/sync/synce-status/lock-state-extended'
+SOURCE_SYNCE_LOCK_STATE = '/sync/synce-status/lock-state'

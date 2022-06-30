@@ -9,12 +9,15 @@ import json
 import time
 import oslo_messaging
 from oslo_config import cfg
+from oslo_utils import uuidutils
+
 import logging
 
 import multiprocessing as mp
 import threading
 
 from trackingfunctionsdk.client.ptpeventproducer import PtpEventProducer
+from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import ptpsync
 from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers.dmesg_watcher import DmesgWatcher
@@ -36,6 +39,18 @@ log_helper.config_logger(LOG)
 
 THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME",'controller-0')
 
+# Event source to event type mapping
+source_type = {
+    '/sync/gnss-status/gnss-sync-status': 'event.sync.gnss-status.gnss-state-change',
+    '/sync/ptp-status/clock-class': 'event.sync.ptp-status.ptp-clock-class-change',
+    '/sync/ptp-status/lock-state': 'event.sync.ptp-status.ptp-state-change',
+    '/sync/sync-status/os-clock-sync-state': 'event.sync.sync-status.os-clock-sync-state-change',
+    '/sync/sync-status/sync-state': 'event.sync.sync-status.synchronization-state-change',
+    '/sync/synce-status/clock-quality': 'event.sync.synce-status.synce-clock-quality-change',
+    '/sync/synce-status/lock-state-extended': 'event.sync.synce-status.synce-state-change-extended',
+    '/sync/synce-status/lock-state': 'event.sync.synce-status.synce-state-change',
+    '/sync/synce-status/lock-state': 'event.sync.synce-status.synce-state-change',
+}
 
 '''Entry point of Default Process Worker'''
 def ProcessWorkerDefault(event, sqlalchemy_conf_json, broker_transport_endpoint):
@@ -61,16 +76,38 @@ class PtpWatcherDefault:
             last_event_time = self.watcher.ptptracker_context.get('last_event_time', time.time())
             self.watcher.ptptracker_context_lock.release()
 
-            lastStatus = {
-                'ResourceType': ResourceType.TypePTP,
-                'EventData': {
-                    'State': sync_state
-                },
-                'ResourceQualifier': {
-                    'NodeName': self.watcher.node_name
-                },
-                'EventTimestamp': last_event_time
-            }
+            resource_address = rpc_kwargs.get('ResourceAddress', None)
+            if resource_address:
+                _, nodename, resource_path = ptpsync.parse_resource_address(resource_address)
+                lastStatus = {
+                    'id': uuidutils.generate_uuid(),
+                    'specversion': constants.SPEC_VERSION,
+                    'source': resource_path,
+                    'type': source_type[resource_path],
+                    'time': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(last_event_time)),
+                    'data': {
+                        'version': constants.DATA_VERSION,
+                        'values': [
+                            {
+                                'data_type': constants.DATA_TYPE_NOTIFICATION,
+                                'ResourceAddress': resource_address,
+                                'value_type': constants.VALUE_TYPE_ENUMERATION,
+                                'value': sync_state
+                            }
+                        ]
+                    }
+                }
+            else:
+                lastStatus = {
+                    'ResourceType': ResourceType.TypePTP,
+                    'EventData': {
+                        'State': sync_state
+                    },
+                    'ResourceQualifier': {
+                        'NodeName': self.watcher.node_name
+                    },
+                    'EventTimestamp': last_event_time
+                }
             return lastStatus
 
         def trigger_delivery(self, **rpc_kwargs):
@@ -183,7 +220,7 @@ class PtpWatcherDefault:
                 holdover_time, freq, sync_state, last_event_time)
         return new_event, sync_state, new_event_time
 
-    '''announce location'''
+    '''publish ptp status'''
     def __publish_ptpstatus(self, forced=False):
         holdover_time = float(self.ptptracker_context['holdover_seconds'])
         freq = float(self.ptptracker_context['poll_freq_seconds'])
@@ -200,7 +237,7 @@ class PtpWatcherDefault:
             self.ptptracker_context['last_event_time'] = new_event_time
             self.ptptracker_context_lock.release()
 
-            # publish new event
+            # publish new event in API version v1 format
             LOG.debug("publish ptp status to clients")
             lastStatus = {
                 'ResourceType': 'PTP',
@@ -212,7 +249,31 @@ class PtpWatcherDefault:
                 },
                 'EventTimestamp': new_event_time
             }
-            self.ptpeventproducer.publish_status(lastStatus)
+            self.ptpeventproducer.publish_status(lastStatus, 'PTP')
+
+            # publish new event in API version v2 format
+            resource_address = ptpsync.format_resource_address(
+                self.node_name,  constants.SOURCE_SYNC_SYNC_STATE)
+            lastStatus = {
+                'id': uuidutils.generate_uuid(),
+                'specversion': constants.SPEC_VERSION,
+                'source': constants.SOURCE_SYNC_SYNC_STATE,
+                'type': source_type[constants.SOURCE_SYNC_SYNC_STATE],
+                'time': new_event_time,
+                'data': {
+                    'version': constants.DATA_VERSION,
+                    'values': [
+                        {
+                            'data_type': constants.DATA_TYPE_NOTIFICATION,
+                            'ResourceAddress': resource_address,
+                            'value_type': constants.VALUE_TYPE_ENUMERATION,
+                            'value': sync_state
+                        }
+                    ]
+                }
+            }
+            self.ptpeventproducer.publish_status(lastStatus, constants.SOURCE_SYNC_SYNC_STATE)
+            self.ptpeventproducer.publish_status(lastStatus, constants.SOURCE_SYNC_ALL)
         return
 
 

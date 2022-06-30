@@ -1,4 +1,3 @@
-#coding=utf-8
 #
 # Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
@@ -16,7 +15,7 @@ from wsme import types as wtypes
 from wsmeext.pecan import wsexpose
 
 from notificationclientsdk.model.dto.resourcetype import ResourceType
-from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV2
 
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
 from notificationclientsdk.services.ptp import PtpService
@@ -32,38 +31,32 @@ log_helper.config_logger(LOG)
 
 THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME",'controller-0')
 
-class SubscriptionsControllerV1(rest.RestController):
+class SubscriptionsControllerV2(rest.RestController):
 
-    @wsexpose(SubscriptionInfoV1, body=SubscriptionInfoV1, status_code=201)
+    @wsexpose(SubscriptionInfoV2, body=SubscriptionInfoV2, status_code=201)
     def post(self, subscription):
         # decode the request body
         try:
-            if subscription.ResourceType == ResourceType.TypePTP:
-                LOG.info(' subscribe: {0}, {1} with callback uri {2}'.format(
-                    subscription.ResourceType,
-                    subscription.ResourceQualifier.NodeName,
+            if subscription.ResourceAddress:
+                LOG.info(' subscribe: ResourceAddress {0} with callback uri {1}'.format(
+                    subscription.ResourceAddress,
                     subscription.EndpointUri))
-            else:
-                LOG.warning(' Subscribe with unsupported ResourceType:{0}'.format(
-                    subscription.ResourceType))
-                abort(404)
 
-            if not self._validateV1(subscription):
+            if not self._validateV2(subscription):
                 LOG.warning(' Invalid Request data:{0}'.format(subscription.to_dict()))
                 abort(400)
 
-            subscription.UriLocation = "{0}://{1}:{2}/ocloudNotifications/v1/subscriptions".format(
+            subscription.UriLocation = "{0}://{1}:{2}/ocloudNotifications/v2/subscriptions".format(
                 conf.server.get('protocol','http'),
                 conf.server.get('host', '127.0.0.1'),
                 conf.server.get('port', '8080')
             )
-            if subscription.ResourceType == ResourceType.TypePTP:
+            if subscription.ResourceAddress:
                 ptpservice = PtpService(notification_control)
                 entry = ptpservice.add_subscription(subscription)
                 del ptpservice
                 if not entry:
                     abort(404)
-
             subscription.SubscriptionId = entry.SubscriptionId
             subscription.UriLocation = entry.UriLocation
             LOG.info('created subscription: {0}'.format(subscription.to_dict()))
@@ -96,8 +89,8 @@ class SubscriptionsControllerV1(rest.RestController):
             subs = []
             for x in entries:
                 if x.Status == 1:
-                    if getattr(x, 'ResourceType', None) is not None:
-                        subs.append(SubscriptionInfoV1(x).to_dict())
+                    if getattr(x, 'ResourceAddress', None) is not None:
+                        subs.append(SubscriptionInfoV2(x).to_dict())
             return subs
         except HTTPException as ex:
             LOG.warning("Client side error:{0},{1}".format(type(ex), str(ex)))
@@ -113,15 +106,14 @@ class SubscriptionsControllerV1(rest.RestController):
     def _lookup(self, subscription_id, *remainder):
         return SubscriptionController(subscription_id), remainder
 
-    def _validateV1(self, subscription_request):
+    def _validateV2(self, subscription_request):
         try:
-            assert subscription_request.ResourceType == 'PTP'
+            assert subscription_request.ResourceAddress
             assert subscription_request.EndpointUri
 
             return True
         except:
             return False
-
 
 class SubscriptionController(rest.RestController):
     def __init__(self, subscription_id):
@@ -137,7 +129,9 @@ class SubscriptionController(rest.RestController):
                 abort(404)
             else:
                 response.status = 200
-                return SubscriptionInfoV1(entry).to_dict()
+                if getattr(entry, 'ResourceAddress', None):
+                    return SubscriptionInfoV2(entry).to_dict()
+
         except HTTPException as ex:
             LOG.warning("Client side error:{0},{1}".format(type(ex), str(ex)))
             raise ex

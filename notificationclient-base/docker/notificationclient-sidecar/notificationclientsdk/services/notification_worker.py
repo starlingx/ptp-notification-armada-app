@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -20,7 +20,7 @@ from notificationclientsdk.common.helpers import rpc_helper, hostfile_helper
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
 
 from notificationclientsdk.model.dto.rpc_endpoint import RpcEndpointInfo
-from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
 from notificationclientsdk.model.dto.resourcetype import ResourceType
 from notificationclientsdk.model.dto.location import LocationInfo
 
@@ -242,7 +242,7 @@ class NotificationWorker:
 
             for s in subs:
                 if s.ResourceType:
-                    subinfo = SubscriptionInfoV0(s)
+                    subinfo = SubscriptionInfoV1(s)
                     # assume resource type being PTP and not wildcard
                     resource_type = s.ResourceType
                     if resource_type == ResourceType.TypePTP:

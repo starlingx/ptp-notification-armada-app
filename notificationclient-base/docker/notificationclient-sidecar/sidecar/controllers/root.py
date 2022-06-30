@@ -1,6 +1,5 @@
-#coding=utf-8
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,9 +13,10 @@ from wsmeext.pecan import wsexpose
 
 THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME",'controller-0')
 
-from sidecar.controllers.v1.subscriptions import SubscriptionsControllerV0
 from sidecar.controllers.v1.subscriptions import SubscriptionsControllerV1
+from sidecar.controllers.v2.subscriptions import SubscriptionsControllerV2
 from sidecar.controllers.v1.resource.ptp import PtpController
+from sidecar.controllers.v2.resource_address import ResourceAddressController
 import logging
 LOG = logging.getLogger(__name__)
 from notificationclientsdk.common.helpers import log_helper
@@ -40,20 +40,32 @@ class V1Controller(rest.RestController):
 
     @expose("json")
     def _lookup(self, primary_key, *remainder):
-        LOG.info("_lookup: primary_key={} remainder={}".format(primary_key, remainder))
-        payload = None
-        if request.is_body_readable:
-            payload = request.json_body
-            LOG.info("_lookup: payload={}".format(payload))
         if primary_key:
             if 'ptp' == primary_key.lower():
                 return PtpController(), remainder
             elif 'subscriptions' == primary_key.lower():
-                if payload and 'ResourceType' in payload:
-                    return SubscriptionsControllerV0(), remainder
-                else:
-                    return SubscriptionsControllerV1(), remainder
+                return SubscriptionsControllerV1(), remainder
         abort(404)
+
+class V2Controller(rest.RestController):
+
+    @wsexpose(wtypes.text)
+    def get(self):
+        return 'v2controller'
+
+    @expose("json")
+    def _lookup(self, primary_key, *remainder):
+        if primary_key:
+            if 'subscriptions' == primary_key.lower():
+                return SubscriptionsControllerV2(), remainder
+            else:
+                if 'currentstate' == remainder[-1].lower():
+                    resource_address_array = remainder[:-1]
+                    resource_address = '/' + primary_key + '/' + '/'.join(resource_address_array)
+                    remainder = remainder[-1:]
+                    return ResourceAddressController(resource_address), remainder
+        abort(404)
+
 
 class ocloudDaemonController(rest.RestController):
 
@@ -73,6 +85,8 @@ class ocloudDaemonController(rest.RestController):
         if primary_key:
             if 'v1' == primary_key.lower():
                 return V1Controller(), remainder
+            elif 'v2' == primary_key.lower():
+                return V2Controller(), remainder
         abort(404)
 
 class RootController(object):

@@ -4,13 +4,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV2
 from notificationclientsdk.model.dto.subscription import ResourceQualifierPtp
 
 from pecan.jsonify import jsonify
 
-@jsonify.register(SubscriptionInfoV0)
+@jsonify.register(SubscriptionInfoV1)
 def jsonify_subscriptioninfo(subscriptionInfo):
     return subscriptionInfo.to_dict()
 
@@ -18,7 +18,7 @@ def jsonify_subscriptioninfo(subscriptionInfo):
 def jsonify_resourcequalifierptp(resourceQualifierPtp):
     return resourceQualifierPtp.to_dict()
 
-@jsonify.register(SubscriptionInfoV1)
+@jsonify.register(SubscriptionInfoV2)
 def jsonify_subscriptioninfo(subscriptionInfo):
     return subscriptionInfo.to_dict()
 

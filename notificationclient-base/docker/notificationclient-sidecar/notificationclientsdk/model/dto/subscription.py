@@ -1,6 +1,6 @@
 #coding=utf-8
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -45,7 +45,7 @@ class ResourceQualifierPtp(ResourceQualifierBase):
 '''
 ViewModel of Subscription
 '''
-class SubscriptionInfoV0(wtypes.Base):
+class SubscriptionInfoV1(wtypes.Base):
     SubscriptionId = wtypes.text
     UriLocation = wtypes.text
     ResourceType = EnumResourceType
@@ -99,7 +99,7 @@ class SubscriptionInfoV0(wtypes.Base):
             }
         return d
 
-class SubscriptionInfoV1(wtypes.Base):
+class SubscriptionInfoV2(wtypes.Base):
     SubscriptionId = wtypes.text
     UriLocation = wtypes.text
     EndpointUri = wtypes.text

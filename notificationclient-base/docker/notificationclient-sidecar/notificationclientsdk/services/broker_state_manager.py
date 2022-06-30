@@ -1,13 +1,13 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 import json
 import logging
-from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV2
 from notificationclientsdk.model.dto.resourcetype import ResourceType
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
 from notificationclientsdk.common.helpers import subscription_helper
@@ -96,9 +96,8 @@ class BrokerStateManager:
         changed = False
         broker_name = None
 
-        LOG.info("__refresh_by_subscription: subscription_orm={}".format(subscription_orm))
         if getattr(subscription_orm, 'ResourceType') is not None:
-            subscription = SubscriptionInfoV0(subscription_orm)
+            subscription = SubscriptionInfoV1(subscription_orm)
             resource = subscription.ResourceType
             # assume PTP and not wildcard
             if resource == ResourceType.TypePTP:
@@ -108,22 +107,22 @@ class BrokerStateManager:
                 LOG.debug("Ignore the subscription for: {0}".format(subscription_orm.SubscriptionId))
                 return False
         else:
-            subscription = SubscriptionInfoV1(subscription_orm)
+            subscription = SubscriptionInfoV2(subscription_orm)
             _, nodename, resource = subscription_helper.parse_resource_address(subscription.ResourceAddress)
             broker_name = nodename
 
-        LOG.info("subscription:{0}, Status:{1}".format(subscription.to_dict(), subscription_orm.Status))
+        LOG.debug("subscription:{0}, Status:{1}".format(subscription.to_dict(), subscription_orm.Status))
         if subscription_orm.Status != 1:
             return False
 
         if not broker_name:
             # ignore the subscription due to unsupported type
-            LOG.info("Ignore the subscription for: {0}".format(subscription.SubscriptionId))
+            LOG.debug("Ignore the subscription for: {0}".format(subscription.SubscriptionId))
             return False
 
         enumerated_broker_names = NodeInfoHelper.enumerate_nodes(broker_name)
         if not enumerated_broker_names:
-            LOG.info("Failed to enumerate broker names for {0}".format(broker_name))
+            LOG.debug("Failed to enumerate broker names for {0}".format(broker_name))
             return False
 
         for expanded_broker_name in enumerated_broker_names:

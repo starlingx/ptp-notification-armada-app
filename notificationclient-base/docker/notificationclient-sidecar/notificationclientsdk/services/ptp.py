@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -9,16 +9,17 @@ import logging
 import json
 import kombu
 
+from notificationclientsdk.client.notificationservice import NotificationServiceClient
+from notificationclientsdk.common.helpers import subscription_helper
+from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
+from notificationclientsdk.model.dto.resourcetype import ResourceType
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV2
+from notificationclientsdk.model.orm.subscription import Subscription as SubscriptionOrm
 from notificationclientsdk.repository.node_repo import NodeRepo
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
-from notificationclientsdk.model.dto.resourcetype import ResourceType
-from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
-from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
-from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
-from notificationclientsdk.model.orm.subscription import Subscription as SubscriptionOrm
-from notificationclientsdk.client.notificationservice import NotificationServiceClient
 from notificationclientsdk.services.daemon import DaemonControl
-from notificationclientsdk.common.helpers import subscription_helper
+
 
 from notificationclientsdk.exception import client_exception
 
@@ -70,7 +71,7 @@ class PtpService(object):
         finally:
             del nodeinfo_repo
 
-    def query(self, broker_name):
+    def query(self, broker_name, resource_address=None):
         default_node_name = NodeInfoHelper.default_node_name(broker_name)
         broker_pod_ip, supported_resource_types = self.__get_node_info(default_node_name)
 
@@ -83,9 +84,9 @@ class PtpService(object):
                 ResourceType.TypePTP, default_node_name))
             raise client_exception.ResourceNotAvailable(broker_name, ResourceType.TypePTP)
 
-        return self._query(default_node_name, broker_pod_ip)
+        return self._query(default_node_name, broker_pod_ip, resource_address)
 
-    def _query(self, broker_name, broker_pod_ip):
+    def _query(self, broker_name, broker_pod_ip, resource_address=None):
         broker_host = "[{0}]".format(broker_pod_ip)
         broker_transport_endpoint = "rabbit://{0}:{1}@{2}:{3}".format(
             self.daemon_control.daemon_context['NOTIFICATION_BROKER_USER'],
@@ -97,7 +98,7 @@ class PtpService(object):
             notificationservice_client = NotificationServiceClient(
                 broker_name, broker_transport_endpoint, broker_pod_ip)
             resource_status = notificationservice_client.query_resource_status(
-                ResourceType.TypePTP, timeout=5, retry=10)
+                ResourceType.TypePTP, timeout=5, retry=10, resource_address=resource_address)
             return resource_status
         except oslo_messaging.exceptions.MessagingTimeout as ex:
             LOG.warning("ptp status is not available @node {0} due to {1}".format(
@@ -144,9 +145,9 @@ class PtpService(object):
 
             # Delivery the initial notification of ptp status
             if hasattr(subscription_dto, 'ResourceType'):
-                subscription_dto2 = SubscriptionInfoV0(entry)
-            else:
                 subscription_dto2 = SubscriptionInfoV1(entry)
+            else:
+                subscription_dto2 = SubscriptionInfoV2(entry)
 
             try:
                 subscription_helper.notify(subscription_dto2, ptpstatus)

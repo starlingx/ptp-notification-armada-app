@@ -1,6 +1,5 @@
-#coding=utf-8
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -59,7 +58,7 @@ def parse_resource_address(resource_address):
     # Assume no optional hierarchy for now
     clusterName = resource_address.split('/')[1]
     nodeName = resource_address.split('/')[2]
-    resource_path = re.split('[/]', resource_address, 3)[3]
+    resource_path = '/' + re.split('[/]', resource_address, 3)[3]
 
     return clusterName, nodeName, resource_path
 
