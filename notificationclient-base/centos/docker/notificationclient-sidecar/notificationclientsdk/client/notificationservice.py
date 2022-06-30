@@ -14,7 +14,6 @@ from notificationclientsdk.model.dto.rpc_endpoint import RpcEndpointInfo
 
 from notificationclientsdk.client.base import BrokerClientBase
 
-from notificationclientsdk.model.dto.subscription import SubscriptionInfo
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
 
 import logging

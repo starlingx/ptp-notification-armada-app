@@ -19,6 +19,7 @@ class Subscription(OrmBase):
     CreateTime = Column(Float)
     LastUpdateTime = Column(Float)
     ResourceQualifierJson = Column(String)
+    ResourceAddress = Column(String(512))
 
 def create_tables(orm_engine):
     Subscription.metadata.create_all(orm_engine)

@@ -8,8 +8,6 @@ import time
 import oslo_messaging
 import logging
 from notificationclientsdk.model.dto.rpc_endpoint import RpcEndpointInfo
-from notificationclientsdk.model.dto.subscription import SubscriptionInfo
-from notificationclientsdk.model.dto.resourcetype import ResourceType
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
 from notificationclientsdk.model.dto.broker_state import  BrokerState
 

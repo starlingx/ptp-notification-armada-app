@@ -45,7 +45,7 @@ class ResourceQualifierPtp(ResourceQualifierBase):
 '''
 ViewModel of Subscription
 '''
-class SubscriptionInfo(wtypes.Base):
+class SubscriptionInfoV0(wtypes.Base):
     SubscriptionId = wtypes.text
     UriLocation = wtypes.text
     ResourceType = EnumResourceType
@@ -63,11 +63,12 @@ class SubscriptionInfo(wtypes.Base):
         if not self._ResourceQualifer:
             if self.ResourceType == ResourceType.TypePTP:
                 self._ResourceQualifer = ResourceQualifierPtp(**self._ResourceQualifierJson)
-
+            else:
+                self._ResourceQualifer = None
         return self._ResourceQualifer
 
     ResourceQualifier = wtypes.wsproperty(wtypes.Base,
-    get_resource_qualifier, set_resource_qualifier, mandatory=True)
+    get_resource_qualifier, set_resource_qualifier)
 
 
     def __init__(self, orm_entry=None):
@@ -84,7 +85,7 @@ class SubscriptionInfo(wtypes.Base):
                 'ResourceType': self.ResourceType,
                 'UriLocation': self.UriLocation,
                 'EndpointUri': self.EndpointUri,
-                'ResourceQualifier': self.ResourceQualifier.to_dict()
+                'ResourceQualifier': self.ResourceQualifier.to_dict(),
             }
         return d
 
@@ -94,6 +95,37 @@ class SubscriptionInfo(wtypes.Base):
                 'ResourceType': self.ResourceType or '',
                 'UriLocation': self.UriLocation,
                 'EndpointUri': self.EndpointUri or '',
-                'ResourceQualifierJson': json.dumps(self.ResourceQualifier.to_dict())  or ''
+                'ResourceQualifierJson': json.dumps(self.ResourceQualifier.to_dict())  or '',
+            }
+        return d
+
+class SubscriptionInfoV1(wtypes.Base):
+    SubscriptionId = wtypes.text
+    UriLocation = wtypes.text
+    EndpointUri = wtypes.text
+    ResourceAddress = wtypes.text
+
+    def __init__(self, orm_entry=None):
+        if orm_entry:
+            self.SubscriptionId = orm_entry.SubscriptionId
+            self.UriLocation = orm_entry.UriLocation
+            self.EndpointUri = orm_entry.EndpointUri
+            self.ResourceAddress = orm_entry.ResourceAddress
+
+    def to_dict(self):
+        d = {
+                'SubscriptionId': self.SubscriptionId,
+                'UriLocation': self.UriLocation,
+                'EndpointUri': self.EndpointUri,
+                'ResourceAddress': self.ResourceAddress,
+            }
+        return d
+
+    def to_orm(self):
+        d = {
+                'SubscriptionId': self.SubscriptionId,
+                'UriLocation': self.UriLocation,
+                'EndpointUri': self.EndpointUri or '',
+                'ResourceAddress': self.ResourceAddress or ''
             }
         return d

@@ -20,7 +20,7 @@ from notificationclientsdk.common.helpers import rpc_helper, hostfile_helper
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
 
 from notificationclientsdk.model.dto.rpc_endpoint import RpcEndpointInfo
-from notificationclientsdk.model.dto.subscription import SubscriptionInfo
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
 from notificationclientsdk.model.dto.resourcetype import ResourceType
 from notificationclientsdk.model.dto.location import LocationInfo
 
@@ -241,15 +241,24 @@ class NotificationWorker:
                 self.broker_state_manager.refresh_by_nodeinfos(nodeinfos)
 
             for s in subs:
-                subinfo = SubscriptionInfo(s)
-
-                # assume resource type being PTP and not wildcast
-                resource_type = s.ResourceType
-                if resource_type == ResourceType.TypePTP:
-                    broker_name = subinfo.ResourceQualifier.NodeName
+                if s.ResourceType:
+                    subinfo = SubscriptionInfoV0(s)
+                    # assume resource type being PTP and not wildcard
+                    resource_type = s.ResourceType
+                    if resource_type == ResourceType.TypePTP:
+                        broker_name = subinfo.ResourceQualifier.NodeName
+                    else:
+                        # ignore the subscription due to unsupported type
+                        LOG.debug("Ignore the subscription for: {0}".format(subinfo.SubscriptionId))
+                        continue
+                elif s.ResourceAddress:
+                    # Get nodename from resource address
+                    LOG.info("Parse resource address {}".format(s.ResourceAddress))
+                    _,nodename,_ = subscription_helper.parse_resource_address(s.ResourceAddress)
+                    broker_name = nodename
                 else:
-                    # ignore the subscription due to unsupported type
-                    LOG.debug("Ignore the subscription for: {0}".format(subinfo.SubscriptionId))
+                    LOG.debug("Subscription {} does not have ResourceType or "
+                              "ResourceAddress".format(s.SubscriptionId))
                     continue
 
                 if s.Status == 1:

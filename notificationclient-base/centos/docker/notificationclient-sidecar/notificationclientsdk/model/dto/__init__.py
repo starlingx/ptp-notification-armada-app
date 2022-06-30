@@ -4,12 +4,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-from notificationclientsdk.model.dto.subscription import SubscriptionInfo
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
 from notificationclientsdk.model.dto.subscription import ResourceQualifierPtp
 
 from wsme.rest.json import tojson
 
-@tojson.when_object(SubscriptionInfo)
+@tojson.when_object(SubscriptionInfoV0)
 def subscriptioninfo_tojson(datatype, value):
     if value is None:
         return None
@@ -17,6 +18,12 @@ def subscriptioninfo_tojson(datatype, value):
 
 @tojson.when_object(ResourceQualifierPtp)
 def resourcequalifierptp_tojson(datatype, value):
+    if value is None:
+        return None
+    return value.to_dict()
+
+@tojson.when_object(SubscriptionInfoV1)
+def subscriptioninfo_tojson(datatype, value):
     if value is None:
         return None
     return value.to_dict()

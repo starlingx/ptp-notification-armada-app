@@ -6,9 +6,11 @@
 
 import json
 import logging
-from notificationclientsdk.model.dto.subscription import SubscriptionInfo
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV0
+from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
 from notificationclientsdk.model.dto.resourcetype import ResourceType
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
+from notificationclientsdk.common.helpers import subscription_helper
 
 from notificationclientsdk.model.dto.broker_state import BrokerState
 
@@ -94,29 +96,34 @@ class BrokerStateManager:
         changed = False
         broker_name = None
 
-        subscription = SubscriptionInfo(subscription_orm)
-        resource_type = subscription.ResourceType
-
-        LOG.debug("subscription:{0}, Status:{1}".format(subscription.to_dict(), subscription_orm.Status))
-        if subscription_orm.Status != 1:
-            return False
-
-        # assume PTP and not wildcast
-        if resource_type == ResourceType.TypePTP:
-            broker_name = subscription.ResourceQualifier.NodeName
+        LOG.info("__refresh_by_subscription: subscription_orm={}".format(subscription_orm))
+        if getattr(subscription_orm, 'ResourceType') is not None:
+            subscription = SubscriptionInfoV0(subscription_orm)
+            resource = subscription.ResourceType
+            # assume PTP and not wildcard
+            if resource == ResourceType.TypePTP:
+                broker_name = subscription.ResourceQualifier.NodeName
+            else:
+                # ignore the subscription due to unsupported type
+                LOG.debug("Ignore the subscription for: {0}".format(subscription_orm.SubscriptionId))
+                return False
         else:
-            # ignore the subscription due to unsupported type
-            LOG.debug("Ignore the subscription for: {0}".format(subinfo.SubscriptionId))
+            subscription = SubscriptionInfoV1(subscription_orm)
+            _, nodename, resource = subscription_helper.parse_resource_address(subscription.ResourceAddress)
+            broker_name = nodename
+
+        LOG.info("subscription:{0}, Status:{1}".format(subscription.to_dict(), subscription_orm.Status))
+        if subscription_orm.Status != 1:
             return False
 
         if not broker_name:
             # ignore the subscription due to unsupported type
-            LOG.debug("Ignore the subscription for: {0}".format(subscription.SubscriptionId))
+            LOG.info("Ignore the subscription for: {0}".format(subscription.SubscriptionId))
             return False
 
         enumerated_broker_names = NodeInfoHelper.enumerate_nodes(broker_name)
         if not enumerated_broker_names:
-            LOG.debug("Failed to enumerate broker names for {0}".format(broker_name))
+            LOG.info("Failed to enumerate broker names for {0}".format(broker_name))
             return False
 
         for expanded_broker_name in enumerated_broker_names:
@@ -125,8 +132,8 @@ class BrokerStateManager:
                 brokerstate = self.add_broker(expanded_broker_name)
                 changed = True
 
-            changed = changed or (brokerstate.is_resource_subscribed(resource_type) == False)
-            brokerstate.try_subscribe_resource(resource_type, self.subscription_refresh_iteration)
+            changed = changed or (brokerstate.is_resource_subscribed(resource) == False)
+            brokerstate.try_subscribe_resource(resource, self.subscription_refresh_iteration)
 
         return changed
 
