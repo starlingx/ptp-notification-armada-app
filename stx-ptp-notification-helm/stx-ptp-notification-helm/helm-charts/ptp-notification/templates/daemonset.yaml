@@ -166,7 +166,6 @@ spec:
         - name: varrun
           hostPath:
             path: {{ .Values.ptptracking.ptp4lSocket }}
-            type: Socket
       {{ end }}
         - name: pmc
           hostPath:
