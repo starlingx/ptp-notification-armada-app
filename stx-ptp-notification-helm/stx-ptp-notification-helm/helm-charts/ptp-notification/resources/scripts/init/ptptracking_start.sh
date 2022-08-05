@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2022 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -28,36 +28,37 @@ log_helper.config_logger(LOG)
 
 import os
 import json
-import time  # 引入time模块
-import oslo_messaging
-from oslo_config import cfg
 
 from trackingfunctionsdk.services.daemon import DaemonControl
 
-THIS_NAMESPACE = os.environ.get("THIS_NAMESPACE",'notification')
-THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME",'controller-1')
-THIS_POD_IP = os.environ.get("THIS_POD_IP",'127.0.0.1')
-REGISTRATION_USER = os.environ.get("REGISTRATION_USER", "admin")
-REGISTRATION_PASS = os.environ.get("REGISTRATION_PASS", "admin")
+THIS_NAMESPACE = os.environ.get("THIS_NAMESPACE", 'notification')
+THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME", 'controller-0')
+THIS_POD_IP = os.environ.get("THIS_POD_IP", '127.0.0.1')
+REGISTRATION_USER = os.environ.get("REGISTRATION_USER", "guest")
+REGISTRATION_PASS = os.environ.get("REGISTRATION_PASS", "guest")
 REGISTRATION_PORT = os.environ.get("REGISTRATION_PORT", "5672")
-REGISTRATION_HOST = os.environ.get("REGISTRATION_HOST",'registration.notification.svc.cluster.local')
+# REGISTRATION_HOST = os.environ.get("REGISTRATION_HOST", 'registration.notification.svc.cluster.local')
+REGISTRATION_HOST = os.environ.get("REGISTRATION_HOST", 'localhost')
 
 # 'rabbit://admin:admin@[127.0.0.1]:5672/'
 # 'rabbit://admin:admin@[::1]:5672/'
 REGISTRATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@[{2}]:{3}'.format(
-  REGISTRATION_USER, REGISTRATION_PASS, REGISTRATION_HOST, REGISTRATION_PORT)
+    REGISTRATION_USER, REGISTRATION_PASS, REGISTRATION_HOST, REGISTRATION_PORT)
 
-NOTIFICATION_BROKER_USER = os.environ.get("NOTIFICATIONSERVICE_USER", "admin")
-NOTIFICATION_BROKER_PASS = os.environ.get("NOTIFICATIONSERVICE_PASS", "admin")
+NOTIFICATION_BROKER_USER = os.environ.get("NOTIFICATIONSERVICE_USER", "guest")
+NOTIFICATION_BROKER_PASS = os.environ.get("NOTIFICATIONSERVICE_PASS", "guest")
 NOTIFICATION_BROKER_PORT = os.environ.get("NOTIFICATIONSERVICE_PORT", "5672")
 
 NOTIFICATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@[{2}]:{3}'.format(
-  NOTIFICATION_BROKER_USER, NOTIFICATION_BROKER_PASS, THIS_POD_IP, NOTIFICATION_BROKER_PORT)
+    NOTIFICATION_BROKER_USER, NOTIFICATION_BROKER_PASS, THIS_POD_IP, NOTIFICATION_BROKER_PORT)
 
-PTP_DEVICE_SIMULATED = os.environ.get("PTP_DEVICE_SIMULATED", False)
+PTP_DEVICE_SIMULATED = os.environ.get("PTP_DEVICE_SIMULATED", True)
 
 PTP_HOLDOVER_SECONDS = os.environ.get("PTP_HOLDOVER_SECONDS", 30)
 PTP_POLL_FREQ_SECONDS = os.environ.get("PTP_POLL_FREQ_SECONDS", 2)
+
+GNSS_CONFIGS = os.environ.get("TS2PHC_CONFIGS", ["/ptp/ptpinstance/ts2phc-ts1.conf"])
+PHC2SYS_CONFIG = os.environ.get("PHC2SYS_CONFIG", "/ptp/ptpinstance/phc2sys-phc-inst1.conf")
 
 context = {
     'THIS_NAMESPACE': THIS_NAMESPACE,
@@ -65,9 +66,9 @@ context = {
     'THIS_POD_IP': THIS_POD_IP,
     'REGISTRATION_TRANSPORT_ENDPOINT': REGISTRATION_TRANSPORT_ENDPOINT,
     'NOTIFICATION_TRANSPORT_ENDPOINT': NOTIFICATION_TRANSPORT_ENDPOINT,
-    # 'NOTIFICATION_BROKER_USER': NOTIFICATION_BROKER_USER,
-    # 'NOTIFICATION_BROKER_PASS': NOTIFICATION_BROKER_PASS,
-    # 'NOTIFICATION_BROKER_PORT': NOTIFICATION_BROKER_PORT
+    'GNSS_CONFIGS': GNSS_CONFIGS,
+    'PHC2SYS_CONFIG': PHC2SYS_CONFIG,
+
     'ptptracker_context': {
         'device_simulated': PTP_DEVICE_SIMULATED,
         'holdover_seconds': PTP_HOLDOVER_SECONDS,
@@ -76,11 +77,11 @@ context = {
 }
 
 sqlalchemy_conf = {
-    'url'           : 'sqlite:///apiserver.db',
-    'echo'          : False,
-    'echo_pool'     : False,
-    'pool_recycle'  : 3600,
-    'encoding'      : 'utf-8'
+    'url': 'sqlite:///apiserver.db',
+    'echo': False,
+    'echo_pool': False,
+    'pool_recycle': 3600,
+    'encoding': 'utf-8'
 }
 
 sqlalchemy_conf_json = json.dumps(sqlalchemy_conf)

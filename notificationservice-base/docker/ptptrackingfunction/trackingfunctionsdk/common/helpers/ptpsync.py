@@ -20,8 +20,10 @@ import subprocess
 import datetime
 import logging
 from trackingfunctionsdk.common.helpers import constants
+from trackingfunctionsdk.common.helpers import log_helper
 
 LOG = logging.getLogger(__name__)
+log_helper.config_logger(LOG)
 
 # dictionary includes PMC commands used and keywords of intrest
 ptp_oper_dict = {
@@ -166,7 +168,7 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
     #     Holdover —> Locked           #
     #     Freerun —> Locked            #
     ####################################
-    current_time = datetime.datetime.now().timestamp()
+    current_time = datetime.datetime.utcnow().timestamp()
     time_in_holdover = round(current_time - event_time)
     previous_sync_state = sync_state
     # max holdover time is calculated to be in a 'safety' zoon
@@ -179,24 +181,27 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
         sync_state = check_results(result, total_ptp_keywords, port_count)
     else:
         sync_state = constants.FREERUN_PHC_STATE
-    # determine if transition into holdover mode (cannot be in holdover if system clock is not in sync)
+    # determine if transition into holdover mode (cannot be in holdover if system clock is not in
+    # sync)
     if sync_state == constants.FREERUN_PHC_STATE and phc2sys:
         if previous_sync_state in [constants.UNKNOWN_PHC_STATE, constants.FREERUN_PHC_STATE]:
             sync_state = constants.FREERUN_PHC_STATE
         elif previous_sync_state == constants.LOCKED_PHC_STATE:
             sync_state = constants.HOLDOVER_PHC_STATE
-        elif previous_sync_state == constants.HOLDOVER_PHC_STATE and time_in_holdover < max_holdover_time:
+        elif previous_sync_state == constants.HOLDOVER_PHC_STATE and time_in_holdover < \
+                max_holdover_time:
             sync_state = constants.HOLDOVER_PHC_STATE
         else:
-            sync_state == constants.FREERUN_PHC_STATE
+            sync_state = constants.FREERUN_PHC_STATE
 
     # determine if ptp sync state has changed since the last one
     if sync_state != previous_sync_state:
-        new_event = "true"
-        event_time = datetime.datetime.now().timestamp()
+        new_event = True
+        event_time = datetime.datetime.utcnow().timestamp()
     else:
-        new_event = "false"
+        new_event = False
     return new_event, sync_state, event_time
+
 
 def parse_resource_address(resource_address):
     # The format of resource address is:
@@ -206,6 +211,7 @@ def parse_resource_address(resource_address):
     nodeName = resource_address.split('/')[2]
     resource_path = '/' + re.split('[/]', resource_address, 3)[3]
     return clusterName, nodeName, resource_path
+
 
 def format_resource_address(node_name, resource):
     # Return a resource_address

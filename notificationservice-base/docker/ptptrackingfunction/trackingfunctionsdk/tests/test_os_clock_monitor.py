@@ -14,13 +14,13 @@ from trackingfunctionsdk.common.helpers.os_clock_monitor import OsClockMonitor
 from trackingfunctionsdk.model.dto.osclockstate import OsClockState
 
 testpath = os.environ.get("TESTPATH", "")
+phc2sys_test_config = constants.PTP_CONFIG_PATH + "phc2sys-phc2sys-test.conf"
 
 class OsClockMonitorTests(unittest.TestCase):
-    os.environ["PHC2SYS_CONFIG"] = constants.PTP_CONFIG_PATH + "phc2sys-phc2sys-test.conf"
-    clockmon = OsClockMonitor(init=False)
+    clockmon = OsClockMonitor(init=False, phc2sys_config=phc2sys_test_config)
 
     def test_set_phc2sys_instance(self):
-        self.clockmon = OsClockMonitor(init=False)
+        self.clockmon = OsClockMonitor(init=False, phc2sys_config=phc2sys_test_config)
         self.clockmon.set_phc2sys_instance()
         assert self.clockmon.phc2sys_instance == "phc2sys-test"
 

@@ -27,8 +27,8 @@ class OsClockMonitor:
     ptp_device = None
     offset = None
 
-    def __init__(self, init=True):
-        self.phc2sys_config = os.environ.get("PHC2SYS_CONFIG", constants.PHC2SYS_DEFAULT_CONFIG)
+    def __init__(self, init=True, phc2sys_config=constants.PHC2SYS_DEFAULT_CONFIG):
+        self.phc2sys_config = phc2sys_config
         self.set_phc2sys_instance()
 
         """Normally initialize all fields, but allow these to be skipped to assist with unit testing
@@ -124,14 +124,41 @@ class OsClockMonitor:
         if offset_int > constants.PHC2SYS_TOLERANCE_HIGH or \
                 offset_int < constants.PHC2SYS_TOLERANCE_LOW:
             LOG.warning("PHC2SYS offset is outside of tolerance, handling state change.")
-            # TODO Implement handler for os clock state change
-            pass
+            self._state = OsClockState.Freerun
         else:
             LOG.info("PHC2SYS offset is within tolerance, OS clock state is LOCKED")
             self._state = OsClockState.Locked
 
     def get_os_clock_state(self):
         return self._state
+
+    def os_clock_status(self, holdover_time, freq, sync_state, event_time):
+        current_time = datetime.datetime.utcnow().timestamp()
+        time_in_holdover = round(current_time - event_time)
+        previous_sync_state = sync_state
+        max_holdover_time = (holdover_time - freq * 2)
+
+        self.get_os_clock_offset()
+        self.set_os_clock_state()
+
+        if self.get_os_clock_state() == constants.FREERUN_PHC_STATE:
+            if previous_sync_state in [constants.UNKNOWN_PHC_STATE, constants.FREERUN_PHC_STATE]:
+                self._state = constants.FREERUN_PHC_STATE
+            elif previous_sync_state == constants.LOCKED_PHC_STATE:
+                self._state = constants.HOLDOVER_PHC_STATE
+            elif previous_sync_state == constants.HOLDOVER_PHC_STATE and \
+                    time_in_holdover < max_holdover_time:
+                self._state = constants.HOLDOVER_PHC_STATE
+            else:
+                self._state = constants.FREERUN_PHC_STATE
+
+        # determine if os clock sync state has changed since the last check
+        if self._state != previous_sync_state:
+            new_event = True
+            event_time = datetime.datetime.utcnow().timestamp()
+        else:
+            new_event = False
+        return new_event, self.get_os_clock_state(), event_time
 
 
 if __name__ == "__main__":
