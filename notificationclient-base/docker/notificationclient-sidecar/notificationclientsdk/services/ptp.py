@@ -8,6 +8,7 @@ import oslo_messaging
 import logging
 import json
 import kombu
+from datetime import datetime, timezone
 
 from notificationclientsdk.client.notificationservice import NotificationServiceClient
 from notificationclientsdk.common.helpers import subscription_helper
@@ -114,9 +115,11 @@ class PtpService(object):
 
     def add_subscription(self, subscription_dto):
         subscription_orm = SubscriptionOrm(**subscription_dto.to_orm())
+        resource_address = None
         if hasattr(subscription_dto, 'ResourceAddress'):
             _,nodename,_ = subscription_helper.parse_resource_address(subscription_dto.ResourceAddress)
             broker_name = nodename
+            resource_address = subscription_dto.ResourceAddress
         elif hasattr(subscription_dto, 'ResourceType'):
             broker_name = subscription_dto.ResourceQualifier.NodeName
         default_node_name = NodeInfoHelper.default_node_name(broker_name)
@@ -136,11 +139,19 @@ class PtpService(object):
         if default_node_name:
 
             ptpstatus = None
-            ptpstatus = self._query(default_node_name, broker_pod_ip)
+            ptpstatus = self._query(default_node_name, broker_pod_ip, resource_address)
             LOG.info("initial ptpstatus:{0}".format(ptpstatus))
 
             # construct subscription entry
-            subscription_orm.InitialDeliveryTimestamp = ptpstatus.get('EventTimestamp', None)
+            timestamp = ptpstatus.get('EventTimestamp', None)
+            if timestamp is None:
+                timestamp = ptpstatus.get('time', None)
+                # Change time from float to ascii format
+                ptpstatus['time'] = datetime.fromtimestamp(ptpstatus['time']).strftime('%Y-%m-%dT%H:%M:%S%fZ')
+                # ptpstatus['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
+                #                                   time.gmtime(timestamp))
+
+            subscription_orm.InitialDeliveryTimestamp = timestamp
             entry = self.subscription_repo.add(subscription_orm)
 
             # Delivery the initial notification of ptp status

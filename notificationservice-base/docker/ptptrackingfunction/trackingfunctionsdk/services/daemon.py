@@ -80,34 +80,69 @@ class PtpWatcherDefault:
             self.watcher = watcher
             self.init_time = time.time()
 
-        def query_status(self, **rpc_kwargs):
-            self.watcher.ptptracker_context_lock.acquire()
-            sync_state = self.watcher.ptptracker_context.get('sync_state', PtpState.Freerun)
-            last_event_time = self.watcher.ptptracker_context.get('last_event_time', time.time())
-            self.watcher.ptptracker_context_lock.release()
+        def _build_event_response(self, resource_path, last_event_time, resource_address, sync_state):
+            if resource_path in [constants.SOURCE_SYNC_PTP_CLOCK_CLASS, constants.SOURCE_SYNCE_CLOCK_QUALITY]:
+                data_type = constants.DATA_TYPE_METRIC
+            else:
+                data_type = constants.DATA_TYPE_NOTIFICATION
+            lastStatus = {
+                'id': uuidutils.generate_uuid(),
+                'specversion': constants.SPEC_VERSION,
+                'source': resource_path,
+                'type': source_type[resource_path],
+                'time': last_event_time,
+                'data': {
+                    'version': constants.DATA_VERSION,
+                    'values': [
+                        {
+                            'data_type': data_type,
+                            'ResourceAddress': resource_address,
+                            'value_type': constants.VALUE_TYPE_ENUMERATION,
+                            'value': sync_state
+                        }
+                    ]
+                }
+            }
+            return lastStatus
 
+        def query_status(self, **rpc_kwargs):
+            lastStatus = {}
             resource_address = rpc_kwargs.get('ResourceAddress', None)
             if resource_address:
                 _, nodename, resource_path = ptpsync.parse_resource_address(resource_address)
-                lastStatus = {
-                    'id': uuidutils.generate_uuid(),
-                    'specversion': constants.SPEC_VERSION,
-                    'source': resource_path,
-                    'type': source_type[resource_path],
-                    'time': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(last_event_time)),
-                    'data': {
-                        'version': constants.DATA_VERSION,
-                        'values': [
-                            {
-                                'data_type': constants.DATA_TYPE_NOTIFICATION,
-                                'ResourceAddress': resource_address,
-                                'value_type': constants.VALUE_TYPE_ENUMERATION,
-                                'value': sync_state
-                            }
-                        ]
-                    }
-                }
+                if resource_path == constants.SOURCE_SYNC_ALL:
+                    resource_path = constants.SOURCE_SYNC_SYNC_STATE
+                if resource_path == constants.SOURCE_SYNC_GNSS_SYNC_STATUS:
+                    self.watcher.gnsstracker_context_lock.acquire()
+                    sync_state = self.watcher.gnsstracker_context.get('sync_state', GnssState.Freerun)
+                    last_event_time = self.watcher.gnsstracker_context.get('last_event_time', time.time())
+                    self.watcher.gnsstracker_context_lock.release()
+                    lastStatus = self._build_event_response(resource_path, last_event_time, resource_address, sync_state)
+                # elif resource_path == constants.SOURCE_SYNC_PTP_CLOCK_CLASS:
+                elif resource_path == constants.SOURCE_SYNC_PTP_LOCK_STATE:
+                    self.watcher.ptptracker_context_lock.acquire()
+                    sync_state = self.watcher.ptptracker_context.get('sync_state', PtpState.Freerun)
+                    last_event_time = self.watcher.ptptracker_context.get('last_event_time', time.time())
+                    self.watcher.ptptracker_context_lock.release()
+                    lastStatus = self._build_event_response(resource_path, last_event_time, resource_address, sync_state)
+                elif resource_path == constants.SOURCE_SYNC_OS_CLOCK:
+                    self.watcher.osclocktracker_context_lock.acquire()
+                    sync_state = self.watcher.osclocktracker_context.get('sync_state', OsClockState.Freerun)
+                    last_event_time = self.watcher.osclocktracker_context.get('last_event_time', time.time())
+                    self.watcher.osclocktracker_context_lock.release()
+                    lastStatus = self._build_event_response(resource_path, last_event_time, resource_address, sync_state)
+                elif resource_path == constants.SOURCE_SYNC_SYNC_STATE:
+                    self.watcher.overalltracker_context_lock.acquire()
+                    sync_state = self.watcher.overalltracker_context.get('sync_state', OverallClockState.Freerun)
+                    last_event_time = self.watcher.overalltracker_context.get('last_event_time', time.time())
+                    self.watcher.overalltracker_context_lock.release()
+                    lastStatus = self._build_event_response(resource_path, last_event_time, resource_address, sync_state)
+                LOG.debug("query_status: {}".format(lastStatus))
             else:
+                self.watcher.ptptracker_context_lock.acquire()
+                sync_state = self.watcher.ptptracker_context.get('sync_state', PtpState.Freerun)
+                last_event_time = self.watcher.ptptracker_context.get('last_event_time', time.time())
+                self.watcher.ptptracker_context_lock.release()
                 lastStatus = {
                     'ResourceType': ResourceType.TypePTP,
                     'EventData': {

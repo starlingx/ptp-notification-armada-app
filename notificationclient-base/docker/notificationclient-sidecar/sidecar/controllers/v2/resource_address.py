@@ -10,6 +10,7 @@ from webob.exc import HTTPException, HTTPNotFound, HTTPBadRequest, HTTPClientErr
 from wsme import types as wtypes
 from wsmeext.pecan import wsexpose
 
+from datetime import datetime, timezone
 import os
 import logging
 import oslo_messaging
@@ -45,6 +46,10 @@ class ResourceAddressController(object):
                 abort(404)
             ptpservice = PtpService(notification_control)
             ptpstatus = ptpservice.query(THIS_NODE_NAME, self.resource_address)
+            # Change time from float to ascii format
+            # ptpstatus['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
+            #                                   time.gmtime(ptpstatus['time']))
+            ptpstatus['time'] = datetime.fromtimestamp(ptpstatus['time']).strftime('%Y-%m-%dT%H:%M:%S%fZ')
             return ptpstatus
         except client_exception.NodeNotAvailable as ex:
             LOG.warning("Node is not available:{0}".format(str(ex)))

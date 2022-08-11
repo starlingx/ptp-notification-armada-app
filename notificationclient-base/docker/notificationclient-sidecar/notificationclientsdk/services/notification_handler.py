@@ -10,6 +10,7 @@ import logging
 import multiprocessing as mp
 import threading
 import time
+from datetime import datetime, timezone
 
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV2
@@ -65,8 +66,9 @@ class NotificationHandler(NotificationHandlerBase):
                 _,node_name,_ = subscription_helper.parse_resource_address(resource_address)
                 this_delivery_time = notification_info['time']
                 # Change time from float to ascii format
-                notification_info['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
-                                                          time.gmtime(this_delivery_time))
+                notification_info['time'] = datetime.fromtimestamp(this_delivery_time).strftime('%Y-%m-%dT%H:%M:%S%fZ')
+                # notification_info['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
+                #                                           time.gmtime(this_delivery_time))
 
             entries = subscription_repo.get(Status=1)
             for entry in entries:
@@ -137,7 +139,7 @@ class NotificationHandler(NotificationHandlerBase):
         else:
             last_delivery_stat = self.notification_stat.get(node_name,{}).get(subscriptionid,{})
             last_delivery_time = last_delivery_stat.get('EventTimestamp', None)
-            if (last_delivery_time >= this_delivery_time):
+            if (last_delivery_time and last_delivery_time >= this_delivery_time):
                 return
             last_delivery_stat['EventTimestamp'] = this_delivery_time
             LOG.debug("delivery time @node: {0},subscription:{1} is updated".format(
