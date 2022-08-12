@@ -57,7 +57,16 @@ PTP_DEVICE_SIMULATED = os.environ.get("PTP_DEVICE_SIMULATED", True)
 PTP_HOLDOVER_SECONDS = os.environ.get("PTP_HOLDOVER_SECONDS", 30)
 PTP_POLL_FREQ_SECONDS = os.environ.get("PTP_POLL_FREQ_SECONDS", 2)
 
-GNSS_CONFIGS = os.environ.get("TS2PHC_CONFIGS", ["/ptp/ptpinstance/ts2phc-ts1.conf"])
+GNSS_HOLDOVER_SECONDS = os.environ.get("GNSS_HOLDOVER_SECONDS", 30)
+GNSS_POLL_FREQ_SECONDS = os.environ.get("GNSS_POLL_FREQ_SECONDS", 2)
+
+OS_CLOCK_HOLDOVER_SECONDS = os.environ.get("OS_CLOCK_HOLDOVER_SECONDS", 30)
+OS_CLOCK_POLL_FREQ_SECONDS = os.environ.get("OS_CLOCK_POLL_FREQ_SECONDS", 2)
+
+OVERALL_HOLDOVER_SECONDS = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
+OVERALL_POLL_FREQ_SECONDS = os.environ.get("OVERALL_POLL_FREQ_SECONDS", 2)
+
+GNSS_CONFIGS = json.loads(os.environ.get("TS2PHC_CONFIGS", ["/ptp/ptpinstance/ts2phc-ts1.conf"]))
 PHC2SYS_CONFIG = os.environ.get("PHC2SYS_CONFIG", "/ptp/ptpinstance/phc2sys-phc-inst1.conf")
 
 context = {
@@ -73,6 +82,18 @@ context = {
         'device_simulated': PTP_DEVICE_SIMULATED,
         'holdover_seconds': PTP_HOLDOVER_SECONDS,
         'poll_freq_seconds': PTP_POLL_FREQ_SECONDS
+    },
+    'gnsstracker_context': {
+        'holdover_seconds': GNSS_HOLDOVER_SECONDS,
+        'poll_freq_seconds': GNSS_POLL_FREQ_SECONDS
+    },
+    'osclocktracker_context': {
+        'holdover_seconds': OS_CLOCK_HOLDOVER_SECONDS,
+        'poll_freq_seconds': OS_CLOCK_POLL_FREQ_SECONDS
+    },
+    'overalltracker_context': {
+        'holdover_seconds': OVERALL_HOLDOVER_SECONDS,
+        'poll_freq_seconds': OVERALL_POLL_FREQ_SECONDS
     }
 }
 

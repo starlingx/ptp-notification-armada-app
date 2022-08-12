@@ -69,11 +69,21 @@ ptptracking:
   ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
   ptp4lServiceName: ptp4l-legacy
   phc2sysServiceName: phc2sys-legacy
+  ts2phcServiceName: ts2phc-legacy
   image:
     repository: starlingx/notificationservice-base
     tag: stx.7.0-v1.0.5
     pullPolicy: IfNotPresent
   device:
     simulated: false
+    holdover_seconds: 15
+    poll_freq_seconds: 2
+  gnss:
+    holdover_seconds: 15
+    poll_freq_seconds: 2
+  osclock:
+    holdover_seconds: 15
+    poll_freq_seconds: 2
+  overall:
     holdover_seconds: 15
     poll_freq_seconds: 2

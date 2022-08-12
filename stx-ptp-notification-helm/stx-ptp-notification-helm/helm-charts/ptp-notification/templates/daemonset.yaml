@@ -111,6 +111,18 @@ spec:
             value: "{{ .Values.ptptracking.device.holdover_seconds }}"
           - name: PTP_POLL_FREQ_SECONDS
             value: "{{ .Values.ptptracking.device.poll_freq_seconds }}"
+          - name: GNSS_HOLDOVER_SECONDS
+            value: "{{ .Values.ptptracking.gnss.holdover_seconds }}"
+          - name: GNSS_POLL_FREQ_SECONDS
+            value: "{{ .Values.ptptracking.gnss.poll_freq_seconds }}"
+          - name: OS_CLOCK_HOLDOVER_SECONDS
+            value: "{{ .Values.ptptracking.osclock.holdover_seconds }}"
+          - name: OS_CLOCK_POLL_FREQ_SECONDS
+            value: "{{ .Values.ptptracking.osclock.poll_freq_seconds }}"
+          - name: OVERALL_HOLDOVER_SECONDS
+            value: "{{ .Values.ptptracking.overall.holdover_seconds }}"
+          - name: OVERALL_POLL_FREQ_SECONDS
+            value: "{{ .Values.ptptracking.overall.poll_freq_seconds }}"
           - name: NOTIFICATIONSERVICE_USER
             value: "admin"
           - name: NOTIFICATIONSERVICE_PASS
@@ -129,6 +141,12 @@ spec:
             value: "{{ .Values.ptptracking.ptp4lServiceName }}"
           - name: PHC2SYS_SERVICE_NAME
             value: "{{ .Values.ptptracking.phc2sysServiceName }}"
+          - name: PHC2SYS_CONFIG
+            value: "/ptp/ptpinstance/phc2sys-{{.Values.ptptracking.phc2sysServiceName}}.conf"
+          - name: TS2PHC_SERVICE_NAME
+            value: "{{ .Values.ptptracking.ts2phcServiceName }}"
+          - name: TS2PHC_CONFIGS
+            value: '["/ptp/ptpinstance/ts2phc-{{.Values.ptptracking.ts2phcServiceName}}.conf"]'
         command: ["/bin/bash", "/mnt/ptptracking_start.sh"]
         securityContext:
           privileged: true
@@ -149,9 +167,23 @@ spec:
           - name: pmc
             mountPath: /usr/sbin/pmc
             readOnly: false
+          - name: phcctl
+            mountPath: /usr/sbin/phc_ctl
+            readOnly: false
       {{ end }}
           - name: conf
             mountPath: /ptp/
+            readOnly: true
+          - name: logs
+            mountPath: /logs/
+            readOnly: true
+          - name: ice
+            mountPath: /ice/
+            readOnly: true
+          - name: proc
+            mountPath: /host/proc/
+          - name: hostsys
+            mountPath: /hostsys/
             readOnly: true
       volumes:
         - name: scripts
@@ -170,9 +202,28 @@ spec:
         - name: pmc
           hostPath:
             path: /usr/sbin/pmc
+        - name: phcctl
+          hostPath:
+            path: /usr/sbin/phc_ctl
         - name: conf
           hostPath:
             path: /etc/
+            type: Directory
+        - name: logs
+          hostPath:
+            path: /var/log/
+            type: Directory
+        - name: ice
+          hostPath:
+            path: /sys/kernel/debug/ice/
+            type: Directory
+        - name: proc
+          hostPath:
+            path: /proc
+            type: Directory
+        - name: hostsys
+          hostPath:
+            path: /sys/
             type: Directory
       tolerations:
       - key: "node-role.kubernetes.io/master"
