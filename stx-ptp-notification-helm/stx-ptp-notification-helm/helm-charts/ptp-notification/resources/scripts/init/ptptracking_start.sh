@@ -21,15 +21,16 @@ cat <<EOF>/root/ptptracking-daemon.py
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 import logging
-LOG = logging.getLogger(__name__)
-
-from trackingfunctionsdk.common.helpers import log_helper
-log_helper.config_logger(LOG)
-
 import os
 import json
 
+from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.services.daemon import DaemonControl
+
+LOG = logging.getLogger(__name__)
+log_helper.config_logger(LOG)
+
+
 
 THIS_NAMESPACE = os.environ.get("THIS_NAMESPACE", 'notification')
 THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME", 'controller-0')
@@ -66,8 +67,10 @@ OS_CLOCK_POLL_FREQ_SECONDS = os.environ.get("OS_CLOCK_POLL_FREQ_SECONDS", 2)
 OVERALL_HOLDOVER_SECONDS = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
 OVERALL_POLL_FREQ_SECONDS = os.environ.get("OVERALL_POLL_FREQ_SECONDS", 2)
 
-GNSS_CONFIGS = json.loads(os.environ.get("TS2PHC_CONFIGS", ["/ptp/ptpinstance/ts2phc-ts1.conf"]))
+GNSS_CONFIGS = json.loads(os.environ.get("TS2PHC_CONFIGS", '["/ptp/ptpinstance/ts2phc-tc1.conf"]'))
 PHC2SYS_CONFIG = os.environ.get("PHC2SYS_CONFIG", "/ptp/ptpinstance/phc2sys-phc-inst1.conf")
+PTP4L_CONFIGS = json.loads(os.environ.get("PTP4L_CONFIGS", '["/ptp/ptpinstance/ptp4l-ptp-legacy.conf"]'))
+
 
 context = {
     'THIS_NAMESPACE': THIS_NAMESPACE,
@@ -77,6 +80,7 @@ context = {
     'NOTIFICATION_TRANSPORT_ENDPOINT': NOTIFICATION_TRANSPORT_ENDPOINT,
     'GNSS_CONFIGS': GNSS_CONFIGS,
     'PHC2SYS_CONFIG': PHC2SYS_CONFIG,
+    'PTP4L_CONFIGS' : PTP4L_CONFIGS,
 
     'ptptracker_context': {
         'device_simulated': PTP_DEVICE_SIMULATED,

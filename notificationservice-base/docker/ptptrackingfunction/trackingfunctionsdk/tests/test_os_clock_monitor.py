@@ -17,15 +17,15 @@ testpath = os.environ.get("TESTPATH", "")
 phc2sys_test_config = constants.PTP_CONFIG_PATH + "phc2sys-phc2sys-test.conf"
 
 class OsClockMonitorTests(unittest.TestCase):
-    clockmon = OsClockMonitor(init=False, phc2sys_config=phc2sys_test_config)
+    clockmon = OsClockMonitor(phc2sys_config=phc2sys_test_config, init=False)
 
     def test_set_phc2sys_instance(self):
-        self.clockmon = OsClockMonitor(init=False, phc2sys_config=phc2sys_test_config)
+        self.clockmon = OsClockMonitor(phc2sys_config=phc2sys_test_config, init=False)
         self.clockmon.set_phc2sys_instance()
         assert self.clockmon.phc2sys_instance == "phc2sys-test"
 
     def test_check_config_file_interface(self):
-        self.clockmon = OsClockMonitor(init=False)
+        self.clockmon = OsClockMonitor(phc2sys_config=phc2sys_test_config, init=False)
         self.clockmon.phc2sys_config = testpath + "test_input_files/phc2sys-test.conf"
         self.assertEqual(self.clockmon._check_config_file_interface(), "ens2f0")
 
@@ -56,7 +56,7 @@ class OsClockMonitorTests(unittest.TestCase):
                              ])
     def test_get_interface_phc_device(self, glob_patched):
         # Success path
-        self.clockmon = OsClockMonitor(init=False)
+        self.clockmon = OsClockMonitor(phc2sys_config=phc2sys_test_config, init=False)
         self.clockmon.phc_interface = "ens1f0"
         self.assertEqual(self.clockmon._get_interface_phc_device(), 'ptp0')
 
@@ -69,13 +69,13 @@ class OsClockMonitorTests(unittest.TestCase):
     @mock.patch('trackingfunctionsdk.common.helpers.os_clock_monitor.subprocess.check_output',
                 side_effect=[b'-37000000015ns'])
     def test_get_os_clock_offset(self, subprocess_patched):
-        self.clockmon = OsClockMonitor(init=False)
+        self.clockmon = OsClockMonitor(phc2sys_config=phc2sys_test_config, init=False)
         self.clockmon.ptp_device = 'ptp0'
         self.clockmon.get_os_clock_offset()
         assert self.clockmon.offset == '37000000015'
 
     def test_set_os_closck_state(self):
-        self.clockmon = OsClockMonitor(init=False)
+        self.clockmon = OsClockMonitor(phc2sys_config=phc2sys_test_config, init=False)
         self.clockmon.offset = '37000000015'
         self.clockmon.set_os_clock_state()
         self.assertEqual(self.clockmon.get_os_clock_state(), OsClockState.Locked)

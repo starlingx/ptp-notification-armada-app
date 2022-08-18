@@ -27,7 +27,7 @@ class OsClockMonitor:
     ptp_device = None
     offset = None
 
-    def __init__(self, init=True, phc2sys_config=constants.PHC2SYS_DEFAULT_CONFIG):
+    def __init__(self, phc2sys_config, init=True):
         self.phc2sys_config = phc2sys_config
         self.set_phc2sys_instance()
 

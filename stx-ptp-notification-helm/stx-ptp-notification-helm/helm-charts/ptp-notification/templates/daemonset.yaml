@@ -147,6 +147,8 @@ spec:
             value: "{{ .Values.ptptracking.ts2phcServiceName }}"
           - name: TS2PHC_CONFIGS
             value: '["/ptp/ptpinstance/ts2phc-{{.Values.ptptracking.ts2phcServiceName}}.conf"]'
+          - name: LOGGING_LEVEL
+            value: "{{ .Values.ptptracking.log_level }}"
         command: ["/bin/bash", "/mnt/ptptracking_start.sh"]
         securityContext:
           privileged: true

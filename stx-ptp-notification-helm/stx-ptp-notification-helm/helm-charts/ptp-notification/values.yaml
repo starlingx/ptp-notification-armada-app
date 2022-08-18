@@ -70,6 +70,7 @@ ptptracking:
   ptp4lServiceName: ptp4l-legacy
   phc2sysServiceName: phc2sys-legacy
   ts2phcServiceName: ts2phc-legacy
+  log_level: INFO
   image:
     repository: starlingx/notificationservice-base
     tag: stx.7.0-v1.0.5
