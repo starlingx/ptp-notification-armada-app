@@ -13,3 +13,4 @@ API definition
    :maxdepth: 2
 
    api_ptp_notifications_definition_v1
+   api_ptp_notifications_definition_v2
