@@ -7,8 +7,6 @@
 %global app_name ptp-notification
 %global helm_repo stx-platform
 
-%global armada_folder  /usr/lib/armada
-
 # Install location
 %global app_folder /usr/local/share/applications/helm
 
@@ -34,15 +32,7 @@ BuildRequires: python-k8sapp-ptp-notification
 BuildRequires: python-k8sapp-ptp-notification-wheels
 
 %description
-StarlingX PTP Notification Helm Charts
-
-%package armada
-Summary: StarlingX PTP Notification Application Armada Helm Charts
-Group: base
-License: Apache-2.0
-
-%description armada
-StarlingX PTP Notification Application Armada Helm Charts
+StarlingX PTP Notification FluxCD Helm Charts
 
 %prep
 %setup -n %{name}-%{version}
@@ -63,19 +53,14 @@ kill %1
 
 # Create a chart tarball compliant with sysinv kube-app.py
 %define app_staging %{_builddir}/staging
-%define app_tarball_armada %{app_name}-armada-%{version}-%{tis_patch_ver}.tgz
 %define app_tarball_fluxcd %{app_name}-%{version}-%{tis_patch_ver}.tgz
-%define armada_app_path %{_builddir}/%{app_tarball_armada}
 %define fluxcd_app_path %{_builddir}/%{app_tarball_fluxcd}
 
 # Setup staging
 mkdir -p %{app_staging}
 cp files/metadata.yaml %{app_staging}
-cp manifests/ptp_notification_manifest.yaml %{app_staging}
 mkdir -p %{app_staging}/charts
 cp helm-charts/*.tgz %{app_staging}/charts
-#cp %{helm_folder}/*.tgz %{app_staging}/charts
-cd %{app_staging}
 
 # Populate metadata
 sed -i 's/@APP_NAME@/%{app_name}/g' %{app_staging}/metadata.yaml
@@ -86,14 +71,7 @@ sed -i 's/@HELM_REPO@/%{helm_repo}/g' %{app_staging}/metadata.yaml
 mkdir -p %{app_staging}/plugins
 cp /plugins/%{app_name}/*.whl %{app_staging}/plugins
 
-# package it up
-find . -type f ! -name '*.md5' -print0 | xargs -0 md5sum > checksum.md5
-tar -zcf %armada_app_path -C %{app_staging}/ .
-
 # package fluxcd
-rm -f %{app_staging}/ptp_notification_manifest.yaml
-
-cd -
 cp -R fluxcd-manifests %{app_staging}/
 
 # calculate checksum of all files in app_staging
@@ -108,12 +86,7 @@ rm -fr %{app_staging}
 
 %install
 install -d -m 755 %{buildroot}/%{app_folder}
-install -p -D -m 755 %armada_app_path %{buildroot}/%{app_folder}
 install -p -D -m 755 %fluxcd_app_path %{buildroot}/%{app_folder}
-
-%files armada
-%defattr(-,root,root,-)
-%{app_folder}/%{app_tarball_armada}
 
 %files
 %defattr(-,root,root,-)

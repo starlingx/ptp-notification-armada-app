@@ -15,6 +15,6 @@ Package: stx-ptp-notification-helm
 Section: libs
 Architecture: any
 Depends: ${misc:Depends}
-Description: StarlingX PTP Notification Armada Helm Charts
- This package contains Armada helm charts for the PTP notification
+Description: StarlingX PTP Notification FluxCD Helm Charts
+ This package contains FluxCD helm charts for the PTP notification
  application.
