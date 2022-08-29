@@ -10,6 +10,7 @@ RUN set -ex ;\
         $(grep '^name=' ${STX_REPO_FILE} | awk -F '=' '{printf "--enablerepo=" $2 " "}') \
         -y \
         gcc python3-devel python3-pip \
+        && pip3 install --upgrade pip \
         && pip3 install --user pecan \
         && pip3 install pygtail \
         && pip3 install oslo-config \

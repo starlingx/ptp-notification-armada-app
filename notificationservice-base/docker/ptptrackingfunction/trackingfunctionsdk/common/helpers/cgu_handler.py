@@ -80,7 +80,6 @@ class CguHandler:
     def cgu_output_to_dict(self):
         # Take raw cgu output and parse it into a dict
         cgu_output = self.cgu_output_raw.splitlines()
-        LOG.debug("CGU output: %s" % cgu_output)
         cgu_dict = {'input': {},
                     'EEC DPLL': {
                         'Current reference': '',

@@ -103,6 +103,8 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: status.podIP
+          - name: PYTHONPATH
+            value: /opt/ptptrackingfunction
           - name: THIS_NAMESPACE
             value: {{ .Values.global.namespace }}
           - name: PTP_DEVICE_SIMULATED
@@ -145,11 +147,9 @@ spec:
             value: "/ptp/ptpinstance/phc2sys-{{.Values.ptptracking.phc2sysServiceName}}.conf"
           - name: TS2PHC_SERVICE_NAME
             value: "{{ .Values.ptptracking.ts2phcServiceName }}"
-          - name: TS2PHC_CONFIGS
-            value: '["/ptp/ptpinstance/ts2phc-{{.Values.ptptracking.ts2phcServiceName}}.conf"]'
           - name: LOGGING_LEVEL
             value: "{{ .Values.ptptracking.log_level }}"
-        command: ["/bin/bash", "/mnt/ptptracking_start.sh"]
+        command: ["python3", "/mnt/ptptracking_start.py"]
         securityContext:
           privileged: true
           capabilities:

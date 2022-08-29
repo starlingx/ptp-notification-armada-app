@@ -3,28 +3,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-#!/bin/bash
-
-# apt-get update -y
-# #sleep infinity
-
-# apt-get install -y gcc
-# apt-get install -y python-dev
-# apt-get install -y python3-pip
-
-# export https_proxy=http://128.224.230.5:9090
-
-# pip3 install oslo-config
-# pip3 install oslo-messaging
-
-cat <<EOF>/root/ptptracking-daemon.py
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 import logging
+import re
 import os
 import json
 
 from trackingfunctionsdk.common.helpers import log_helper
+from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.services.daemon import DaemonControl
 
 LOG = logging.getLogger(__name__)
@@ -67,10 +54,21 @@ OS_CLOCK_POLL_FREQ_SECONDS = os.environ.get("OS_CLOCK_POLL_FREQ_SECONDS", 2)
 OVERALL_HOLDOVER_SECONDS = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
 OVERALL_POLL_FREQ_SECONDS = os.environ.get("OVERALL_POLL_FREQ_SECONDS", 2)
 
-GNSS_CONFIGS = json.loads(os.environ.get("TS2PHC_CONFIGS", '["/ptp/ptpinstance/ts2phc-tc1.conf"]'))
-PHC2SYS_CONFIG = os.environ.get("PHC2SYS_CONFIG", "/ptp/ptpinstance/phc2sys-phc-inst1.conf")
-PTP4L_CONFIGS = json.loads(os.environ.get("PTP4L_CONFIGS", '["/ptp/ptpinstance/ptp4l-ptp-legacy.conf"]'))
+PHC2SYS_CONFIG = "/ptp/ptpinstance/phc2sys-%s.conf" % os.environ.get("PHC2SYS_SERVICE_NAME", "phc2sys-legacy")
 
+PTP4L_INSTANCES = os.environ.get("PTP4L_SERVICE_NAME", "ptp4l-legacy")
+PTP4L_INSTANCES = str(PTP4L_INSTANCES).replace('[','').replace(']','')
+PTP4L_INSTANCES = PTP4L_INSTANCES.split()
+PTP4L_CONFIGS = []
+for item in PTP4L_INSTANCES:
+    PTP4L_CONFIGS.append("/ptp/ptpinstance/ptp4l-%s.conf" % item)
+
+GNSS_INSTANCES = os.environ.get("TS2PHC_SERVICE_NAME", None)
+GNSS_INSTANCES = str(GNSS_INSTANCES).replace('[','').replace(']','')
+GNSS_INSTANCES = GNSS_INSTANCES.split()
+GNSS_CONFIGS = []
+for item in GNSS_INSTANCES:
+    GNSS_CONFIGS.append("/ptp/ptpinstance/ts2phc-%s.conf" % item)
 
 context = {
     'THIS_NAMESPACE': THIS_NAMESPACE,
@@ -81,6 +79,8 @@ context = {
     'GNSS_CONFIGS': GNSS_CONFIGS,
     'PHC2SYS_CONFIG': PHC2SYS_CONFIG,
     'PTP4L_CONFIGS' : PTP4L_CONFIGS,
+    'GNSS_INSTANCES': GNSS_INSTANCES,
+    'PTP4L_INSTANCES': PTP4L_INSTANCES,
 
     'ptptracker_context': {
         'device_simulated': PTP_DEVICE_SIMULATED,
@@ -108,7 +108,7 @@ sqlalchemy_conf = {
     'pool_recycle': 3600,
     'encoding': 'utf-8'
 }
-
+LOG.info("PTP tracking service startup context %s" % context)
 sqlalchemy_conf_json = json.dumps(sqlalchemy_conf)
 default_daemoncontrol = DaemonControl(sqlalchemy_conf_json, json.dumps(context))
 
@@ -116,12 +116,5 @@ default_daemoncontrol.refresh()
 while True:
     pass
 
-EOF
 
 
-
-echo "done"
-
-PYTHONPATH=/opt/ptptrackingfunction python3 /root/ptptracking-daemon.py &
-
-sleep infinity

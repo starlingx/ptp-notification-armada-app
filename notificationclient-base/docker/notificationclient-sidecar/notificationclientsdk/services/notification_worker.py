@@ -10,6 +10,7 @@ import logging
 import multiprocessing as mp
 import threading
 import sys
+
 if sys.version > '3':
     import queue as Queue
 else:
@@ -18,6 +19,7 @@ else:
 from notificationclientsdk.common.helpers import subscription_helper
 from notificationclientsdk.common.helpers import rpc_helper, hostfile_helper
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
+from notificationclientsdk.common.helpers import log_helper
 
 from notificationclientsdk.model.dto.rpc_endpoint import RpcEndpointInfo
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
@@ -38,14 +40,13 @@ from notificationclientsdk.services.broker_connection_manager import BrokerConne
 from notificationclientsdk.services.notification_handler import NotificationHandler
 
 LOG = logging.getLogger(__name__)
-
-from notificationclientsdk.common.helpers import log_helper
 log_helper.config_logger(LOG)
 
-class NotificationWorker:
 
+class NotificationWorker:
     class LocationInfoHandler(LocationHandlerBase):
         '''Glue code to forward location info to daemon method'''
+
         def __init__(self, locationinfo_dispatcher):
             self.locationinfo_dispatcher = locationinfo_dispatcher
             super(NotificationWorker.LocationInfoHandler, self).__init__()
@@ -55,7 +56,7 @@ class NotificationWorker:
             return self.locationinfo_dispatcher.produce_location_event(location_info)
 
     def __init__(
-        self, event, subscription_event, daemon_context):
+            self, event, subscription_event, daemon_context):
 
         self.__alive = True
 
@@ -254,7 +255,8 @@ class NotificationWorker:
                 elif s.ResourceAddress:
                     # Get nodename from resource address
                     LOG.info("Parse resource address {}".format(s.ResourceAddress))
-                    _,nodename,_ = subscription_helper.parse_resource_address(s.ResourceAddress)
+                    _, nodename, _, _, _ = subscription_helper.parse_resource_address(
+                        s.ResourceAddress)
                     broker_name = nodename
                 else:
                     LOG.debug("Subscription {} does not have ResourceType or "
@@ -298,7 +300,7 @@ class NotificationWorker:
         try:
             LOG.debug("try to sync up  data for {0} brokers".format(
                 self.broker_state_manager.count_brokers()))
-            result,_,_ = self.broker_state_manager.syncup_broker_data(
+            result, _, _ = self.broker_state_manager.syncup_broker_data(
                 self.broker_connection_manager)
         except Exception as ex:
             result = False

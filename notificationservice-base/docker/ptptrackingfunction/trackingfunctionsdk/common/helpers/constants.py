@@ -45,6 +45,8 @@ CLOCK_REALTIME = "CLOCK_REALTIME"
 PHC2SYS_TOLERANCE_LOW = 36999999000
 PHC2SYS_TOLERANCE_HIGH = 37000001000
 
+PTP_V1_KEY = "ptp_notification_v1"
+
 # testing values
 CGU_PATH_VALID = "/sys/kernel/debug/ice/0000:18:00.0/cgu"
 

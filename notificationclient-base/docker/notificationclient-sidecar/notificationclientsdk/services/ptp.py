@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 
 from notificationclientsdk.client.notificationservice import NotificationServiceClient
 from notificationclientsdk.common.helpers import subscription_helper
+from notificationclientsdk.common.helpers import log_helper
+from notificationclientsdk.common.helpers import constants
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
 from notificationclientsdk.model.dto.resourcetype import ResourceType
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
@@ -21,13 +23,11 @@ from notificationclientsdk.repository.node_repo import NodeRepo
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
 from notificationclientsdk.services.daemon import DaemonControl
 
-
 from notificationclientsdk.exception import client_exception
 
 LOG = logging.getLogger(__name__)
-
-from notificationclientsdk.common.helpers import log_helper
 log_helper.config_logger(LOG)
+
 
 class PtpService(object):
 
@@ -72,7 +72,7 @@ class PtpService(object):
         finally:
             del nodeinfo_repo
 
-    def query(self, broker_name, resource_address=None):
+    def query(self, broker_name, resource_address=None, optional=None):
         default_node_name = NodeInfoHelper.default_node_name(broker_name)
         broker_pod_ip, supported_resource_types = self.__get_node_info(default_node_name)
 
@@ -85,9 +85,9 @@ class PtpService(object):
                 ResourceType.TypePTP, default_node_name))
             raise client_exception.ResourceNotAvailable(broker_name, ResourceType.TypePTP)
 
-        return self._query(default_node_name, broker_pod_ip, resource_address)
+        return self._query(default_node_name, broker_pod_ip, resource_address, optional)
 
-    def _query(self, broker_name, broker_pod_ip, resource_address=None):
+    def _query(self, broker_name, broker_pod_ip, resource_address=None, optional=None):
         broker_host = "[{0}]".format(broker_pod_ip)
         broker_transport_endpoint = "rabbit://{0}:{1}@{2}:{3}".format(
             self.daemon_control.daemon_context['NOTIFICATION_BROKER_USER'],
@@ -99,7 +99,8 @@ class PtpService(object):
             notificationservice_client = NotificationServiceClient(
                 broker_name, broker_transport_endpoint, broker_pod_ip)
             resource_status = notificationservice_client.query_resource_status(
-                ResourceType.TypePTP, timeout=5, retry=10, resource_address=resource_address)
+                ResourceType.TypePTP, timeout=5, retry=10, resource_address=resource_address,
+                optional=optional)
             return resource_status
         except oslo_messaging.exceptions.MessagingTimeout as ex:
             LOG.warning("ptp status is not available @node {0} due to {1}".format(
@@ -117,7 +118,8 @@ class PtpService(object):
         subscription_orm = SubscriptionOrm(**subscription_dto.to_orm())
         resource_address = None
         if hasattr(subscription_dto, 'ResourceAddress'):
-            _,nodename,_ = subscription_helper.parse_resource_address(subscription_dto.ResourceAddress)
+            _, nodename, _, _, _ = subscription_helper.parse_resource_address(subscription_dto.
+                                                                              ResourceAddress)
             broker_name = nodename
             resource_address = subscription_dto.ResourceAddress
         elif hasattr(subscription_dto, 'ResourceType'):
@@ -139,17 +141,22 @@ class PtpService(object):
         if default_node_name:
 
             ptpstatus = None
-            ptpstatus = self._query(default_node_name, broker_pod_ip, resource_address)
+            ptpstatus = self._query(default_node_name,
+                                    broker_pod_ip,
+                                    resource_address,
+                                    optional=None)
             LOG.info("initial ptpstatus:{0}".format(ptpstatus))
 
             # construct subscription entry
-            timestamp = ptpstatus.get('EventTimestamp', None)
-            if timestamp is None:
-                timestamp = ptpstatus.get('time', None)
-                # Change time from float to ascii format
-                ptpstatus['time'] = datetime.fromtimestamp(ptpstatus['time']).strftime('%Y-%m-%dT%H:%M:%S%fZ')
-                # ptpstatus['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
-                #                                   time.gmtime(timestamp))
+            if constants.PTP_V1_KEY in ptpstatus:
+                timestamp = ptpstatus[constants.PTP_V1_KEY].get('EventTimestamp', None)
+                ptpstatus = ptpstatus[constants.PTP_V1_KEY]
+            else:
+                for item in ptpstatus:
+                    timestamp = ptpstatus[item].get('time', None)
+                    # Change time from float to ascii format
+                    ptpstatus[item]['time'] = datetime.fromtimestamp(ptpstatus[item]['time']) \
+                        .strftime('%Y-%m-%dT%H:%M:%S%fZ')
 
             subscription_orm.InitialDeliveryTimestamp = timestamp
             entry = self.subscription_repo.add(subscription_orm)
@@ -179,7 +186,7 @@ class PtpService(object):
     def remove_subscription(self, subscriptionid):
         try:
             # 1, delete entry
-            self.subscription_repo.delete_one(SubscriptionId = subscriptionid)
+            self.subscription_repo.delete_one(SubscriptionId=subscriptionid)
             self.subscription_repo.commit()
             # 2, refresh daemon
             self.daemon_control.refresh()

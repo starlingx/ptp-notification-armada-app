@@ -37,7 +37,8 @@ class ResourceAddressController(object):
     def CurrentState(self):
         try:
             # validate resource address
-            _, nodename, resource = subscription_helper.parse_resource_address(self.resource_address)
+            _, nodename, resource, optional, self.resource_address = subscription_helper.\
+                parse_resource_address(self.resource_address)
             if nodename != THIS_NODE_NAME and nodename != '.':
                 LOG.warning("Node {} is not available".format(nodename))
                 abort(404)
@@ -45,11 +46,13 @@ class ResourceAddressController(object):
                 LOG.warning("Resource {} is not valid".format(resource))
                 abort(404)
             ptpservice = PtpService(notification_control)
-            ptpstatus = ptpservice.query(THIS_NODE_NAME, self.resource_address)
+            ptpstatus = ptpservice.query(THIS_NODE_NAME, self.resource_address, optional)
             # Change time from float to ascii format
             # ptpstatus['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
             #                                   time.gmtime(ptpstatus['time']))
-            ptpstatus['time'] = datetime.fromtimestamp(ptpstatus['time']).strftime('%Y-%m-%dT%H:%M:%S%fZ')
+            for item in ptpstatus:
+                ptpstatus[item]['time'] = datetime.fromtimestamp(ptpstatus[item]['time']).\
+                    strftime('%Y-%m-%dT%H:%M:%S%fZ')
             return ptpstatus
         except client_exception.NodeNotAvailable as ex:
             LOG.warning("Node is not available:{0}".format(str(ex)))
