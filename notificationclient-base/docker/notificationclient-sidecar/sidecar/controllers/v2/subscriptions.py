@@ -14,22 +14,21 @@ import logging
 from wsme import types as wtypes
 from wsmeext.pecan import wsexpose
 
-from notificationclientsdk.model.dto.resourcetype import ResourceType
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV2
 
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
 from notificationclientsdk.services.ptp import PtpService
 from notificationclientsdk.exception import client_exception
+from notificationclientsdk.common.helpers import log_helper
 
 from sidecar.repository.notification_control import notification_control
 from sidecar.repository.dbcontext_default import defaults
 
 LOG = logging.getLogger(__name__)
-
-from notificationclientsdk.common.helpers import log_helper
 log_helper.config_logger(LOG)
 
-THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME",'controller-0')
+THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME", 'controller-0')
+
 
 class SubscriptionsControllerV2(rest.RestController):
 
@@ -47,7 +46,7 @@ class SubscriptionsControllerV2(rest.RestController):
                 abort(400)
 
             subscription.UriLocation = "{0}://{1}:{2}/ocloudNotifications/v2/subscriptions".format(
-                conf.server.get('protocol','http'),
+                conf.server.get('protocol', 'http'),
                 conf.server.get('host', '127.0.0.1'),
                 conf.server.get('port', '8080')
             )
@@ -77,13 +76,13 @@ class SubscriptionsControllerV2(rest.RestController):
             LOG.error("Server side error:{0},{1}".format(type(ex), str(ex)))
             abort(500)
         except Exception as ex:
-            LOG.error("Exception:{0}@{1}".format(type(ex),str(ex)))
+            LOG.error("Exception:{0}@{1}".format(type(ex), str(ex)))
             abort(500)
 
     @expose('json')
     def get(self):
         try:
-            repo = SubscriptionRepo(defaults['dbcontext'].get_session(), autocommit = False)
+            repo = SubscriptionRepo(defaults['dbcontext'].get_session(), autocommit=False)
             entries = repo.get(Status=1)
             response.status = 200
             subs = []
@@ -99,7 +98,7 @@ class SubscriptionsControllerV2(rest.RestController):
             LOG.error("Server side error:{0},{1}".format(type(ex), str(ex)))
             raise ex
         except Exception as ex:
-            LOG.error("Exception:{0}@{1}".format(type(ex),str(ex)))
+            LOG.error("Exception:{0}@{1}".format(type(ex), str(ex)))
             abort(500)
 
     @expose()
@@ -115,6 +114,7 @@ class SubscriptionsControllerV2(rest.RestController):
         except:
             return False
 
+
 class SubscriptionController(rest.RestController):
     def __init__(self, subscription_id):
         self.subscription_id = subscription_id
@@ -122,7 +122,7 @@ class SubscriptionController(rest.RestController):
     @expose('json')
     def get(self):
         try:
-            repo = SubscriptionRepo(defaults['dbcontext'].get_session(), autocommit = False)
+            repo = SubscriptionRepo(defaults['dbcontext'].get_session(), autocommit=False)
             entry = repo.get_one(SubscriptionId=self.subscription_id, Status=1)
 
             if not entry:
@@ -139,13 +139,13 @@ class SubscriptionController(rest.RestController):
             LOG.error("Server side error:{0},{1}".format(type(ex), str(ex)))
             raise ex
         except Exception as ex:
-            LOG.error("Exception:{0}@{1}".format(type(ex),str(ex)))
+            LOG.error("Exception:{0}@{1}".format(type(ex), str(ex)))
             abort(500)
 
     @wsexpose(status_code=204)
     def delete(self):
         try:
-            repo = SubscriptionRepo(defaults['dbcontext'].get_session(), autocommit = False)
+            repo = SubscriptionRepo(defaults['dbcontext'].get_session(), autocommit=False)
             entry = repo.get_one(SubscriptionId=self.subscription_id)
             if entry:
                 if entry.SubscriptionId:
@@ -164,5 +164,5 @@ class SubscriptionController(rest.RestController):
             LOG.error("Server side error:{0},{1}".format(type(ex), str(ex)))
             raise ex
         except Exception as ex:
-            LOG.error("Exception:{0}@{1}".format(type(ex),str(ex)))
+            LOG.error("Exception:{0}@{1}".format(type(ex), str(ex)))
             abort(500)

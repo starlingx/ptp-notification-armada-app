@@ -15,6 +15,8 @@ def get_logger(module_name):
 
 
 def config_logger(logger):
-    logging.basicConfig(stream=sys.stdout)
+    logging.basicConfig(stream=sys.stdout,
+                        format='%(asctime)s %(levelname)-8s %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
     logger.setLevel(level=os.environ.get("LOGGING_LEVEL", "INFO"))
     return logger

@@ -58,12 +58,19 @@ class NotificationServiceClient(BrokerClientBase):
         return
 
     def query_resource_status(self, resource_type,
-        timeout=None, retry=None, resource_qualifier_json=None, resource_address=None):
+                              timeout=None,
+                              retry=None,
+                              resource_qualifier_json=None,
+                              resource_address=None,
+                              optional=None):
         topic = '{0}-Status'.format(resource_type)
         server = '{0}-Tracking-{1}'.format(resource_type, self.target_node_name)
         return self.call(
-            topic, server, 'QueryStatus', timeout=timeout, retry=retry,
-            QualifierJson=resource_qualifier_json, ResourceAddress=resource_address)
+            topic, server, 'QueryStatus',
+            timeout=timeout, retry=retry,
+            QualifierJson=resource_qualifier_json,
+            ResourceAddress=resource_address,
+            optional=optional)
 
     def add_resource_status_listener(self, resource_type, status_handler=None):
         if not status_handler:

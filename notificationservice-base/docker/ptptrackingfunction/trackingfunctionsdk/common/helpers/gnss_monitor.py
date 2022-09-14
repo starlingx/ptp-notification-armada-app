@@ -5,6 +5,7 @@
 #
 import logging
 import datetime
+import re
 
 from abc import ABC, abstractmethod
 
@@ -34,6 +35,13 @@ class GnssMonitor(Observer):
 
     def __init__(self, config_file, nmea_serialport=None, pci_addr=None, cgu_path=None):
         self.config_file = config_file
+        try:
+            pattern = '(?<=/ptp/ptpinstance/ts2phc-).*(?=.conf)'
+            match = re.search(pattern, self.config_file)
+            self.ts2phc_service_name = match.group()
+        except AttributeError:
+            LOG.warning("GnssMonitor: Unable to determine tsphc_service name from %s"
+                        % self.config_file)
 
         # Setup GNSS data
         self.gnss_cgu_handler = CguHandler(config_file, nmea_serialport, pci_addr, cgu_path)

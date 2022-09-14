@@ -67,7 +67,9 @@ location:
 ptptracking:
   imagePullSecrets: default-registry-key
   ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
-  ptp4lServiceName: ptp4l-legacy
+  ptp4lServiceName:
+    - ptp1
+    - ptp2
   phc2sysServiceName: phc2sys-legacy
   ts2phcServiceName: ts2phc-legacy
   log_level: INFO

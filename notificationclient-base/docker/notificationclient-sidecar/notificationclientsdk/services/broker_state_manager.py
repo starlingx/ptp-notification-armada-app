@@ -17,13 +17,16 @@ from notificationclientsdk.model.dto.broker_state import BrokerState
 LOG = logging.getLogger(__name__)
 
 from notificationclientsdk.common.helpers import log_helper
+
 log_helper.config_logger(LOG)
+
 
 class BrokerStateManager:
     '''
     Manager to manage broker states
     Note: Now it is not thread safe
     '''
+
     def __init__(self):
         self.broker_state_map = {}
         self.disabled_brokers = []
@@ -84,7 +87,7 @@ class BrokerStateManager:
         for broker_name, brokerstate in self.broker_state_map.items():
             try:
                 if brokerstate.any_obsolete_subscription(
-                    self.subscription_refresh_iteration):
+                        self.subscription_refresh_iteration):
                     return True
             except Exception as ex:
                 LOG.warning(
@@ -104,14 +107,17 @@ class BrokerStateManager:
                 broker_name = subscription.ResourceQualifier.NodeName
             else:
                 # ignore the subscription due to unsupported type
-                LOG.debug("Ignore the subscription for: {0}".format(subscription_orm.SubscriptionId))
+                LOG.debug(
+                    "Ignore the subscription for: {0}".format(subscription_orm.SubscriptionId))
                 return False
         else:
             subscription = SubscriptionInfoV2(subscription_orm)
-            _, nodename, resource = subscription_helper.parse_resource_address(subscription.ResourceAddress)
+            _, nodename, resource, _, _ = subscription_helper.parse_resource_address(
+                subscription.ResourceAddress)
             broker_name = nodename
 
-        LOG.debug("subscription:{0}, Status:{1}".format(subscription.to_dict(), subscription_orm.Status))
+        LOG.debug(
+            "subscription:{0}, Status:{1}".format(subscription.to_dict(), subscription_orm.Status))
         if subscription_orm.Status != 1:
             return False
 
@@ -200,8 +206,10 @@ class BrokerStateManager:
                         # trigger to sync up notification after (re-)connection
                         LOG.debug("Trigger to re-sync up data: {0}".format(broker_name))
                         result = brokerstate.signal_data_syncup()
-                    elif brokerstate.is_resource_subscribed_changed() or brokerstate.is_resources_changed():
-                        LOG.debug("Update watching due to resources changed: {0}".format(broker_name))
+                    elif brokerstate.is_resource_subscribed_changed() or \
+                            brokerstate.is_resources_changed():
+                        LOG.debug(
+                            "Update watching due to resources changed: {0}".format(broker_name))
                         result = broker_connection_manager.update_watching_resources(brokerstate)
 
                 # leave the signals as it is to re-sync up in next loop in case of failure

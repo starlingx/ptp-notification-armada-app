@@ -26,8 +26,8 @@ from notificationclientsdk.client.notificationservice import NotificationHandler
 LOG = logging.getLogger(__name__)
 
 from notificationclientsdk.common.helpers import log_helper
-log_helper.config_logger(LOG)
 
+log_helper.config_logger(LOG)
 
 
 class NotificationHandler(NotificationHandlerBase):
@@ -55,26 +55,25 @@ class NotificationHandler(NotificationHandlerBase):
                 if not resource_type:
                     raise Exception("abnormal notification@{0}".format(node_name))
                 if not resource_type in self.__supported_resource_types:
-                    raise Exception("notification with unsupported resource type:{0}".format(resource_type))
+                    raise Exception(
+                        "notification with unsupported resource type:{0}".format(resource_type))
                 this_delivery_time = notification_info['EventTimestamp']
             else:
-                source = notification_info.get('source', None)
-                values = notification_info.get('data', {}).get('values', [])
+                parent_key = list(notification_info.keys())[0]
+                source = notification_info[parent_key].get('source', None)
+                values = notification_info[parent_key].get('data', {}).get('values', [])
                 resource_address = values[0].get('ResourceAddress', None)
+                this_delivery_time = notification_info[parent_key].get('time')
                 if not resource_address:
                     raise Exception("No resource address in notification source".format(source))
-                _,node_name,_ = subscription_helper.parse_resource_address(resource_address)
-                this_delivery_time = notification_info['time']
-                # Change time from float to ascii format
-                notification_info['time'] = datetime.fromtimestamp(this_delivery_time).strftime('%Y-%m-%dT%H:%M:%S%fZ')
-                # notification_info['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
-                #                                           time.gmtime(this_delivery_time))
+                _, node_name, _, _, _ = subscription_helper.parse_resource_address(resource_address)
 
             entries = subscription_repo.get(Status=1)
             for entry in entries:
                 subscriptionid = entry.SubscriptionId
                 if entry.ResourceAddress:
-                    _,entry_node_name,_ = subscription_helper.parse_resource_address(entry.ResourceAddress)
+                    _, entry_node_name, _, _, _ = subscription_helper.parse_resource_address(
+                        entry.ResourceAddress)
                     subscription_dto2 = SubscriptionInfoV2(entry)
                 else:
                     ResourceQualifierJson = entry.ResourceQualifierJson or '{}'
@@ -87,10 +86,12 @@ class NotificationHandler(NotificationHandlerBase):
                     continue
 
                 try:
-                    last_delivery_time = self.__get_latest_delivery_timestamp(node_name, subscriptionid)
+                    last_delivery_time = self.__get_latest_delivery_timestamp(node_name,
+                                                                              subscriptionid)
                     if last_delivery_time and last_delivery_time >= this_delivery_time:
                         # skip this entry since already delivered
-                        LOG.debug("Ignore the outdated notification for: {0}".format(entry.SubscriptionId))
+                        LOG.debug("Ignore the outdated notification for: {0}".format(
+                            entry.SubscriptionId))
                         continue
 
                     subscription_helper.notify(subscription_dto2, notification_info)
@@ -117,7 +118,7 @@ class NotificationHandler(NotificationHandlerBase):
                 del subscription_repo
 
     def __get_latest_delivery_timestamp(self, node_name, subscriptionid):
-        last_delivery_stat = self.notification_stat.get(node_name,{}).get(subscriptionid,{})
+        last_delivery_stat = self.notification_stat.get(node_name, {}).get(subscriptionid, {})
         last_delivery_time = last_delivery_stat.get('EventTimestamp', None)
         return last_delivery_time
 
@@ -126,18 +127,18 @@ class NotificationHandler(NotificationHandlerBase):
             self.notification_stat[node_name] = {
                 subscriptionid: {
                     'EventTimestamp': this_delivery_time
-                    }
                 }
+            }
             LOG.debug("delivery time @node: {0},subscription:{1} is added".format(
                 node_name, subscriptionid))
         elif not self.notification_stat[node_name].get(subscriptionid, None):
             self.notification_stat[node_name][subscriptionid] = {
                 'EventTimestamp': this_delivery_time
-                }
+            }
             LOG.debug("delivery time @node: {0},subscription:{1} is added".format(
                 node_name, subscriptionid))
         else:
-            last_delivery_stat = self.notification_stat.get(node_name,{}).get(subscriptionid,{})
+            last_delivery_stat = self.notification_stat.get(node_name, {}).get(subscriptionid, {})
             last_delivery_time = last_delivery_stat.get('EventTimestamp', None)
             if (last_delivery_time and last_delivery_time >= this_delivery_time):
                 return

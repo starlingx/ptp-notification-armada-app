@@ -50,14 +50,11 @@ class PtpMonitor:
 
     pmc_query_results = {}
 
-    def __init__(self, ptp4l_config, holdover_time, freq, init=True):
+    def __init__(self, ptp4l_instance, holdover_time, freq, init=True):
 
         if init:
-            self.ptp4l_config = ptp4l_config
-            pattern = '(?<=/ptp/ptpinstance/ptp4l-).*(?=.conf)'
-            match = re.search(pattern, self.ptp4l_config)
-            self.ptp4l_service_name = match.group()
-            LOG.debug(self.ptp4l_service_name)
+            self.ptp4l_config = "/ptp/ptpinstance/ptp4l-%s.conf" % ptp4l_instance
+            self.ptp4l_service_name = ptp4l_instance
             self.phc2sys_service_name = os.environ.get('PHC2SYS_SERVICE_NAME', 'phc2sys')
             self.holdover_time = int(holdover_time)
             self.freq = int(freq)
