@@ -52,6 +52,7 @@ class OsClockMonitorTests(unittest.TestCase):
                 side_effect=[['/hostsys/class/net/ens1f0/device/ptp/ptp0'],
                              ['/hostsys/class/net/ens1f0/device/ptp/ptp0',
                               '/hostsys/class/net/ens1f0/device/ptp/ptp1'],
+                             [],
                              []
                              ])
     def test_get_interface_phc_device(self, glob_patched):

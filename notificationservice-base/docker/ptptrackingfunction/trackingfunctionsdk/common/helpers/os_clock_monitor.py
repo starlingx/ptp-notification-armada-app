@@ -100,12 +100,17 @@ class OsClockMonitor:
         pattern = "/hostsys/class/net/" + self.phc_interface + "/device/ptp/*"
         ptp_device = glob(pattern)
         if len(ptp_device) == 0:
-            LOG.error("No ptp device found at %s" % pattern)
-            return None
+            # Try the 0th interface instead, required for some NIC types
+            phc_interface_base = self.phc_interface[:-1] + "0"
+            LOG.error("No ptp device found at %s trying %s instead" % (pattern, phc_interface_base))
+            pattern = "/hostsys/class/net/" + phc_interface_base + "/device/ptp/*"
+            ptp_device = glob(pattern)
+            if len(ptp_device) == 0:
+                LOG.warning("No ptp device found for base interface at %s" % pattern)
+                return None
         if len(ptp_device) > 1:
             LOG.error("More than one ptp device found at %s" % pattern)
             return None
-
         ptp_device = os.path.basename(ptp_device[0])
         LOG.debug("Found ptp device %s at %s" % (ptp_device, pattern))
         return ptp_device
