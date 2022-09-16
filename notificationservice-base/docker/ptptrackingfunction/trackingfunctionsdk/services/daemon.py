@@ -332,7 +332,8 @@ class PtpWatcherDefault:
         # Setup PTP Monitor(s)
         self.ptp_monitor_list = [
             PtpMonitor(config, self.ptptracker_context[config]['holdover_seconds'],
-                       self.ptptracker_context[config]['poll_freq_seconds']) for config in
+                       self.ptptracker_context[config]['poll_freq_seconds'],
+                       self.daemon_context['PHC2SYS_SERVICE_NAME']) for config in
             self.daemon_context['PTP4L_INSTANCES']]
 
     def signal_ptp_event(self):

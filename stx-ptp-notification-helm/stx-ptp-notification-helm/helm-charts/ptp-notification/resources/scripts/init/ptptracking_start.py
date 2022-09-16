@@ -5,10 +5,11 @@
 #
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
-import logging
-import re
-import os
+import glob
 import json
+import logging
+import os
+import re
 
 from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers import constants
@@ -54,21 +55,44 @@ OS_CLOCK_POLL_FREQ_SECONDS = os.environ.get("OS_CLOCK_POLL_FREQ_SECONDS", 2)
 OVERALL_HOLDOVER_SECONDS = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
 OVERALL_POLL_FREQ_SECONDS = os.environ.get("OVERALL_POLL_FREQ_SECONDS", 2)
 
-PHC2SYS_CONFIG = "/ptp/ptpinstance/phc2sys-%s.conf" % os.environ.get("PHC2SYS_SERVICE_NAME", "phc2sys-legacy")
+if os.environ.get("PHC2SYS_SERVICE_NAME").lower() == "false":
+    LOG.info("OS Clock tracking disabled.")
+    PHC2SYS_CONFIG = None
+else:
+    PHC2SYS_CONFIG = glob.glob("/ptp/ptpinstance/phc2sys-*")
+    if len(PHC2SYS_CONFIG) == 0:
+        LOG.warning("No phc2sys config found.")
+        PHC2SYS_CONFIG = None
+    elif len(PHC2SYS_CONFIG) > 1:
+        LOG.warning("Multiple phc2sys instances found, selecting %s" % PHC2SYS_CONFIG[0])
+        PHC2SYS_CONFIG = PHC2SYS_CONFIG[0]
+    pattern = '(?<=/ptp/ptpinstance/phc2sys-).*(?=.conf)'
+    match = re.search(pattern, PHC2SYS_CONFIG)
+    PHC2SYS_SERVICE_NAME = match.group()
 
-PTP4L_INSTANCES = os.environ.get("PTP4L_SERVICE_NAME", "ptp4l-legacy")
-PTP4L_INSTANCES = str(PTP4L_INSTANCES).replace('[','').replace(']','')
-PTP4L_INSTANCES = PTP4L_INSTANCES.split()
 PTP4L_CONFIGS = []
-for item in PTP4L_INSTANCES:
-    PTP4L_CONFIGS.append("/ptp/ptpinstance/ptp4l-%s.conf" % item)
+PTP4L_INSTANCES = []
+if os.environ.get("PTP4L_SERVICE_NAME").lower() == "false":
+    LOG.info("PTP4L instance tracking disabled.")
+else:
+    PTP4L_CONFIGS = glob.glob("/ptp/ptpinstance/ptp4l-*")
+    PTP4L_INSTANCES = []
+    pattern = '(?<=/ptp/ptpinstance/ptp4l-).*(?=.conf)'
+    for conf in PTP4L_CONFIGS:
+        match = re.search(pattern, conf)
+        PTP4L_INSTANCES.append(match.group())
 
-GNSS_INSTANCES = os.environ.get("TS2PHC_SERVICE_NAME", None)
-GNSS_INSTANCES = str(GNSS_INSTANCES).replace('[','').replace(']','')
-GNSS_INSTANCES = GNSS_INSTANCES.split()
 GNSS_CONFIGS = []
-for item in GNSS_INSTANCES:
-    GNSS_CONFIGS.append("/ptp/ptpinstance/ts2phc-%s.conf" % item)
+GNSS_INSTANCES = []
+if os.environ.get("TS2PHC_SERVICE_NAME").lower() == "false":
+    LOG.info("GNSS instance tracking disabled.")
+else:
+    GNSS_CONFIGS = glob.glob("/ptp/ptpinstance/ts2phc-*")
+    GNSS_INSTANCES = []
+    pattern = '(?<=/ptp/ptpinstance/ts2phc-).*(?=.conf)'
+    for conf in GNSS_CONFIGS:
+        match = re.search(pattern, conf)
+        GNSS_INSTANCES.append(match.group())
 
 context = {
     'THIS_NAMESPACE': THIS_NAMESPACE,
@@ -78,7 +102,8 @@ context = {
     'NOTIFICATION_TRANSPORT_ENDPOINT': NOTIFICATION_TRANSPORT_ENDPOINT,
     'GNSS_CONFIGS': GNSS_CONFIGS,
     'PHC2SYS_CONFIG': PHC2SYS_CONFIG,
-    'PTP4L_CONFIGS' : PTP4L_CONFIGS,
+    'PHC2SYS_SERVICE_NAME': PHC2SYS_SERVICE_NAME,
+    'PTP4L_CONFIGS': PTP4L_CONFIGS,
     'GNSS_INSTANCES': GNSS_INSTANCES,
     'PTP4L_INSTANCES': PTP4L_INSTANCES,
 
