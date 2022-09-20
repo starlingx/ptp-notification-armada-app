@@ -28,11 +28,12 @@ log_helper.config_logger(LOG)
 
 class PtpMonitor:
     _clock_class = None
-    _ptp_sync_state = PtpState.Freerun
+    _ptp_sync_state = constants.UNKNOWN_PHC_STATE
     _new_ptp_sync_event = False
     _new_clock_class_event = False
     _ptp_event_time = None
     _clock_class_event_time = None
+    _clock_class_retry = 3
 
     # Critical resources
     ptp4l_service_name = None
@@ -73,10 +74,23 @@ class PtpMonitor:
             self._new_ptp_sync_event = new_ptp_sync_event
 
     def get_ptp_sync_state(self):
-        return self._ptp_sync_state
+        return self._new_ptp_sync_event, self._ptp_sync_state, self._ptp_event_time
 
     def set_ptp_clock_class(self):
-        clock_class = self.pmc_query_results['clockClass']
+        try:
+            clock_class = self.pmc_query_results['clockClass']
+            # Reset retry counter upon getting clock class
+            self._clock_class_retry = 3
+        except KeyError:
+            LOG.warning("set_ptp_clock_class: Unable to read current clockClass")
+            if self._clock_class_retry > 0:
+                self._clock_class_retry -= 1
+                LOG.warning("Trying to get clockClass %s more time(s) before "
+                            "setting clockClass 248 (FREERUN)" % self._clock_class_retry)
+                clock_class = self._clock_class
+            else:
+                clock_class = "248"
+                self._clock_class_retry = 3
         if clock_class != self._clock_class:
             self._clock_class = clock_class
             self._new_clock_class_event = True
@@ -131,6 +145,8 @@ class PtpMonitor:
                 sync_state = PtpState.Freerun
 
         # determine if ptp sync state has changed since the last one
+        LOG.debug("ptp_monitor: sync_state %s, "
+                  "previous_sync_state %s" % (sync_state, previous_sync_state))
         if sync_state != previous_sync_state:
             new_event = True
             self._ptp_event_time = datetime.datetime.utcnow().timestamp()

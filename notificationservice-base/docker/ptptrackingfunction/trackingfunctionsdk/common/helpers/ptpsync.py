@@ -74,7 +74,7 @@ def check_results(result, total_ptp_keywords, port_count):
     if (result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT
             and result[constants.GRANDMASTER_IDENTITY] != result[constants.CLOCK_IDENTITY]):
         sync_state = constants.FREERUN_PHC_STATE
-    else:
+    elif result[constants.GRANDMASTER_IDENTITY] == result[constants.CLOCK_IDENTITY]:
         local_gm = True
         LOG.debug("Local node is a GM")
     for port in range(1, port_count + 1):

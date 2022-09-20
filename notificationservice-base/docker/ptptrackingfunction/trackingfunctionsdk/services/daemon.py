@@ -415,8 +415,15 @@ class PtpWatcherDefault:
             elif gnss._state == GnssState.Locked and gnss_state != GnssState.Freerun:
                 gnss_state = GnssState.Locked
 
+        for ptp4l in self.ptp_monitor_list:
+            _, read_state, _ = ptp4l.get_ptp_sync_state()
+            if read_state == PtpState.Holdover or read_state == PtpState.Freerun or \
+                    read_state == constants.UNKNOWN_PHC_STATE:
+                ptp_state = PtpState.Freerun
+            elif read_state == PtpState.Locked and ptp_state != PtpState.Freerun:
+                ptp_state = PtpState.Locked
+
         os_clock_state = self.os_clock_monitor.get_os_clock_state()
-        ptp_state = self.ptptracker_context.get('sync_state')
 
         if gnss_state is GnssState.Freerun or os_clock_state is OsClockState.Freerun or ptp_state \
                 is PtpState.Freerun:
@@ -443,6 +450,7 @@ class PtpWatcherDefault:
     def __get_ptp_status(self, holdover_time, freq, sync_state, last_event_time, ptp_monitor):
         new_event = False
         new_event_time = last_event_time
+        ptp_monitor.set_ptp_sync_state()
         if self.ptp_device_simulated:
             now = time.time()
             timediff = now - last_event_time
@@ -458,7 +466,7 @@ class PtpWatcherDefault:
                 else:
                     sync_state = PtpState.Freerun
         else:
-            new_event, sync_state, new_event_time = ptp_monitor.ptp_status()
+            new_event, sync_state, new_event_time = ptp_monitor.get_ptp_sync_state()
         return new_event, sync_state, new_event_time
 
     '''announce location'''
