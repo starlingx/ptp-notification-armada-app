@@ -78,7 +78,9 @@ def check_results(result, total_ptp_keywords, port_count):
         local_gm = True
         LOG.debug("Local node is a GM")
     for port in range(1, port_count + 1):
-        if result[constants.PORT.format(port)].lower() == constants.SLAVE_MODE or local_gm:
+        if result[constants.PORT.format(port)].lower() == constants.SLAVE_MODE:
+            break
+        elif local_gm and result[constants.PORT.format(port)].lower() == constants.MASTER_MODE:
             break
     else:
         sync_state = constants.FREERUN_PHC_STATE

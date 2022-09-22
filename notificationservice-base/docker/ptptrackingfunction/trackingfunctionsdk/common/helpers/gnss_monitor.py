@@ -68,7 +68,6 @@ class GnssMonitor(Observer):
 
     def update(self, subject, matched_line) -> None:
         LOG.info("Kernel event detected. %s" % matched_line)
-        LOG.debug("GnssMonitor handler logic would run now")
         self.set_gnss_status()
 
     def set_gnss_status(self):

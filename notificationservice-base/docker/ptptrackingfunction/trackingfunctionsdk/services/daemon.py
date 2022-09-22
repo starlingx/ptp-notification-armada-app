@@ -259,8 +259,7 @@ class PtpWatcherDefault:
         # PTP Context
         self.ptptracker_context = {}
         for config in self.daemon_context['PTP4L_INSTANCES']:
-            self.ptptracker_context[config] = self.daemon_context.get(
-                'ptptracker_context', PtpWatcherDefault.DEFAULT_PTPTRACKER_CONTEXT)
+            self.ptptracker_context[config] = PtpWatcherDefault.DEFAULT_PTPTRACKER_CONTEXT.copy()
             self.ptptracker_context[config]['sync_state'] = PtpState.Freerun
             self.ptptracker_context[config]['last_event_time'] = self.init_time
             self.ptp_device_simulated = "true" == self.ptptracker_context[config].get(
@@ -272,8 +271,7 @@ class PtpWatcherDefault:
         # GNSS Context
         self.gnsstracker_context = {}
         for config in self.daemon_context['GNSS_INSTANCES']:
-            self.gnsstracker_context[config] = self.daemon_context.get(
-                'gnsstracker_context', PtpWatcherDefault.DEFAULT_GNSSTRACKER_CONTEXT)
+            self.gnsstracker_context[config] = PtpWatcherDefault.DEFAULT_GNSSTRACKER_CONTEXT.copy()
             self.gnsstracker_context[config]['sync_state'] = GnssState.Freerun
             self.gnsstracker_context[config]['last_event_time'] = self.init_time
             self.gnsstracker_context_lock = threading.Lock()
@@ -281,16 +279,14 @@ class PtpWatcherDefault:
 
         # OS Clock Context
         self.osclocktracker_context = {}
-        self.osclocktracker_context = self.daemon_context.get(
-            'os_clock_tracker_context', PtpWatcherDefault.DEFAULT_OS_CLOCK_TRACKER_CONTEXT)
+        self.osclocktracker_context = PtpWatcherDefault.DEFAULT_OS_CLOCK_TRACKER_CONTEXT.copy()
         self.osclocktracker_context['sync_state'] = OsClockState.Freerun
         self.osclocktracker_context['last_event_time'] = self.init_time
         self.osclocktracker_context_lock = threading.Lock()
 
         # Overall Sync Context
         self.overalltracker_context = {}
-        self.overalltracker_context = self.daemon_context.get(
-            'overall_sync_tracker_context', PtpWatcherDefault.DEFAULT_OVERALL_SYNC_TRACKER_CONTEXT)
+        self.overalltracker_context = PtpWatcherDefault.DEFAULT_OVERALL_SYNC_TRACKER_CONTEXT.copy()
         self.overalltracker_context['sync_state'] = OverallClockState.Freerun
         self.overalltracker_context['last_event_time'] = self.init_time
         self.overalltracker_context_lock = threading.Lock()
@@ -624,19 +620,18 @@ class PtpWatcherDefault:
             new_event, sync_state, new_event_time = self.__get_ptp_status(
                 holdover_time, freq, sync_state, last_event_time, ptp_monitor)
             LOG.info("%s PTP sync state: state is %s, new_event is %s" % (
-            ptp_monitor.ptp4l_service_name, sync_state, new_event))
+                ptp_monitor.ptp4l_service_name, sync_state, new_event))
 
             new_clock_class_event, clock_class, clock_class_event_time = \
                 ptp_monitor.get_ptp_clock_class()
             LOG.info("%s PTP clock class: clockClass is %s, new_event is %s" % (
-            ptp_monitor.ptp4l_service_name, clock_class, new_clock_class_event))
+                ptp_monitor.ptp4l_service_name, clock_class, new_clock_class_event))
             if new_event or forced:
                 # update context
                 self.ptptracker_context_lock.acquire()
                 self.ptptracker_context[ptp_monitor.ptp4l_service_name]['sync_state'] = sync_state
                 self.ptptracker_context[ptp_monitor.ptp4l_service_name][
                     'last_event_time'] = new_event_time
-
 
                 # publish new event
                 LOG.debug("Publish ptp status to clients")
@@ -651,7 +646,7 @@ class PtpWatcherDefault:
                     'EventTimestamp': new_event_time
                 }
                 self.ptpeventproducer.publish_status(lastStatus, 'PTP')
-
+                lastStatus = {}
                 # publish new event in API version v2 format
                 resource_address = utils.format_resource_address(
                     self.node_name, constants.SOURCE_SYNC_PTP_LOCK_STATE)

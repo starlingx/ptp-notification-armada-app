@@ -21,6 +21,7 @@ GRANDMASTER_IDENTITY = "grandmasterIdentity"
 CLOCK_CLASS = "clockClass"
 # expected values for valid ptp state
 SLAVE_MODE = "slave"
+MASTER_MODE = "master"
 TIME_IS_TRACEABLE1 = "1"
 TIME_IS_TRACEABLE2 = "true"
 GM_IS_PRESENT = "true"
