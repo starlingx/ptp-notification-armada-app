@@ -119,7 +119,7 @@ class PtpWatcherDefault:
                     self.watcher.gnsstracker_context_lock.acquire()
                     if optional:
                         sync_state = self.watcher.gnsstracker_context[optional]. \
-                            get('sync_state', GnssState.Freerun)
+                            get('sync_state', GnssState.Failure_Nofix)
                         last_event_time = self.watcher.gnsstracker_context[optional].get(
                             'last_event_time',
                             time.time())
@@ -130,7 +130,7 @@ class PtpWatcherDefault:
                     else:
                         for config in self.daemon_context['GNSS_INSTANCES']:
                             sync_state = self.watcher.gnsstracker_context[config] \
-                                .get('sync_state', GnssState.Freerun)
+                                .get('sync_state', GnssState.Failure_Nofix)
                             last_event_time = self.watcher.gnsstracker_context[config].get(
                                 'last_event_time',
                                 time.time())
@@ -272,7 +272,7 @@ class PtpWatcherDefault:
         self.gnsstracker_context = {}
         for config in self.daemon_context['GNSS_INSTANCES']:
             self.gnsstracker_context[config] = PtpWatcherDefault.DEFAULT_GNSSTRACKER_CONTEXT.copy()
-            self.gnsstracker_context[config]['sync_state'] = GnssState.Freerun
+            self.gnsstracker_context[config]['sync_state'] = GnssState.Failure_Nofix
             self.gnsstracker_context[config]['last_event_time'] = self.init_time
             self.gnsstracker_context_lock = threading.Lock()
         LOG.debug("gnsstracker_context: %s" % self.gnsstracker_context)
@@ -406,10 +406,10 @@ class PtpWatcherDefault:
 
         LOG.debug("Getting overall sync state.")
         for gnss in self.observer_list:
-            if gnss._state == GnssState.Holdover or gnss._state == GnssState.Freerun:
-                gnss_state = GnssState.Freerun
-            elif gnss._state == GnssState.Locked and gnss_state != GnssState.Freerun:
-                gnss_state = GnssState.Locked
+            if gnss._state == constants.UNKNOWN_PHC_STATE or gnss._state == GnssState.Failure_Nofix:
+                gnss_state = GnssState.Failure_Nofix
+            elif gnss._state == GnssState.Synchronized and gnss_state != GnssState.Failure_Nofix:
+                gnss_state = GnssState.Synchronized
 
         for ptp4l in self.ptp_monitor_list:
             _, read_state, _ = ptp4l.get_ptp_sync_state()
@@ -421,8 +421,8 @@ class PtpWatcherDefault:
 
         os_clock_state = self.os_clock_monitor.get_os_clock_state()
 
-        if gnss_state is GnssState.Freerun or os_clock_state is OsClockState.Freerun or ptp_state \
-                is PtpState.Freerun:
+        if gnss_state is GnssState.Failure_Nofix or os_clock_state is OsClockState.Freerun or \
+                ptp_state is PtpState.Freerun:
             sync_state = OverallClockState.Freerun
         else:
             sync_state = OverallClockState.Locked

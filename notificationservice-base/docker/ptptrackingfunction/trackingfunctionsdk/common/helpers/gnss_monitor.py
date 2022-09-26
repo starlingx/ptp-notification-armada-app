@@ -5,6 +5,7 @@
 #
 import logging
 import datetime
+import os.path
 import re
 
 from abc import ABC, abstractmethod
@@ -71,6 +72,13 @@ class GnssMonitor(Observer):
         self.set_gnss_status()
 
     def set_gnss_status(self):
+        # Check that ts2phc is running, else Freerun
+        if not os.path.isfile('/var/run/ts2phc-%s.pid' % self.ts2phc_service_name):
+            LOG.warning("TS2PHC instance %s is not running, reporting GNSS unlocked."
+                        % self.ts2phc_service_name)
+            self._state = GnssState.Failure_Nofix
+            return
+
         self.gnss_cgu_handler.read_cgu()
         self.gnss_cgu_handler.cgu_output_to_dict()
         self.gnss_eec_state = self.gnss_eec_state = \
@@ -79,9 +87,9 @@ class GnssMonitor(Observer):
         LOG.debug("GNSS EEC Status is: %s" % self.gnss_eec_state)
         LOG.debug("GNSS PPS Status is: %s" % self.gnss_pps_state)
         if self.gnss_pps_state == 'locked_ho_ack' and self.gnss_eec_state == 'locked_ho_ack':
-            self._state = GnssState.Locked
+            self._state = GnssState.Synchronized
         else:
-            self._state = GnssState.Freerun
+            self._state = GnssState.Failure_Nofix
 
         LOG.debug("Set state GNSS to %s" % self._state)
 
@@ -93,18 +101,7 @@ class GnssMonitor(Observer):
 
         self.set_gnss_status()
 
-        if self._state == constants.FREERUN_PHC_STATE:
-            if previous_sync_state in [constants.UNKNOWN_PHC_STATE, constants.FREERUN_PHC_STATE]:
-                self._state = constants.FREERUN_PHC_STATE
-            elif previous_sync_state == constants.LOCKED_PHC_STATE:
-                self._state = constants.HOLDOVER_PHC_STATE
-            elif previous_sync_state == constants.HOLDOVER_PHC_STATE and \
-                    time_in_holdover < max_holdover_time:
-                self._state = constants.HOLDOVER_PHC_STATE
-            else:
-                self._state = constants.FREERUN_PHC_STATE
-
-        # determine if os clock sync state has changed since the last check
+        # determine if GNSS state has changed since the last check
         if self._state != previous_sync_state:
             new_event = True
             event_time = datetime.datetime.utcnow().timestamp()

@@ -45,6 +45,7 @@ class NotificationHandler(NotificationHandlerBase):
     def handle(self, notification_info):
         LOG.debug("start notification delivery")
         subscription_repo = None
+        resource_address = None
         try:
             self.notification_lock.acquire()
             subscription_repo = SubscriptionRepo(autocommit=True)
@@ -58,6 +59,8 @@ class NotificationHandler(NotificationHandlerBase):
                     raise Exception(
                         "notification with unsupported resource type:{0}".format(resource_type))
                 this_delivery_time = notification_info['EventTimestamp']
+                # Get subscriptions from DB to deliver notification to
+                entries = subscription_repo.get(Status=1, ResourceType=resource_type)
             else:
                 parent_key = list(notification_info.keys())[0]
                 source = notification_info[parent_key].get('source', None)
@@ -67,13 +70,20 @@ class NotificationHandler(NotificationHandlerBase):
                 if not resource_address:
                     raise Exception("No resource address in notification source".format(source))
                 _, node_name, _, _, _ = subscription_helper.parse_resource_address(resource_address)
+                # Get subscriptions from DB to deliver notification to.
+                # Unable to filter on resource_address here because resource_address may contain
+                # either an unknown node name (ie. controller-0) or a '/./' resulting in entries
+                # being missed. Instead, filter these v2 subscriptions in the for loop below once
+                # the resource path has been obtained.
+                entries = subscription_repo.get(Status=1)
 
-            entries = subscription_repo.get(Status=1)
             for entry in entries:
                 subscriptionid = entry.SubscriptionId
                 if entry.ResourceAddress:
-                    _, entry_node_name, _, _, _ = subscription_helper.parse_resource_address(
-                        entry.ResourceAddress)
+                    _, entry_node_name, entry_resource_path, _, _ = \
+                            subscription_helper.parse_resource_address(entry.ResourceAddress)
+                    if entry_resource_path not in resource_address:
+                        continue
                     subscription_dto2 = SubscriptionInfoV2(entry)
                 else:
                     ResourceQualifierJson = entry.ResourceQualifierJson or '{}'
