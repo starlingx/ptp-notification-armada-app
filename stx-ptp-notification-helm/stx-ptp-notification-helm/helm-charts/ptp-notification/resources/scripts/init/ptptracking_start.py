@@ -55,20 +55,22 @@ OS_CLOCK_POLL_FREQ_SECONDS = os.environ.get("OS_CLOCK_POLL_FREQ_SECONDS", 2)
 OVERALL_HOLDOVER_SECONDS = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
 OVERALL_POLL_FREQ_SECONDS = os.environ.get("OVERALL_POLL_FREQ_SECONDS", 2)
 
+PHC2SYS_CONFIG = None
+PHC2SYS_SERVICE_NAME = None
 if os.environ.get("PHC2SYS_SERVICE_NAME").lower() == "false":
     LOG.info("OS Clock tracking disabled.")
-    PHC2SYS_CONFIG = None
 else:
-    PHC2SYS_CONFIG = glob.glob("/ptp/ptpinstance/phc2sys-*")
-    if len(PHC2SYS_CONFIG) == 0:
+    PHC2SYS_CONFIGS = glob.glob("/ptp/ptpinstance/phc2sys-*")
+    if len(PHC2SYS_CONFIGS) == 0:
         LOG.warning("No phc2sys config found.")
-        PHC2SYS_CONFIG = None
-    elif len(PHC2SYS_CONFIG) > 1:
-        LOG.warning("Multiple phc2sys instances found, selecting %s" % PHC2SYS_CONFIG[0])
-        PHC2SYS_CONFIG = PHC2SYS_CONFIG[0]
-    pattern = '(?<=/ptp/ptpinstance/phc2sys-).*(?=.conf)'
-    match = re.search(pattern, PHC2SYS_CONFIG)
-    PHC2SYS_SERVICE_NAME = match.group()
+    else:
+        PHC2SYS_CONFIG = PHC2SYS_CONFIGS[0]
+        if len(PHC2SYS_CONFIGS) > 1:
+            LOG.warning("Multiple phc2sys instances found, selecting %s" %
+                        PHC2SYS_CONFIG)
+        pattern = '(?<=/ptp/ptpinstance/phc2sys-).*(?=.conf)'
+        match = re.search(pattern, PHC2SYS_CONFIG)
+        PHC2SYS_SERVICE_NAME = match.group()
 
 PTP4L_CONFIGS = []
 PTP4L_INSTANCES = []
