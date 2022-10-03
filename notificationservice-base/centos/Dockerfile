@@ -12,7 +12,6 @@ RUN set -ex ;\
         gcc python3-devel python3-pip \
         && pip3 install --upgrade pip \
         && pip3 install --user pecan \
-        && pip3 install pygtail \
         && pip3 install oslo-config \
         && pip3 install oslo-messaging \
         && pip3 install WSME

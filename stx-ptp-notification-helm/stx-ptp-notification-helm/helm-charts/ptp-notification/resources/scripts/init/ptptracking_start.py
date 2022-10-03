@@ -44,16 +44,9 @@ NOTIFICATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@[{2}]:{3}'.format(
 PTP_DEVICE_SIMULATED = os.environ.get("PTP_DEVICE_SIMULATED", True)
 
 PTP_HOLDOVER_SECONDS = os.environ.get("PTP_HOLDOVER_SECONDS", 30)
-PTP_POLL_FREQ_SECONDS = os.environ.get("PTP_POLL_FREQ_SECONDS", 2)
-
 GNSS_HOLDOVER_SECONDS = os.environ.get("GNSS_HOLDOVER_SECONDS", 30)
-GNSS_POLL_FREQ_SECONDS = os.environ.get("GNSS_POLL_FREQ_SECONDS", 2)
-
 OS_CLOCK_HOLDOVER_SECONDS = os.environ.get("OS_CLOCK_HOLDOVER_SECONDS", 30)
-OS_CLOCK_POLL_FREQ_SECONDS = os.environ.get("OS_CLOCK_POLL_FREQ_SECONDS", 2)
-
 OVERALL_HOLDOVER_SECONDS = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
-OVERALL_POLL_FREQ_SECONDS = os.environ.get("OVERALL_POLL_FREQ_SECONDS", 2)
 
 PHC2SYS_CONFIG = None
 PHC2SYS_SERVICE_NAME = None
@@ -111,20 +104,16 @@ context = {
 
     'ptptracker_context': {
         'device_simulated': PTP_DEVICE_SIMULATED,
-        'holdover_seconds': PTP_HOLDOVER_SECONDS,
-        'poll_freq_seconds': PTP_POLL_FREQ_SECONDS
+        'holdover_seconds': PTP_HOLDOVER_SECONDS
     },
     'gnsstracker_context': {
-        'holdover_seconds': GNSS_HOLDOVER_SECONDS,
-        'poll_freq_seconds': GNSS_POLL_FREQ_SECONDS
+        'holdover_seconds': GNSS_HOLDOVER_SECONDS
     },
     'osclocktracker_context': {
-        'holdover_seconds': OS_CLOCK_HOLDOVER_SECONDS,
-        'poll_freq_seconds': OS_CLOCK_POLL_FREQ_SECONDS
+        'holdover_seconds': OS_CLOCK_HOLDOVER_SECONDS
     },
     'overalltracker_context': {
-        'holdover_seconds': OVERALL_HOLDOVER_SECONDS,
-        'poll_freq_seconds': OVERALL_POLL_FREQ_SECONDS
+        'holdover_seconds': OVERALL_HOLDOVER_SECONDS
     }
 }
 
@@ -140,8 +129,6 @@ sqlalchemy_conf_json = json.dumps(sqlalchemy_conf)
 default_daemoncontrol = DaemonControl(sqlalchemy_conf_json, json.dumps(context))
 
 default_daemoncontrol.refresh()
-while True:
-    pass
 
 
 

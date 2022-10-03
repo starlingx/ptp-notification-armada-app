@@ -117,12 +117,21 @@ class OsClockMonitor:
 
     def get_os_clock_offset(self):
         """Get the os CLOCK_REALTIME offset"""
-        ptp_device_path = "/dev/" + self.ptp_device
-        offset = subprocess.check_output([constants.PHC_CTL_PATH, ptp_device_path, 'cmp']
+        try:
+            ptp_device_path = "/dev/" + self.ptp_device
+            offset = subprocess.check_output([constants.PHC_CTL_PATH, ptp_device_path, 'cmp']
                                          ).decode().split()[-1]
-        offset = offset.strip("-ns")
-        LOG.debug("PHC offset is %s" % offset)
-        self.offset = offset
+            offset = offset.strip("-ns")
+            LOG.debug("PHC offset is %s" % offset)
+            self.offset = offset
+        except Exception as ex:
+            # We have seen rare instances where the ptp device cannot be read but then works fine
+            # on the next attempt. Setting the offset to 0 here will allow the OS clock to move to
+            # holdover. If there is a real fault, it will stay in holdover and tranition to freerun
+            # but if it was just a single miss, it will return to locked on the next check.
+            LOG.warning("Unable to read device offset for %s due to %s" % (ptp_device_path, ex))
+            LOG.warning("Check operation of %s. Defaulting offset value to 0." % ptp_device_path)
+            self.offset = "0"
 
     def set_os_clock_state(self):
         offset_int = int(self.offset)
@@ -139,8 +148,10 @@ class OsClockMonitor:
 
     def os_clock_status(self, holdover_time, freq, sync_state, event_time):
         current_time = datetime.datetime.utcnow().timestamp()
-        time_in_holdover = round(current_time - event_time)
+        time_in_holdover = None
         previous_sync_state = sync_state
+        if previous_sync_state == constants.HOLDOVER_PHC_STATE:
+            time_in_holdover = round(current_time - event_time)
         max_holdover_time = (holdover_time - freq * 2)
 
         self.get_os_clock_offset()
@@ -153,6 +164,8 @@ class OsClockMonitor:
                 self._state = constants.HOLDOVER_PHC_STATE
             elif previous_sync_state == constants.HOLDOVER_PHC_STATE and \
                     time_in_holdover < max_holdover_time:
+                LOG.debug("OS Clock: Time in holdover is %s  Max time in holdover is %s" % (
+                    time_in_holdover, max_holdover_time))
                 self._state = constants.HOLDOVER_PHC_STATE
             else:
                 self._state = constants.FREERUN_PHC_STATE

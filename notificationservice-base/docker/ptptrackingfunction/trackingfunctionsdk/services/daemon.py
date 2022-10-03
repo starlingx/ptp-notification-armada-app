@@ -16,7 +16,6 @@ from trackingfunctionsdk.client.ptpeventproducer import PtpEventProducer
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import ptpsync as utils
 from trackingfunctionsdk.common.helpers import log_helper
-from trackingfunctionsdk.common.helpers.dmesg_watcher import DmesgWatcher
 from trackingfunctionsdk.common.helpers.gnss_monitor import GnssMonitor
 from trackingfunctionsdk.common.helpers.os_clock_monitor import OsClockMonitor
 from trackingfunctionsdk.common.helpers.ptp_monitor import PtpMonitor
@@ -262,6 +261,9 @@ class PtpWatcherDefault:
             self.ptptracker_context[config] = PtpWatcherDefault.DEFAULT_PTPTRACKER_CONTEXT.copy()
             self.ptptracker_context[config]['sync_state'] = PtpState.Freerun
             self.ptptracker_context[config]['last_event_time'] = self.init_time
+            self.ptptracker_context[config]['holdover_seconds'] = os.environ.get("PTP_HOLDOVER_SECONDS", 30)
+            self.ptptracker_context[config]['poll_freq_seconds'] = os.environ.get(
+                "CONTROL_TIMEOUT", 2)
             self.ptp_device_simulated = "true" == self.ptptracker_context[config].get(
                 'device_simulated',
                 "False")
@@ -274,6 +276,9 @@ class PtpWatcherDefault:
             self.gnsstracker_context[config] = PtpWatcherDefault.DEFAULT_GNSSTRACKER_CONTEXT.copy()
             self.gnsstracker_context[config]['sync_state'] = GnssState.Failure_Nofix
             self.gnsstracker_context[config]['last_event_time'] = self.init_time
+            self.gnsstracker_context[config]['holdover_seconds'] = os.environ.get("GNSS_HOLDOVER_SECONDS", 30)
+            self.gnsstracker_context[config]['poll_freq_seconds'] = os.environ.get(
+                "CONTROL_TIMEOUT", 2)
             self.gnsstracker_context_lock = threading.Lock()
         LOG.debug("gnsstracker_context: %s" % self.gnsstracker_context)
 
@@ -282,6 +287,9 @@ class PtpWatcherDefault:
         self.osclocktracker_context = PtpWatcherDefault.DEFAULT_OS_CLOCK_TRACKER_CONTEXT.copy()
         self.osclocktracker_context['sync_state'] = OsClockState.Freerun
         self.osclocktracker_context['last_event_time'] = self.init_time
+        self.osclocktracker_context['holdover_seconds'] = os.environ.get("OS_CLOCK_HOLDOVER_SECONDS", 30)
+        self.osclocktracker_context['poll_freq_seconds'] = os.environ.get(
+                "CONTROL_TIMEOUT", 2)
         self.osclocktracker_context_lock = threading.Lock()
 
         # Overall Sync Context
@@ -289,6 +297,9 @@ class PtpWatcherDefault:
         self.overalltracker_context = PtpWatcherDefault.DEFAULT_OVERALL_SYNC_TRACKER_CONTEXT.copy()
         self.overalltracker_context['sync_state'] = OverallClockState.Freerun
         self.overalltracker_context['last_event_time'] = self.init_time
+        self.overalltracker_context['holdover_seconds'] = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
+        self.overalltracker_context['poll_freq_seconds'] = os.environ.get(
+                "CONTROL_TIMEOUT", 2)
         self.overalltracker_context_lock = threading.Lock()
 
         self.event_timeout = float(os.environ.get('CONTROL_TIMEOUT', 2))
@@ -315,12 +326,7 @@ class PtpWatcherDefault:
         # Main loop in run() sets it to false after the first iteration
         self.forced_publishing = True
 
-        self.watcher = DmesgWatcher()
         self.observer_list = [GnssMonitor(i) for i in self.daemon_context['GNSS_CONFIGS']]
-        for observer in self.observer_list:
-            self.watcher.attach(observer)
-
-        self.watcher_thread = threading.Thread(target=self.watcher.run_watcher)
 
         # Setup OS Clock monitor
         self.os_clock_monitor = OsClockMonitor(phc2sys_config=self.daemon_context['PHC2SYS_CONFIG'])
@@ -342,9 +348,6 @@ class PtpWatcherDefault:
     def run(self):
         # start location listener
         self.__start_listener()
-
-        # start GNSS monitoring
-        self.watcher_thread.start()
 
         while True:
             # announce the location
@@ -398,7 +401,9 @@ class PtpWatcherDefault:
         new_event_time = last_event_time
         previous_sync_state = sync_state
         current_time = datetime.datetime.utcnow().timestamp()
-        time_in_holdover = round(current_time - last_event_time)
+        time_in_holdover = None
+        if previous_sync_state == constants.HOLDOVER_PHC_STATE:
+            time_in_holdover = round(current_time - last_event_time)
         max_holdover_time = (holdover_time - freq * 2)
         gnss_state = None
         os_clock_state = None
@@ -434,6 +439,8 @@ class PtpWatcherDefault:
                 sync_state = OverallClockState.Holdover
             elif previous_sync_state == constants.HOLDOVER_PHC_STATE and \
                     time_in_holdover < max_holdover_time:
+                LOG.debug("Overall sync: Time in holdover is %s  Max time in holdover is %s" % (
+                    time_in_holdover, max_holdover_time))
                 sync_state = OverallClockState.Holdover
             else:
                 sync_state = OverallClockState.Freerun

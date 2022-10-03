@@ -7,4 +7,3 @@ WebOb~=1.8.7
 requests~=2.27.1
 mock
 PyYAML
-pygtail~=0.12.0

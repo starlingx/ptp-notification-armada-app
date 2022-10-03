@@ -11,7 +11,6 @@ import re
 from abc import ABC, abstractmethod
 
 from trackingfunctionsdk.common.helpers import log_helper
-from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers.cgu_handler import CguHandler
 from trackingfunctionsdk.model.dto.gnssstate import GnssState
 
@@ -94,8 +93,6 @@ class GnssMonitor(Observer):
         LOG.debug("Set state GNSS to %s" % self._state)
 
     def get_gnss_status(self, holdover_time, freq, sync_state, event_time):
-        current_time = datetime.datetime.utcnow().timestamp()
-        time_in_holdover = round(current_time - event_time)
         previous_sync_state = sync_state
         max_holdover_time = (holdover_time - freq * 2)
 

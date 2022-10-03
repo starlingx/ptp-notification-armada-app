@@ -116,10 +116,13 @@ class PtpMonitor:
         #     Freerun —> Locked            #
         ####################################
         current_time = datetime.datetime.utcnow().timestamp()
-        time_in_holdover = round(current_time - self._ptp_event_time)
+        time_in_holdover = None
         previous_sync_state = self._ptp_sync_state
+        if previous_sync_state == PtpState.Holdover:
+            time_in_holdover = round(current_time - self._ptp_event_time)
         # max holdover time is calculated to be in a 'safety' zone
         max_holdover_time = (self.holdover_time - self.freq * 2)
+
 
         pmc, ptp4l, phc2sys, ptp4lconf = utils.check_critical_resources(self.ptp4l_service_name,
                                                                         self.phc2sys_service_name)
@@ -140,6 +143,8 @@ class PtpMonitor:
                 sync_state = PtpState.Holdover
             elif previous_sync_state == PtpState.Holdover and time_in_holdover < \
                     max_holdover_time:
+                LOG.debug("PTP Status: Time in holdover is %s  Max time in holdover is %s" % (
+                    time_in_holdover, max_holdover_time))
                 sync_state = PtpState.Holdover
             else:
                 sync_state = PtpState.Freerun

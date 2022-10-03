@@ -111,20 +111,10 @@ spec:
             value: "{{ .Values.ptptracking.device.simulated }}"
           - name: PTP_HOLDOVER_SECONDS
             value: "{{ .Values.ptptracking.device.holdover_seconds }}"
-          - name: PTP_POLL_FREQ_SECONDS
-            value: "{{ .Values.ptptracking.device.poll_freq_seconds }}"
-          - name: GNSS_HOLDOVER_SECONDS
-            value: "{{ .Values.ptptracking.gnss.holdover_seconds }}"
-          - name: GNSS_POLL_FREQ_SECONDS
-            value: "{{ .Values.ptptracking.gnss.poll_freq_seconds }}"
           - name: OS_CLOCK_HOLDOVER_SECONDS
             value: "{{ .Values.ptptracking.osclock.holdover_seconds }}"
-          - name: OS_CLOCK_POLL_FREQ_SECONDS
-            value: "{{ .Values.ptptracking.osclock.poll_freq_seconds }}"
           - name: OVERALL_HOLDOVER_SECONDS
             value: "{{ .Values.ptptracking.overall.holdover_seconds }}"
-          - name: OVERALL_POLL_FREQ_SECONDS
-            value: "{{ .Values.ptptracking.overall.poll_freq_seconds }}"
           - name: NOTIFICATIONSERVICE_USER
             value: "admin"
           - name: NOTIFICATIONSERVICE_PASS
@@ -149,6 +139,8 @@ spec:
             value: "{{ .Values.ptptracking.ts2phcServiceName }}"
           - name: LOGGING_LEVEL
             value: "{{ .Values.ptptracking.log_level }}"
+          - name: CONTROL_TIMEOUT
+            value: "{{ .Values.ptptracking.control_timeout }}"
         command: ["python3", "/mnt/ptptracking_start.py"]
         securityContext:
           privileged: true

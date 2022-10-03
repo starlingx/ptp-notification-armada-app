@@ -75,16 +75,12 @@ ptptracking:
     repository: starlingx/notificationservice-base
     tag: stx.7.0-v1.0.5
     pullPolicy: IfNotPresent
+  control_timeout: 2
   device:
     simulated: false
     holdover_seconds: 15
-    poll_freq_seconds: 2
-  gnss:
-    holdover_seconds: 15
-    poll_freq_seconds: 2
   osclock:
     holdover_seconds: 15
-    poll_freq_seconds: 2
   overall:
     holdover_seconds: 15
-    poll_freq_seconds: 2
+
