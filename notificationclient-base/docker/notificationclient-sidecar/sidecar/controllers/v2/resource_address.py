@@ -4,14 +4,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-from pecan import expose, redirect, rest, route, response, abort
-from webob.exc import HTTPException, HTTPNotFound, HTTPBadRequest, HTTPClientError, HTTPServerError
+from pecan import expose, abort
+from webob.exc import HTTPException, HTTPServerError
 
-from wsme import types as wtypes
-from wsmeext.pecan import wsexpose
-
-from datetime import datetime, timezone
-import os
+from datetime import datetime
 import logging
 import oslo_messaging
 
@@ -19,15 +15,13 @@ from notificationclientsdk.common.helpers import constants
 from notificationclientsdk.common.helpers import subscription_helper
 from notificationclientsdk.services.ptp import PtpService
 from notificationclientsdk.exception import client_exception
+from notificationclientsdk.common.helpers import log_helper
 
 from sidecar.repository.notification_control import notification_control
 
 LOG = logging.getLogger(__name__)
-
-from notificationclientsdk.common.helpers import log_helper
 log_helper.config_logger(LOG)
 
-THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME",'controller-0')
 
 class ResourceAddressController(object):
     def __init__(self, resource_address):
@@ -37,22 +31,28 @@ class ResourceAddressController(object):
     def CurrentState(self):
         try:
             # validate resource address
-            _, nodename, resource, optional, self.resource_address = subscription_helper.\
-                parse_resource_address(self.resource_address)
-            if nodename != THIS_NODE_NAME and nodename != '.':
+            _, nodename, resource, optional, self.resource_address = \
+                subscription_helper.parse_resource_address(
+                    self.resource_address)
+            service_node_name = notification_control.get_service_nodename()
+            LOG.debug('service_node_name is %s' % service_node_name)
+            if nodename != service_node_name and nodename != '.':
                 LOG.warning("Node {} is not available".format(nodename))
                 abort(404)
             if resource not in constants.VALID_SOURCE_URI:
                 LOG.warning("Resource {} is not valid".format(resource))
                 abort(404)
             ptpservice = PtpService(notification_control)
-            ptpstatus = ptpservice.query(THIS_NODE_NAME, self.resource_address, optional)
+            ptpstatus = ptpservice.query(service_node_name,
+                                         self.resource_address, optional)
+            LOG.debug('Got ptpstatus: %s' % ptpstatus)
             # Change time from float to ascii format
             # ptpstatus['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
             #                                   time.gmtime(ptpstatus['time']))
             for item in ptpstatus:
-                ptpstatus[item]['time'] = datetime.fromtimestamp(ptpstatus[item]['time']).\
-                    strftime('%Y-%m-%dT%H:%M:%S%fZ')
+                ptpstatus[item]['time'] = datetime.fromtimestamp(
+                    ptpstatus[item]['time']).strftime(
+                        '%Y-%m-%dT%H:%M:%S%fZ')
             return ptpstatus
         except client_exception.NodeNotAvailable as ex:
             LOG.warning("Node is not available:{0}".format(str(ex)))
@@ -72,6 +72,5 @@ class ResourceAddressController(object):
             # raise ex
             abort(500)
         except Exception as ex:
-            LOG.error("Exception:{0}@{1}".format(type(ex),str(ex)))
+            LOG.error("Exception:{0}@{1}".format(type(ex), str(ex)))
             abort(500)
-

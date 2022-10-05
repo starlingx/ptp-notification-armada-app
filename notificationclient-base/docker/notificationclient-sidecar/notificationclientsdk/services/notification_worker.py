@@ -17,11 +17,9 @@ else:
     import Queue
 
 from notificationclientsdk.common.helpers import subscription_helper
-from notificationclientsdk.common.helpers import rpc_helper, hostfile_helper
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
 from notificationclientsdk.common.helpers import log_helper
 
-from notificationclientsdk.model.dto.rpc_endpoint import RpcEndpointInfo
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
 from notificationclientsdk.model.dto.resourcetype import ResourceType
 from notificationclientsdk.model.dto.location import LocationInfo
@@ -33,11 +31,14 @@ from notificationclientsdk.model.orm.node import NodeInfo as NodeInfoOrm
 
 from notificationclientsdk.repository.node_repo import NodeRepo
 
-from notificationclientsdk.client.locationservice import LocationHandlerDefault, LocationHandlerBase
+from notificationclientsdk.client.locationservice import LocationHandlerBase
 
-from notificationclientsdk.services.broker_state_manager import BrokerStateManager
-from notificationclientsdk.services.broker_connection_manager import BrokerConnectionManager
-from notificationclientsdk.services.notification_handler import NotificationHandler
+from notificationclientsdk.services.broker_state_manager import \
+    BrokerStateManager
+from notificationclientsdk.services.broker_connection_manager import \
+    BrokerConnectionManager
+from notificationclientsdk.services.notification_handler import \
+    NotificationHandler
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
@@ -46,30 +47,29 @@ log_helper.config_logger(LOG)
 class NotificationWorker:
     class LocationInfoHandler(LocationHandlerBase):
         '''Glue code to forward location info to daemon method'''
-
         def __init__(self, locationinfo_dispatcher):
             self.locationinfo_dispatcher = locationinfo_dispatcher
             super(NotificationWorker.LocationInfoHandler, self).__init__()
 
         def handle(self, location_info):
             LOG.debug("Received location info:{0}".format(location_info))
-            return self.locationinfo_dispatcher.produce_location_event(location_info)
+            return self.locationinfo_dispatcher.produce_location_event(
+                location_info)
 
-    def __init__(
-            self, event, subscription_event, daemon_context):
-
+    def __init__(self, event, subscription_event, daemon_context):
         self.__alive = True
 
         self.daemon_context = daemon_context
-        self.residing_node_name = daemon_context['THIS_NODE_NAME']
-        NodeInfoHelper.set_residing_node(self.residing_node_name)
+        NodeInfoHelper.set_residing_node(daemon_context['THIS_NODE_NAME'])
 
-        self.sqlalchemy_conf = json.loads(daemon_context['SQLALCHEMY_CONF_JSON'])
+        self.sqlalchemy_conf = json.loads(
+            daemon_context['SQLALCHEMY_CONF_JSON'])
         DbContext.init_dbcontext(self.sqlalchemy_conf)
         self.event = event
         self.subscription_event = subscription_event
 
-        self.__locationinfo_handler = NotificationWorker.LocationInfoHandler(self)
+        self.__locationinfo_handler = \
+            NotificationWorker.LocationInfoHandler(self)
         self.__notification_handler = NotificationHandler()
         self.broker_connection_manager = BrokerConnectionManager(
             self.__locationinfo_handler,
@@ -97,7 +97,8 @@ class NotificationWorker:
         node_name = location_info.get('NodeName', None)
         podip = location_info.get("PodIP", None)
         if not node_name or not podip:
-            LOG.warning("Missing PodIP inside location info:{0}".format(location_info))
+            LOG.warning(
+                "Missing PodIP inside location info:{0}".format(location_info))
             return False
         timestamp = location_info.get('Timestamp', 0)
         # mutex for threads which produce location events
@@ -147,8 +148,8 @@ class NotificationWorker:
                 self.handle_brokers_data_syncup_event()
 
             continue
+
         self.broker_connection_manager.stop()
-        return
 
     def consume_location_event(self):
         nodeinfo_repo = None
@@ -162,31 +163,49 @@ class NotificationWorker:
                 node_name = self.location_keys_q.get(False)
                 location_info = self.location_channel.get(node_name, None)
                 if not location_info:
-                    LOG.warning("ignore location info@{0} without content".format(node_name))
+                    LOG.warning(
+                        "ignore location info@{0} without content".format(
+                            node_name))
                     continue
 
-                LOG.debug("consume location info @{0}:{1}".format(node_name, location_info))
-                is_nodeinfo_added, is_nodeinfo_updated = self.__persist_locationinfo(
-                    location_info, nodeinfo_repo)
-                _nodeinfo_added = _nodeinfo_added + (1 if is_nodeinfo_added else 0)
-                _nodeinfo_updated = _nodeinfo_updated + (1 if is_nodeinfo_updated else 0)
+                LOG.debug("consume location info @{0}:{1}".format(
+                    node_name, location_info))
+                is_nodeinfo_added, is_nodeinfo_updated = \
+                    self.__persist_locationinfo(location_info, nodeinfo_repo)
+                _nodeinfo_added = \
+                    _nodeinfo_added + (1 if is_nodeinfo_added else 0)
+                _nodeinfo_updated = \
+                    _nodeinfo_updated + (1 if is_nodeinfo_updated else 0)
+                if is_nodeinfo_added or is_nodeinfo_updated:
+                    LOG.debug("Setting daemon's SERVICE_NODE_NAME to %s"
+                              % node_name)
+                    self.daemon_context['SERVICE_NODE_NAME'] = node_name
+                    LOG.debug("Daemon context updated: id %d contents %s"
+                              % (id(self.daemon_context), self.daemon_context))
                 continue
 
             LOG.debug("Finished consuming location event")
+
             if _nodeinfo_added > 0:
-                LOG.debug("signal event to refresh brokers state from subscription")
-                # node info changes trigger rebuilding broker states from subscription
-                # due to some subscriptions might subscribe resources of all nodes
+                LOG.debug(
+                    "signal event to refresh brokers state from subscription")
+                # node info changes trigger rebuilding broker states from
+                # subscription due to some subscriptions might subscribe
+                # resources of all nodes
                 self.subscription_event.set()
+
             if _nodeinfo_added > 0 or _nodeinfo_updated > 0:
-                LOG.debug("try to refresh brokers state due to changes of node info")
+                LOG.debug(
+                    "try to refresh brokers state due to changes of node info")
                 nodeinfos = nodeinfo_repo.get()
-                broker_state_changed = self.broker_state_manager.refresh_by_nodeinfos(nodeinfos)
+                broker_state_changed = \
+                    self.broker_state_manager.refresh_by_nodeinfos(nodeinfos)
                 if broker_state_changed:
                     # signal the potential changes on node resources
                     LOG.debug("signal event to re-sync up brokers state")
                     self.__brokers_watcher_event.set()
                     self.signal_events()
+
         except Exception as ex:
             LOG.warning("failed to consume location event:{0}".format(str(ex)))
         finally:
@@ -204,23 +223,28 @@ class NotificationWorker:
         is_nodeinfo_updated = False
         try:
             location_info2 = LocationInfo(**location_info)
-            entry = nodeinfo_repo.get_one(NodeName=location_info['NodeName'], Status=1)
+            entry = nodeinfo_repo.get_one(
+                NodeName=location_info['NodeName'], Status=1)
             if not entry:
                 entry = NodeInfoOrm(**location_info2.to_orm())
                 nodeinfo_repo.add(entry)
                 is_nodeinfo_added = True
                 LOG.debug("Add NodeInfo: {0}".format(entry.NodeName))
-            elif not entry.Timestamp or entry.Timestamp < location_info['Timestamp']:
-                # location info with newer timestamp indicate broker need to be re-sync up
+            elif not entry.Timestamp or (entry.Timestamp <
+                                         location_info['Timestamp']):
+                # location info with newer timestamp indicate broker need to be
+                # re-sync up
                 is_nodeinfo_updated = True
                 nodeinfo_repo.update(entry.NodeName, **location_info2.to_orm())
                 LOG.debug("Update NodeInfo: {0}".format(entry.NodeName))
             else:
                 # do nothing
-                LOG.debug("Ignore the location for broker: {0}".format(entry.NodeName))
+                LOG.debug("Ignore the location for broker: {0}".format(
+                    entry.NodeName))
         except Exception as ex:
-            LOG.warning("failed to update broker state with location info:{0}, {1}".format(
-                location_info, str(ex)))
+            LOG.warning("failed to update broker state with "
+                        "location info:{0},{1}".format(location_info,
+                                                       str(ex)))
         finally:
             return is_nodeinfo_added, is_nodeinfo_updated
 
@@ -235,7 +259,8 @@ class NotificationWorker:
             nodeinfo_repo = NodeRepo(autocommit=True)
             subs = subscription_repo.get()
             LOG.debug("found {0} subscriptions".format(subs.count()))
-            broker_state_changed = self.broker_state_manager.refresh_by_subscriptions(subs)
+            broker_state_changed = \
+                self.broker_state_manager.refresh_by_subscriptions(subs)
             if broker_state_changed:
                 nodeinfo_repo = NodeRepo(autocommit=True)
                 nodeinfos = nodeinfo_repo.get()
@@ -250,13 +275,17 @@ class NotificationWorker:
                         broker_name = subinfo.ResourceQualifier.NodeName
                     else:
                         # ignore the subscription due to unsupported type
-                        LOG.debug("Ignore the subscription for: {0}".format(subinfo.SubscriptionId))
+                        LOG.debug(
+                            "Ignore the subscription for: {0}".format(
+                                subinfo.SubscriptionId))
                         continue
                 elif s.ResourceAddress:
                     # Get nodename from resource address
-                    LOG.info("Parse resource address {}".format(s.ResourceAddress))
-                    _, nodename, _, _, _ = subscription_helper.parse_resource_address(
-                        s.ResourceAddress)
+                    LOG.info(
+                        "Parse resource address {}".format(s.ResourceAddress))
+                    _, nodename, _, _, _ = \
+                        subscription_helper.parse_resource_address(
+                            s.ResourceAddress)
                     broker_name = nodename
                 else:
                     LOG.debug("Subscription {} does not have ResourceType or "
@@ -264,8 +293,6 @@ class NotificationWorker:
                     continue
 
                 if s.Status == 1:
-                    current_node_name = NodeInfoHelper.expand_node_name(broker_name)
-
                     # update the initial delivery timestamp as well
                     self.__notification_handler.update_delivery_timestamp(
                         NodeInfoHelper.default_node_name(broker_name),
@@ -288,7 +315,8 @@ class NotificationWorker:
             self.__brokers_data_syncup_event.set()
         except Exception as ex:
             result = False
-            LOG.warning("fail to sync up watcher for brokers: {0}".format(str(ex)))
+            LOG.warning(
+                "fail to sync up watcher for brokers: {0}".format(str(ex)))
         finally:
             if not result:
                 # retry indefinitely
@@ -304,7 +332,8 @@ class NotificationWorker:
                 self.broker_connection_manager)
         except Exception as ex:
             result = False
-            LOG.warning("fail to sync up data for brokers: {0}".format(str(ex)))
+            LOG.warning(
+                "fail to sync up data for brokers: {0}".format(str(ex)))
         finally:
             if not result:
                 self.__brokers_data_syncup_event.set()

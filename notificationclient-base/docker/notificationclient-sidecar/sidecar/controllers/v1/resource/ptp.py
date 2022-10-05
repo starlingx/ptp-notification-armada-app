@@ -1,26 +1,27 @@
-#coding=utf-8
+#
+# Copyright (c) 2020-2022 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 
-from pecan import expose, redirect, rest, route, response, abort
-from webob.exc import HTTPException, HTTPNotFound, HTTPBadRequest, HTTPClientError, HTTPServerError
+from pecan import expose, rest, route, abort
+from webob.exc import HTTPException, HTTPServerError
 
 from wsme import types as wtypes
 from wsmeext.pecan import wsexpose
 
-import os
 import logging
 import oslo_messaging
 
+from notificationclientsdk.common.helpers import log_helper
 from notificationclientsdk.services.ptp import PtpService
 from notificationclientsdk.exception import client_exception
 
 from sidecar.repository.notification_control import notification_control
 
 LOG = logging.getLogger(__name__)
-
-from notificationclientsdk.common.helpers import log_helper
 log_helper.config_logger(LOG)
 
-THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME",'controller-0')
 
 class CurrentStateController(rest.RestController):
     def __init__(self):
@@ -30,7 +31,10 @@ class CurrentStateController(rest.RestController):
     def get(self):
         try:
             ptpservice = PtpService(notification_control)
-            ptpstatus = ptpservice.query(THIS_NODE_NAME)
+            service_node_name = notification_control.get_service_nodename()
+            LOG.debug('service_node_name is %s' % service_node_name)
+            ptpstatus = ptpservice.query(service_node_name)
+            LOG.debug('Got ptpstatus: %s' % ptpstatus)
             # response.status = 200
             return ptpstatus
         except client_exception.NodeNotAvailable as ex:
@@ -51,8 +55,9 @@ class CurrentStateController(rest.RestController):
             # raise ex
             abort(500)
         except Exception as ex:
-            LOG.error("Exception:{0}@{1}".format(type(ex),str(ex)))
+            LOG.error("Exception:{0}@{1}".format(type(ex), str(ex)))
             abort(500)
+
 
 class PtpController(rest.RestController):
     def __init__(self):
@@ -61,6 +66,7 @@ class PtpController(rest.RestController):
     @wsexpose(wtypes.text)
     def get(self):
         return 'ptp'
+
 
 route(PtpController, 'CurrentState', CurrentStateController())
 route(PtpController, 'currentstate', CurrentStateController())
