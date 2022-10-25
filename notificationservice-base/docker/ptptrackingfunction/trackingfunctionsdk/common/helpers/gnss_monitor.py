@@ -10,6 +10,7 @@ import re
 
 from abc import ABC, abstractmethod
 
+from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers.cgu_handler import CguHandler
 from trackingfunctionsdk.model.dto.gnssstate import GnssState
@@ -33,18 +34,23 @@ class GnssMonitor(Observer):
     _state = GnssState()
     gnss_cgu_handler = None
 
-    def __init__(self, config_file, nmea_serialport=None, pci_addr=None, cgu_path=None):
+    def __init__(self, config_file, nmea_serialport=None, pci_addr=None,
+                 cgu_path=None):
         self.config_file = config_file
         try:
-            pattern = '(?<=/ptp/ptpinstance/ts2phc-).*(?=.conf)'
+            pattern = '(?<=' + \
+                      constants.TS2PHC_CONFIG_PATH + \
+                      'ts2phc-).*(?=.conf)'
             match = re.search(pattern, self.config_file)
             self.ts2phc_service_name = match.group()
         except AttributeError:
-            LOG.warning("GnssMonitor: Unable to determine tsphc_service name from %s"
-                        % self.config_file)
+            LOG.warning(
+                "GnssMonitor: Unable to determine tsphc_service name from %s"
+                % self.config_file)
 
         # Setup GNSS data
-        self.gnss_cgu_handler = CguHandler(config_file, nmea_serialport, pci_addr, cgu_path)
+        self.gnss_cgu_handler = CguHandler(config_file, nmea_serialport,
+                                           pci_addr, cgu_path)
 
         if self.gnss_cgu_handler.nmea_serialport is None:
             self.gnss_cgu_handler.get_gnss_nmea_serialport_from_ts2phc_config()
@@ -56,8 +62,10 @@ class GnssMonitor(Observer):
         self.gnss_cgu_handler.read_cgu()
         self.gnss_cgu_handler.cgu_output_to_dict()
 
-        self.dmesg_values_to_check = {'pin': 'GNSS-1PPS',
-                                      'pci_addr': self.gnss_cgu_handler.pci_addr}
+        self.dmesg_values_to_check = {
+            'pin': 'GNSS-1PPS',
+            'pci_addr': self.gnss_cgu_handler.pci_addr
+        }
 
         # Initialize status
         if self.gnss_cgu_handler.cgu_output_parsed['EEC DPLL']['Current reference'] == 'GNSS-1PPS':
@@ -72,8 +80,10 @@ class GnssMonitor(Observer):
 
     def set_gnss_status(self):
         # Check that ts2phc is running, else Freerun
-        if not os.path.isfile('/var/run/ts2phc-%s.pid' % self.ts2phc_service_name):
-            LOG.warning("TS2PHC instance %s is not running, reporting GNSS unlocked."
+        if not os.path.isfile('/var/run/ts2phc-%s.pid'
+                              % self.ts2phc_service_name):
+            LOG.warning("TS2PHC instance %s is not running, "
+                        "reporting GNSS unlocked."
                         % self.ts2phc_service_name)
             self._state = GnssState.Failure_Nofix
             return
@@ -85,7 +95,8 @@ class GnssMonitor(Observer):
         self.gnss_pps_state = self.gnss_cgu_handler.cgu_output_parsed['PPS DPLL']['Status']
         LOG.debug("GNSS EEC Status is: %s" % self.gnss_eec_state)
         LOG.debug("GNSS PPS Status is: %s" % self.gnss_pps_state)
-        if self.gnss_pps_state == 'locked_ho_ack' and self.gnss_eec_state == 'locked_ho_ack':
+        if self.gnss_pps_state == 'locked_ho_ack' and \
+           self.gnss_eec_state == 'locked_ho_ack':
             self._state = GnssState.Synchronized
         else:
             self._state = GnssState.Failure_Nofix
@@ -94,7 +105,6 @@ class GnssMonitor(Observer):
 
     def get_gnss_status(self, holdover_time, freq, sync_state, event_time):
         previous_sync_state = sync_state
-        max_holdover_time = (holdover_time - freq * 2)
 
         self.set_gnss_status()
 
@@ -105,4 +115,3 @@ class GnssMonitor(Observer):
         else:
             new_event = False
         return new_event, self._state, event_time
-

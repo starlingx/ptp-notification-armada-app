@@ -59,6 +59,7 @@ notification:
             - "true"
 
 location:
+  log_level: INFO
   image:
     repository: starlingx/locationservice-base
     tag: stx.5.0-v1.0.1

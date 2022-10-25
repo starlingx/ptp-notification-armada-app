@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+from os import path
+
 # phc states constants
 FREERUN_PHC_STATE = "Freerun"
 LOCKED_PHC_STATE = "Locked"
@@ -36,10 +38,18 @@ GNSS_DPLL_0 = "DPLL0"
 GNSS_DPLL_1 = "DPLL1"
 
 UTC_OFFSET = "37"
-PTP_CONFIG_PATH = "/ptp/ptpinstance/"
+
+if path.exists('/ptp/linuxptp/ptpinstance'):
+    LINUXPTP_CONFIG_PATH = '/ptp/linuxptp/ptpinstance/'
+elif path.exists('/ptp/ptpinstance'):
+    LINUXPTP_CONFIG_PATH = '/ptp/ptpinstance/'
+else:
+    LINUXPTP_CONFIG_PATH = '/ptp/'
+PTP_CONFIG_PATH = LINUXPTP_CONFIG_PATH
+PHC2SYS_CONFIG_PATH = LINUXPTP_CONFIG_PATH
+TS2PHC_CONFIG_PATH = LINUXPTP_CONFIG_PATH
 PHC_CTL_PATH = "/usr/sbin/phc_ctl"
-PHC2SYS_DEFAULT_CONFIG = "/ptp/ptpinstance/phc2sys-phc2sys-legacy.conf"
-PHC2SYS_CONF_PATH = "/ptp/ptpinstance/"
+PHC2SYS_DEFAULT_CONFIG = PHC2SYS_CONFIG_PATH + "phc2sys-phc2sys-legacy.conf"
 
 CLOCK_REALTIME = "CLOCK_REALTIME"
 

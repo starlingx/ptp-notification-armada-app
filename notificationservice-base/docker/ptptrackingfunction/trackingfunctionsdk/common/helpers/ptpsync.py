@@ -12,12 +12,9 @@
 # Sync status provided as: 'Locked', 'Holdover', 'Freerun'
 #
 #
-import errno, os
-import os.path
+import os
 import re
-import sys
 import subprocess
-import datetime
 import logging
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import log_helper
@@ -53,7 +50,8 @@ def check_critical_resources(ptp4l_service_name, phc2sys_service_name):
         ptp4l = True
     if os.path.isfile('/var/run/phc2sys-%s.pid' % phc2sys_service_name):
         phc2sys = True
-    if os.path.isfile('/ptp/ptpinstance/ptp4l-%s.conf' % ptp4l_service_name):
+    if os.path.isfile(constants.PTP_CONFIG_PATH +
+                      ('ptp4l-%s.conf' % ptp4l_service_name)):
         ptp4lconf = True
     return pmc, ptp4l, phc2sys, ptp4lconf
 

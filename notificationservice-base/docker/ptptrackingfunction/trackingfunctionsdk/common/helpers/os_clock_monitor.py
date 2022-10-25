@@ -31,8 +31,8 @@ class OsClockMonitor:
         self.phc2sys_config = phc2sys_config
         self.set_phc2sys_instance()
 
-        """Normally initialize all fields, but allow these to be skipped to assist with unit testing
-        or to short-circuit values if required.
+        """Normally initialize all fields, but allow these to be skipped to
+        assist with unit testing or to short-circuit values if required.
         """
         if init:
             self.get_os_clock_time_source()
@@ -40,8 +40,8 @@ class OsClockMonitor:
             self.set_os_clock_state()
 
     def set_phc2sys_instance(self):
-        self.phc2sys_instance = self.phc2sys_config.split(constants.PHC2SYS_CONF_PATH
-                                                          + "phc2sys-")[1]
+        self.phc2sys_instance = self.phc2sys_config.split(
+            constants.PHC2SYS_CONFIG_PATH + "phc2sys-")[1]
         self.phc2sys_instance = self.phc2sys_instance.split(".")[0]
         LOG.debug("phc2sys config file: %s" % self.phc2sys_config)
         LOG.debug("phc2sys instance name: %s" % self.phc2sys_instance)
@@ -77,7 +77,8 @@ class OsClockMonitor:
 
         phc_interface = cmdline_args[interface_index + 1]
         if phc_interface == constants.CLOCK_REALTIME:
-            LOG.info("PHC2SYS is using CLOCK_REALTIME, OS Clock is not being disciplined by a PHC")
+            LOG.info("PHC2SYS is using CLOCK_REALTIME, OS Clock is not being "
+                     "disciplined by a PHC")
             return None
         LOG.debug("PHC interface is %s" % phc_interface)
         return phc_interface
@@ -91,9 +92,10 @@ class OsClockMonitor:
             # Find the interface value inside the square brackets
             if re.match(r"^\[.*\]$", line) and line != "[global]":
                 phc_interface = line.strip("[]")
+                LOG.debug("PHC interface is %s" % phc_interface)
+                return phc_interface
 
-        LOG.debug("PHC interface is %s" % phc_interface)
-        return phc_interface
+        return None
 
     def _get_interface_phc_device(self):
         """Determine the phc device for the interface"""
@@ -102,11 +104,14 @@ class OsClockMonitor:
         if len(ptp_device) == 0:
             # Try the 0th interface instead, required for some NIC types
             phc_interface_base = self.phc_interface[:-1] + "0"
-            LOG.error("No ptp device found at %s trying %s instead" % (pattern, phc_interface_base))
-            pattern = "/hostsys/class/net/" + phc_interface_base + "/device/ptp/*"
+            LOG.error("No ptp device found at %s trying %s instead"
+                      % (pattern, phc_interface_base))
+            pattern = "/hostsys/class/net/" + phc_interface_base + \
+                      "/device/ptp/*"
             ptp_device = glob(pattern)
             if len(ptp_device) == 0:
-                LOG.warning("No ptp device found for base interface at %s" % pattern)
+                LOG.warning("No ptp device found for base interface at %s"
+                            % pattern)
                 return None
         if len(ptp_device) > 1:
             LOG.error("More than one ptp device found at %s" % pattern)
@@ -117,30 +122,42 @@ class OsClockMonitor:
 
     def get_os_clock_offset(self):
         """Get the os CLOCK_REALTIME offset"""
+        if self.ptp_device is None:
+            # This may happen in virtualized environments
+            LOG.warning("No PTP device. Defaulting offset value to 0.")
+            self.offset = "0"
+            return
         try:
             ptp_device_path = "/dev/" + self.ptp_device
-            offset = subprocess.check_output([constants.PHC_CTL_PATH, ptp_device_path, 'cmp']
-                                         ).decode().split()[-1]
+            offset = subprocess.check_output(
+                [constants.PHC_CTL_PATH, ptp_device_path, 'cmp']
+                ).decode().split()[-1]
             offset = offset.strip("-ns")
             LOG.debug("PHC offset is %s" % offset)
             self.offset = offset
         except Exception as ex:
-            # We have seen rare instances where the ptp device cannot be read but then works fine
-            # on the next attempt. Setting the offset to 0 here will allow the OS clock to move to
-            # holdover. If there is a real fault, it will stay in holdover and tranition to freerun
-            # but if it was just a single miss, it will return to locked on the next check.
-            LOG.warning("Unable to read device offset for %s due to %s" % (ptp_device_path, ex))
-            LOG.warning("Check operation of %s. Defaulting offset value to 0." % ptp_device_path)
+            # We have seen rare instances where the ptp device cannot be read
+            # but then works fine on the next attempt. Setting the offset to 0
+            # here will allow the OS clock to move to holdover. If there is a
+            # real fault, it will stay in holdover and tranition to freerun but
+            # if it was just a single miss, it will return to locked on the
+            # next check.
+            LOG.warning("Unable to read device offset for %s due to %s"
+                        % (ptp_device_path, ex))
+            LOG.warning("Check operation of %s. Defaulting offset value to 0."
+                        % ptp_device_path)
             self.offset = "0"
 
     def set_os_clock_state(self):
         offset_int = int(self.offset)
         if offset_int > constants.PHC2SYS_TOLERANCE_HIGH or \
                 offset_int < constants.PHC2SYS_TOLERANCE_LOW:
-            LOG.warning("PHC2SYS offset is outside of tolerance, handling state change.")
+            LOG.warning("PHC2SYS offset is outside of tolerance, "
+                        "handling state change.")
             self._state = OsClockState.Freerun
         else:
-            LOG.info("PHC2SYS offset is within tolerance, OS clock state is LOCKED")
+            LOG.info("PHC2SYS offset is within tolerance, "
+                     "OS clock state is LOCKED")
             self._state = OsClockState.Locked
 
     def get_os_clock_state(self):
@@ -158,14 +175,16 @@ class OsClockMonitor:
         self.set_os_clock_state()
 
         if self.get_os_clock_state() == constants.FREERUN_PHC_STATE:
-            if previous_sync_state in [constants.UNKNOWN_PHC_STATE, constants.FREERUN_PHC_STATE]:
+            if previous_sync_state in [constants.UNKNOWN_PHC_STATE,
+                                       constants.FREERUN_PHC_STATE]:
                 self._state = constants.FREERUN_PHC_STATE
             elif previous_sync_state == constants.LOCKED_PHC_STATE:
                 self._state = constants.HOLDOVER_PHC_STATE
             elif previous_sync_state == constants.HOLDOVER_PHC_STATE and \
                     time_in_holdover < max_holdover_time:
-                LOG.debug("OS Clock: Time in holdover is %s  Max time in holdover is %s" % (
-                    time_in_holdover, max_holdover_time))
+                LOG.debug("OS Clock: Time in holdover is %s "
+                          "Max time in holdover is %s"
+                          % (time_in_holdover, max_holdover_time))
                 self._state = constants.HOLDOVER_PHC_STATE
             else:
                 self._state = constants.FREERUN_PHC_STATE
@@ -180,6 +199,6 @@ class OsClockMonitor:
 
 
 if __name__ == "__main__":
-    # This file can be run in a ptp-notification pod to verify the functionality of
-    # os_clock_monitor.
+    # This file can be run in a ptp-notification pod to verify the
+    # functionality of os_clock_monitor.
     test_monitor = OsClockMonitor()

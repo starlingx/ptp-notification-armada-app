@@ -84,6 +84,8 @@ spec:
             value: "{{ .Values.notification.endpoint.pass }}"
           - name: NOTIFICATIONSERVICE_PORT
             value: "{{ .Values.notification.endpoint.port }}"
+          - name: LOGGING_LEVEL
+            value: "{{ .Values.location.log_level }}"
 
         command: ["/bin/bash", "/mnt/locationservice_start.sh"]
         volumeMounts:
@@ -133,8 +135,6 @@ spec:
             value: "{{ .Values.ptptracking.ptp4lServiceName }}"
           - name: PHC2SYS_SERVICE_NAME
             value: "{{ .Values.ptptracking.phc2sysServiceName }}"
-          - name: PHC2SYS_CONFIG
-            value: "/ptp/ptpinstance/phc2sys-{{.Values.ptptracking.phc2sysServiceName}}.conf"
           - name: TS2PHC_SERVICE_NAME
             value: "{{ .Values.ptptracking.ts2phcServiceName }}"
           - name: LOGGING_LEVEL
