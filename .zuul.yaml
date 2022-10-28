@@ -45,6 +45,7 @@
     parent: tox
     description: |
       Run pylint test for k8sapp-ptp-notification-tox-pylint
+    nodeset: ubuntu-bionic
     required-projects:
       - starlingx/config
       - starlingx/fault
