@@ -23,14 +23,19 @@ from trackingfunctionsdk.common.helpers import constants
 
 LOG = logging.getLogger(__name__)
 
+
 # dictionary includes PMC commands used and keywords of intrest
 ptp_oper_dict = {
     #[pmc cmd, ptp keywords,...]
     1: ["'GET PORT_DATA_SET'", constants.PORT_STATE],
     2: ["'GET TIME_STATUS_NP'", constants.GM_PRESENT, constants.MASTER_OFFSET],
-    3: ["'GET PARENT_DATA_SET'", constants.GM_CLOCK_CLASS],
-    4: ["'GET TIME_PROPERTIES_DATA_SET'", constants.TIME_TRACEABLE]
+    3: ["'GET PARENT_DATA_SET'", constants.GM_CLOCK_CLASS, constants.GRANDMASTER_IDENTITY],
+    4: ["'GET TIME_PROPERTIES_DATA_SET'", constants.TIME_TRACEABLE],
+    5: ["'GET DEFAULT_DATA_SET'", constants.CLOCK_IDENTITY]
 }
+
+ptp4l_service_name = os.environ.get('PTP4L_SERVICE_NAME', 'ptp4l')
+phc2sys_service_name = os.environ.get('PHC2SYS_SERVICE_NAME', 'phc2sys')
 
 # run subprocess and returns out, err, errcode
 def run_shell2(dir, ctx, args):
@@ -54,11 +59,11 @@ def check_critical_resources():
 
     if os.path.isfile('/usr/sbin/pmc'):
         pmc = True
-    if os.path.isfile('/var/run/ptp4l.pid'):
+    if os.path.isfile('/var/run/ptp4l-%s.pid' % ptp4l_service_name):
         ptp4l = True
-    if os.path.isfile('/var/run/phc2sys.pid'):
+    if os.path.isfile('/var/run/phc2sys-%s.pid' % phc2sys_service_name):
         phc2sys = True
-    if os.path.isfile('/ptp/ptp4l.conf'):
+    if os.path.isfile('/ptp/ptpinstance/ptp4l-%s.conf' % ptp4l_service_name):
         ptp4lconf = True
     return pmc, ptp4l, phc2sys, ptp4lconf
 
@@ -66,21 +71,32 @@ def check_results(result, total_ptp_keywords, port_count):
     # sync state is in 'Locked' state and will be overwritten if
     # it is not the case
     sync_state = constants.LOCKED_PHC_STATE
+
+    local_gm = False
+
     # check for a healthy result
     if len(result) != total_ptp_keywords:
         sync_state = constants.FREERUN_PHC_STATE
         LOG.warning('results are not complete, returning FREERUN')
         return sync_state
     # determine the current sync state
-    if result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT:
+    if (result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT
+            and result[constants.GRANDMASTER_IDENTITY] != result[constants.CLOCK_IDENTITY]):
         sync_state = constants.FREERUN_PHC_STATE
+    else:
+        local_gm = True
     for port in range(1, port_count + 1):
-        if result[constants.PORT.format(port)].lower() == constants.SLAVE_MODE: break
+        if result[constants.PORT.format(port)].lower() == constants.SLAVE_MODE or local_gm:
+            break
     else:
         sync_state = constants.FREERUN_PHC_STATE
-    if result[constants.TIME_TRACEABLE] != constants.TIME_IS_TRACEABLE1 and result[constants.TIME_TRACEABLE].lower != constants.TIME_IS_TRACEABLE2:
+    if (result[constants.TIME_TRACEABLE] != constants.TIME_IS_TRACEABLE1
+            and result[constants.TIME_TRACEABLE].lower != constants.TIME_IS_TRACEABLE2):
         sync_state = constants.FREERUN_PHC_STATE
-    if result[constants.GM_CLOCK_CLASS] not in [constants.CLOCK_CLASS_VALUE1, constants.CLOCK_CLASS_VALUE2, constants.CLOCK_CLASS_VALUE3]:
+    if (result[constants.GM_CLOCK_CLASS] not in
+            [constants.CLOCK_CLASS_VALUE1,
+            constants.CLOCK_CLASS_VALUE2,
+            constants.CLOCK_CLASS_VALUE3]):
         sync_state = constants.FREERUN_PHC_STATE
     return sync_state
 
@@ -94,7 +110,7 @@ def ptpsync():
 
     for key in range(1,len_dic+1):
         cmd = ptp_dict_to_use[key][0]
-        cmd = "pmc -b 0 -u -f /ptp/ptp4l.conf " + cmd
+        cmd = "pmc -b 0 -u -f /ptp/ptpinstance/ptp4l-" + ptp4l_service_name + ".conf " + cmd
 
         ptp_keyword = ptp_dict_to_use[key][1:]
         total_ptp_keywords += len(ptp_keyword)
@@ -124,6 +140,8 @@ def ptpsync():
                          port_count += 1
                          result.update({constants.PORT.format(port_count):state[1]})
                      else:
+                         state[1] = state[1].replace('\\n','')
+                         state[1] = state[1].replace('\'','')
                          result.update({state[0]:state[1]})
     # making sure at least one port is available
     if port_count == 0:
@@ -145,7 +163,7 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
     #     Freerun —> Locked            #
     ####################################
     current_time = datetime.datetime.now().timestamp()
-    time_in_holdover = round(current_time - event_time) 
+    time_in_holdover = round(current_time - event_time)
     previous_sync_state = sync_state
     # max holdover time is calculated to be in a 'safety' zoon
     max_holdover_time = (holdover_time - freq * 2)
