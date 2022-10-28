@@ -94,9 +94,7 @@ def check_results(result, total_ptp_keywords, port_count):
             and result[constants.TIME_TRACEABLE].lower != constants.TIME_IS_TRACEABLE2):
         sync_state = constants.FREERUN_PHC_STATE
     if (result[constants.GM_CLOCK_CLASS] not in
-            [constants.CLOCK_CLASS_VALUE1,
-            constants.CLOCK_CLASS_VALUE2,
-            constants.CLOCK_CLASS_VALUE3]):
+            [constants.CLOCK_CLASS_VALUE6]):
         sync_state = constants.FREERUN_PHC_STATE
     return sync_state
 
