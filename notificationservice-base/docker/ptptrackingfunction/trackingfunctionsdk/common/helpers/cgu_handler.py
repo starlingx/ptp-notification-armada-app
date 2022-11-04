@@ -6,7 +6,6 @@
 import logging
 import os
 import re
-import sys
 
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import log_helper
@@ -16,7 +15,8 @@ log_helper.config_logger(LOG)
 
 
 class CguHandler:
-    def __init__(self, config_file, nmea_serialport=None, pci_addr=None, cgu_path=None):
+    def __init__(self, config_file, nmea_serialport=None, pci_addr=None, 
+                 cgu_path=None):
         self.config_file = config_file
         self.nmea_serialport = nmea_serialport
         self.pci_addr = pci_addr
@@ -39,33 +39,38 @@ class CguHandler:
             LOG.error(err)
             raise
 
-    def convert_nmea_serialport_to_pci_addr(self, dmesg_path="/logs/dmesg"):
-        # Parse the nmea_serialport value into a PCI address so that we can later find the cgu
+    def convert_nmea_serialport_to_pci_addr(self, log_file="/logs/kern.log"):
+        # Parse the nmea_serialport value into a PCI address so that we can
+        # later find the cgu
         # Returns the address or None
         pci_addr = None
         # Get only the ttyGNSS_1800_0 portion of the path
         nmea_serialport = self.nmea_serialport.split('/')[2]
         LOG.debug("Looking for nmea_serialport value: %s" % nmea_serialport)
 
-        with open(dmesg_path, 'r') as dmesg:
-            for line in dmesg:
+        with open(log_file, 'r') as file:
+            for line in file:
                 if nmea_serialport in line:
                     # Regex split to make any number of spaces the delimiter
-                    # Eg. [    4.834255] ice 0000:18:00.0: ttyGNSS_1800_0 registered
+                    # Eg.: ... ice 0000:18:00.0: ttyGNSS_1800_0 registered
                     # Becomes: 0000:18:00.0
-                    pci_addr = re.split(' +', line)[3].strip(':')
+                    pci_addr = re.split(' +', line)[7].strip(':')
+                    LOG.debug("Found with PCI addr: %s" % pci_addr)
+                    break
+
         self.pci_addr = pci_addr
-        return
 
     def get_cgu_path_from_pci_addr(self):
         # Search for a cgu file using the given pci address
         cgu_path = "/ice/" + self.pci_addr + "/cgu"
         if os.path.exists(cgu_path):
-            LOG.debug("PCI address %s has cgu path %s" % (self.pci_addr, cgu_path))
+            LOG.debug("PCI address %s has cgu path %s" %
+                      (self.pci_addr, cgu_path))
             self.cgu_path = cgu_path
             return
         else:
-            LOG.error("Could not find cgu path for PCI address %s" % self.pci_addr)
+            LOG.error("Could not find cgu path for PCI address %s" %
+                      self.pci_addr)
             raise FileNotFoundError
 
     def read_cgu(self):
@@ -75,7 +80,6 @@ class CguHandler:
             with open(self.cgu_path, 'r') as infile:
                 cgu_output = infile.read()
         self.cgu_output_raw = cgu_output
-        return
 
     def cgu_output_to_dict(self):
         # Take raw cgu output and parse it into a dict
@@ -94,19 +98,25 @@ class CguHandler:
 
         for line in cgu_output[7:14]:
             # Build a dict out of the 7 line table
-            dict_to_insert = {re.split(' +', line)[1]: {'state': re.split(' +', line)[4],
-                                                        'priority': {'EEC': re.split(' +', line)[6],
-                                                                     'PPS': re.split(' +', line)[8]}
-                                                        }
-                              }
+            dict_to_insert = {
+                re.split(' +', line)[1]: {
+                    'state': re.split(' +', line)[4],
+                    'priority': {
+                        'EEC': re.split(' +', line)[6],
+                        'PPS': re.split(' +', line)[8]
+                    }
+                }
+            }
             cgu_dict['input'].update(dict_to_insert)
 
         # Add the DPLL data below the table
-        cgu_dict['EEC DPLL']['Current reference'] = re.split('[ \t]+', cgu_output[16])[3]
+        cgu_dict['EEC DPLL']['Current reference'] = \
+            re.split('[ \t]+', cgu_output[16])[3]
         cgu_dict['EEC DPLL']['Status'] = re.split('[ \t]+', cgu_output[17])[2]
-        cgu_dict['PPS DPLL']['Current reference'] = re.split('[ \t]+', cgu_output[20])[3]
+        cgu_dict['PPS DPLL']['Current reference'] = \
+            re.split('[ \t]+', cgu_output[20])[3]
         cgu_dict['PPS DPLL']['Status'] = re.split('[ \t]+', cgu_output[21])[2]
-        cgu_dict['PPS DPLL']['Phase offset'] = re.split('[ \t]+', cgu_output[22])[3]
+        cgu_dict['PPS DPLL']['Phase offset'] = \
+            re.split('[ \t]+', cgu_output[22])[3]
 
         self.cgu_output_parsed = cgu_dict
-        return

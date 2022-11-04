@@ -33,14 +33,14 @@ class CguHandlerTests(unittest.TestCase):
     def test_convert_nmea_serialport_to_pci_addr(self):
         # Test success path
         self.testCguHandler.get_gnss_nmea_serialport_from_ts2phc_config()
-        self.testCguHandler.convert_nmea_serialport_to_pci_addr(testpath +
-                                                                "test_input_files/mock_dmesg")
+        self.testCguHandler.convert_nmea_serialport_to_pci_addr(
+            testpath + "test_input_files/mock_kern.log")
         self.assertEqual(self.testCguHandler.pci_addr, "0000:18:00.0")
 
         # Test pci address not found
         self.testCguHandler.nmea_serialport = "/dev/ttyGNSS_not_present"
-        self.testCguHandler.convert_nmea_serialport_to_pci_addr(testpath +
-                                                                "test_input_files/mock_dmesg")
+        self.testCguHandler.convert_nmea_serialport_to_pci_addr(
+            testpath + "test_input_files/mock_kern.log")
         self.assertEqual(self.testCguHandler.pci_addr, None)
 
     @mock.patch('trackingfunctionsdk.common.helpers.cgu_handler.os.path')
@@ -48,8 +48,8 @@ class CguHandlerTests(unittest.TestCase):
         # Setup mock
         mock_path.exists.return_value = True
         self.testCguHandler.get_gnss_nmea_serialport_from_ts2phc_config()
-        self.testCguHandler.convert_nmea_serialport_to_pci_addr(testpath +
-                                                                "test_input_files/mock_dmesg")
+        self.testCguHandler.convert_nmea_serialport_to_pci_addr(
+            testpath + "test_input_files/mock_kern.log")
         self.testCguHandler.get_cgu_path_from_pci_addr()
         self.assertEqual(self.testCguHandler.cgu_path, "/ice/0000:18:00.0/cgu")
 
