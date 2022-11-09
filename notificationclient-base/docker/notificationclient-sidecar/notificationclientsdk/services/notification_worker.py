@@ -56,7 +56,8 @@ class NotificationWorker:
             return self.locationinfo_dispatcher.produce_location_event(
                 location_info)
 
-    def __init__(self, event, subscription_event, daemon_context):
+    def __init__(self, event, subscription_event, daemon_context,
+                 service_nodenames):
         self.__alive = True
 
         self.daemon_context = daemon_context
@@ -67,6 +68,8 @@ class NotificationWorker:
         DbContext.init_dbcontext(self.sqlalchemy_conf)
         self.event = event
         self.subscription_event = subscription_event
+
+        self.service_nodenames = service_nodenames
 
         self.__locationinfo_handler = \
             NotificationWorker.LocationInfoHandler(self)
@@ -174,14 +177,14 @@ class NotificationWorker:
                     self.__persist_locationinfo(location_info, nodeinfo_repo)
                 _nodeinfo_added = \
                     _nodeinfo_added + (1 if is_nodeinfo_added else 0)
+                if is_nodeinfo_added and \
+                        node_name not in self.service_nodenames:
+                    self.service_nodenames.append(node_name)
+                    LOG.debug("List of nodes updated: id %d contents %s" %
+                              (id(self.service_nodenames),
+                               self.service_nodenames))
                 _nodeinfo_updated = \
                     _nodeinfo_updated + (1 if is_nodeinfo_updated else 0)
-                if is_nodeinfo_added or is_nodeinfo_updated:
-                    LOG.debug("Setting daemon's SERVICE_NODE_NAME to %s"
-                              % node_name)
-                    self.daemon_context['SERVICE_NODE_NAME'] = node_name
-                    LOG.debug("Daemon context updated: id %d contents %s"
-                              % (id(self.daemon_context), self.daemon_context))
                 continue
 
             LOG.debug("Finished consuming location event")

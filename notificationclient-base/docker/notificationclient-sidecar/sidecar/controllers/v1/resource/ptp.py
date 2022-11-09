@@ -30,18 +30,38 @@ class CurrentStateController(rest.RestController):
     @expose('json')
     def get(self):
         try:
+            service_nodenames = \
+                notification_control.list_of_service_nodenames()
+            LOG.debug('List of service nodes: %s' % service_nodenames)
+            if len(service_nodenames) == 0:
+                LOG.warning('No PTP service available yet')
+                abort(404)
+
+            # Starting with residing node, try querying the announced locations
+            # since the notification app may have moved to another node
+            nodename = notification_control.get_residing_nodename()
             ptpservice = PtpService(notification_control)
-            service_node_name = notification_control.get_service_nodename()
-            LOG.debug('service_node_name is %s' % service_node_name)
-            ptpstatus = ptpservice.query(service_node_name)
-            LOG.debug('Got ptpstatus: %s' % ptpstatus)
-            # response.status = 200
-            return ptpstatus
-        except client_exception.NodeNotAvailable as ex:
-            LOG.warning("Node is not available:{0}".format(str(ex)))
+
+            while len(service_nodenames) > 0:
+                try:
+                    LOG.debug('Querying nodename: %s' % nodename)
+                    ptpstatus = ptpservice.query(nodename)
+                    LOG.debug('Got ptpstatus: %s' % ptpstatus)
+                    # response.status = 200
+                    return ptpstatus
+                except client_exception.NodeNotAvailable as ex:
+                    LOG.warning("{0}".format(str(ex)))
+                    service_nodenames.remove(nodename)
+                    if len(service_nodenames) > 0:
+                        nodename = service_nodenames[0]
+                except Exception:
+                    raise   # break
+
+            LOG.warning('No PTP service available')
             abort(404)
+
         except client_exception.ResourceNotAvailable as ex:
-            LOG.warning("Resource is not available:{0}".format(str(ex)))
+            LOG.warning("{0}".format(str(ex)))
             abort(404)
         except oslo_messaging.exceptions.MessagingTimeout as ex:
             LOG.warning("Resource is not reachable:{0}".format(str(ex)))
