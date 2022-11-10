@@ -19,20 +19,28 @@ LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
 
 
-def ProcessWorkerDefault(event, subscription_event, daemon_context):
+def ProcessWorkerDefault(event,
+                         subscription_event,
+                         daemon_context,
+                         service_nodenames):
     '''Entry point of Default Process Worker'''
-    worker = NotificationWorker(event, subscription_event, daemon_context)
+    worker = NotificationWorker(event,
+                                subscription_event,
+                                daemon_context,
+                                service_nodenames)
     worker.run()
 
 
 class DaemonControl(object):
     def __init__(self, daemon_context, process_worker=None):
+        self.daemon_context = daemon_context
+        self.residing_node_name = daemon_context['THIS_NODE_NAME']
         self.event = mp.Event()
         self.subscription_event = mp.Event()
         self.manager = mp.Manager()
-        self.daemon_context = self.manager.dict(daemon_context)
-        LOG.debug('Managed (shared) daemon_context id %d contents %s' %
-                  (id(self.daemon_context), daemon_context))
+        self.service_nodenames = self.manager.list()
+        LOG.debug('Managed (shared) list of nodes id %d contents %s' %
+                  (id(self.service_nodenames), self.service_nodenames))
         self.registration_endpoint = RpcEndpointInfo(
             daemon_context['REGISTRATION_TRANSPORT_ENDPOINT'])
         self.registration_transport = rpc_helper.get_transport(
@@ -46,7 +54,8 @@ class DaemonControl(object):
         self.mpinstance = mp.Process(target=process_worker,
                                      args=(self.event,
                                            self.subscription_event,
-                                           self.daemon_context))
+                                           daemon_context,
+                                           self.service_nodenames))
         self.mpinstance.start()
 
         # initial update
@@ -61,5 +70,11 @@ class DaemonControl(object):
         self.subscription_event.set()
         self.event.set()
 
-    def get_service_nodename(self):
-        return self.daemon_context['SERVICE_NODE_NAME']
+    def get_residing_nodename(self):
+        return self.residing_node_name
+
+    def in_service_nodenames(self, nodename):
+        return nodename in self.service_nodenames
+
+    def list_of_service_nodenames(self):
+        return self.service_nodenames[:]

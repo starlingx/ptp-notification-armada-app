@@ -34,16 +34,17 @@ class ResourceAddressController(object):
             _, nodename, resource, optional, self.resource_address = \
                 subscription_helper.parse_resource_address(
                     self.resource_address)
-            service_node_name = notification_control.get_service_nodename()
-            LOG.debug('service_node_name is %s' % service_node_name)
-            if nodename != service_node_name and nodename != '.':
+            if nodename == '.':
+                nodename = notification_control.get_residing_nodename()
+            LOG.debug('Nodename to query: %s' % nodename)
+            if not notification_control.in_service_nodenames(nodename):
                 LOG.warning("Node {} is not available".format(nodename))
                 abort(404)
             if resource not in constants.VALID_SOURCE_URI:
                 LOG.warning("Resource {} is not valid".format(resource))
                 abort(404)
             ptpservice = PtpService(notification_control)
-            ptpstatus = ptpservice.query(service_node_name,
+            ptpstatus = ptpservice.query(nodename,
                                          self.resource_address, optional)
             LOG.debug('Got ptpstatus: %s' % ptpstatus)
             # Change time from float to ascii format
@@ -55,10 +56,10 @@ class ResourceAddressController(object):
                         '%Y-%m-%dT%H:%M:%S%fZ')
             return ptpstatus
         except client_exception.NodeNotAvailable as ex:
-            LOG.warning("Node is not available:{0}".format(str(ex)))
+            LOG.warning("{0}".format(str(ex)))
             abort(404)
         except client_exception.ResourceNotAvailable as ex:
-            LOG.warning("Resource is not available:{0}".format(str(ex)))
+            LOG.warning("{0}".format(str(ex)))
             abort(404)
         except oslo_messaging.exceptions.MessagingTimeout as ex:
             LOG.warning("Resource is not reachable:{0}".format(str(ex)))
