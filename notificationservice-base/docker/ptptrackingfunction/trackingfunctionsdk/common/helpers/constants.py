@@ -32,6 +32,7 @@ CLOCK_CLASS_VALUE6 = "6"
 NMEA_SERIALPORT = "ts2phc.nmea_serialport"
 GNSS_PIN = "GNSS-1PPS"
 GNSS_LOCKED_HO_ACK = 'locked_ho_ack'
+GNSS_LOCKED_HO_ACQ = 'locked_ho_acq'
 GNSS_DPLL_0 = "DPLL0"
 GNSS_DPLL_1 = "DPLL1"
 

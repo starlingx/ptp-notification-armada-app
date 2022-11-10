@@ -68,11 +68,15 @@ class GnssMonitor(Observer):
         }
 
         # Initialize status
-        if self.gnss_cgu_handler.cgu_output_parsed['EEC DPLL']['Current reference'] == 'GNSS-1PPS':
-            self.gnss_eec_state = self.gnss_cgu_handler.cgu_output_parsed['EEC DPLL']['Status']
+        if self.gnss_cgu_handler.cgu_output_parsed[
+                'EEC DPLL']['Current reference'] == 'GNSS-1PPS':
+            self.gnss_eec_state = \
+                self.gnss_cgu_handler.cgu_output_parsed['EEC DPLL']['Status']
 
-        if self.gnss_cgu_handler.cgu_output_parsed['PPS DPLL']['Current reference'] == 'GNSS-1PPS':
-            self.gnss_pps_state = self.gnss_cgu_handler.cgu_output_parsed['PPS DPLL']['Status']
+        if self.gnss_cgu_handler.cgu_output_parsed[
+                'PPS DPLL']['Current reference'] == 'GNSS-1PPS':
+            self.gnss_pps_state = \
+                self.gnss_cgu_handler.cgu_output_parsed['PPS DPLL']['Status']
 
     def update(self, subject, matched_line) -> None:
         LOG.info("Kernel event detected. %s" % matched_line)
@@ -92,11 +96,16 @@ class GnssMonitor(Observer):
         self.gnss_cgu_handler.cgu_output_to_dict()
         self.gnss_eec_state = self.gnss_eec_state = \
             self.gnss_cgu_handler.cgu_output_parsed['EEC DPLL']['Status']
-        self.gnss_pps_state = self.gnss_cgu_handler.cgu_output_parsed['PPS DPLL']['Status']
+        self.gnss_pps_state = \
+            self.gnss_cgu_handler.cgu_output_parsed['PPS DPLL']['Status']
         LOG.debug("GNSS EEC Status is: %s" % self.gnss_eec_state)
         LOG.debug("GNSS PPS Status is: %s" % self.gnss_pps_state)
-        if self.gnss_pps_state == 'locked_ho_ack' and \
-           self.gnss_eec_state == 'locked_ho_ack':
+        if self.gnss_pps_state in [
+                constants.GNSS_LOCKED_HO_ACK,
+                constants.GNSS_LOCKED_HO_ACQ] and \
+           self.gnss_eec_state in [
+                constants.GNSS_LOCKED_HO_ACK,
+                constants.GNSS_LOCKED_HO_ACQ]:
             self._state = GnssState.Synchronized
         else:
             self._state = GnssState.Failure_Nofix
