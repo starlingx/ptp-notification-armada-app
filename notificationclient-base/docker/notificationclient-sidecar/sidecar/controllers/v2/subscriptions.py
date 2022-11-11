@@ -6,12 +6,10 @@
 
 from pecan import conf
 from pecan import expose, rest, response, abort
-from webob.exc import HTTPException, HTTPNotFound, HTTPBadRequest, HTTPClientError, HTTPServerError
+from webob.exc import HTTPException, HTTPServerError
 
-import os
 import logging
 
-from wsme import types as wtypes
 from wsmeext.pecan import wsexpose
 
 from notificationclientsdk.model.dto.subscription import SubscriptionInfoV2
@@ -27,8 +25,6 @@ from sidecar.repository.dbcontext_default import defaults
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
 
-THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME", 'controller-0')
-
 
 class SubscriptionsControllerV2(rest.RestController):
 
@@ -37,37 +33,43 @@ class SubscriptionsControllerV2(rest.RestController):
         # decode the request body
         try:
             if subscription.ResourceAddress:
-                LOG.info(' subscribe: ResourceAddress {0} with callback uri {1}'.format(
-                    subscription.ResourceAddress,
-                    subscription.EndpointUri))
+                LOG.info('subscribe: ResourceAddress {0} with '
+                         'callback uri {1}'.format(
+                            subscription.ResourceAddress,
+                            subscription.EndpointUri))
 
             if not self._validateV2(subscription):
-                LOG.warning(' Invalid Request data:{0}'.format(subscription.to_dict()))
+                LOG.warning('Invalid Request data:{0}'.format(
+                    subscription.to_dict()))
                 abort(400)
 
-            subscription.UriLocation = "{0}://{1}:{2}/ocloudNotifications/v2/subscriptions".format(
-                conf.server.get('protocol', 'http'),
-                conf.server.get('host', '127.0.0.1'),
-                conf.server.get('port', '8080')
-            )
+            subscription.UriLocation = \
+                "{0}://{1}:{2}/ocloudNotifications/v2/subscriptions".format(
+                    conf.server.get('protocol', 'http'),
+                    conf.server.get('host', '127.0.0.1'),
+                    conf.server.get('port', '8080')
+                )
             if subscription.ResourceAddress:
                 ptpservice = PtpService(notification_control)
+
                 entry = ptpservice.add_subscription(subscription)
+                subscription.SubscriptionId = entry.SubscriptionId
+                subscription.UriLocation = entry.UriLocation
+                LOG.info('created subscription: {0}'.format(
+                    subscription.to_dict()))
+
                 del ptpservice
-                if not entry:
-                    abort(404)
-            subscription.SubscriptionId = entry.SubscriptionId
-            subscription.UriLocation = entry.UriLocation
-            LOG.info('created subscription: {0}'.format(subscription.to_dict()))
 
             return subscription
-        except client_exception.InvalidSubscription as ex:
+        except client_exception.ServiceError as err:
+            abort(int(str(err)))
+        except client_exception.InvalidSubscription:
             abort(400)
-        except client_exception.InvalidEndpoint as ex:
+        except client_exception.InvalidEndpoint:
             abort(400)
-        except client_exception.NodeNotAvailable as ex:
+        except client_exception.NodeNotAvailable:
             abort(404)
-        except client_exception.ResourceNotAvailable as ex:
+        except client_exception.ResourceNotAvailable:
             abort(404)
         except HTTPException as ex:
             LOG.warning("Client side error:{0},{1}".format(type(ex), str(ex)))
@@ -82,7 +84,8 @@ class SubscriptionsControllerV2(rest.RestController):
     @expose('json')
     def get(self):
         try:
-            repo = SubscriptionRepo(defaults['dbcontext'].get_session(), autocommit=False)
+            repo = SubscriptionRepo(defaults['dbcontext'].get_session(),
+                                    autocommit=False)
             entries = repo.get(Status=1)
             response.status = 200
             subs = []
@@ -109,9 +112,8 @@ class SubscriptionsControllerV2(rest.RestController):
         try:
             assert subscription_request.ResourceAddress
             assert subscription_request.EndpointUri
-
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -122,7 +124,8 @@ class SubscriptionController(rest.RestController):
     @expose('json')
     def get(self):
         try:
-            repo = SubscriptionRepo(defaults['dbcontext'].get_session(), autocommit=False)
+            repo = SubscriptionRepo(defaults['dbcontext'].get_session(),
+                                    autocommit=False)
             entry = repo.get_one(SubscriptionId=self.subscription_id, Status=1)
 
             if not entry:
@@ -145,7 +148,8 @@ class SubscriptionController(rest.RestController):
     @wsexpose(status_code=204)
     def delete(self):
         try:
-            repo = SubscriptionRepo(defaults['dbcontext'].get_session(), autocommit=False)
+            repo = SubscriptionRepo(defaults['dbcontext'].get_session(),
+                                    autocommit=False)
             entry = repo.get_one(SubscriptionId=self.subscription_id)
             if entry:
                 if entry.SubscriptionId:

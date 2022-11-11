@@ -26,7 +26,8 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
             data = format_notification_data(subscriptioninfo, notification)
             data = json.dumps(data)
             url = subscriptioninfo.EndpointUri
-            response = requests.post(url, data=data, headers=headers, timeout=timeout)
+            response = requests.post(url, data=data, headers=headers,
+                                     timeout=timeout)
             response.raise_for_status()
             result = True
             return response
@@ -55,36 +56,43 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
 
 def format_notification_data(subscriptioninfo, notification):
     if hasattr(subscriptioninfo, 'ResourceType'):
-        LOG.debug("format_notification_data: Found v1 subscription, no formatting required.")
+        LOG.debug("format_notification_data: Found v1 subscription, "
+                  "no formatting required.")
         return notification
     elif hasattr(subscriptioninfo, 'ResourceAddress'):
-        _, _, resource_path, _, _ = parse_resource_address(subscriptioninfo.ResourceAddress)
-        resource_mapped_value = constants.RESOURCE_ADDRESS_MAPPINGS[resource_path]
+        _, _, resource_path, _, _ = parse_resource_address(
+            subscriptioninfo.ResourceAddress)
+        resource_mapped_value = constants.RESOURCE_ADDRESS_MAPPINGS[
+            resource_path]
         formatted_notification = {resource_mapped_value: []}
         for instance in notification:
             # Add the instance identifier to ResourceAddress for PTP lock-state
             # and PTP clockClass
-            if notification[instance]['source'] in [constants.SOURCE_SYNC_PTP_CLOCK_CLASS,
-                                                    constants.SOURCE_SYNC_PTP_LOCK_STATE]:
-                temp_values = notification[instance].get('data', {}).get('values', [])
+            if notification[instance]['source'] in [
+                    constants.SOURCE_SYNC_PTP_CLOCK_CLASS,
+                    constants.SOURCE_SYNC_PTP_LOCK_STATE]:
+                temp_values = notification[instance].get('data', {}).get(
+                    'values', [])
                 resource_address = temp_values[0].get('ResourceAddress', None)
                 if instance not in resource_address:
                     add_instance_name = resource_address.split('/', 3)
                     add_instance_name.insert(3, instance)
                     resource_address = '/'.join(add_instance_name)
-                    notification[instance]['data']['values'][0]['ResourceAddress'] = resource_address
-            formatted_notification[resource_mapped_value].append(notification[instance])
+                    notification[instance]['data']['values'][0][
+                        'ResourceAddress'] = resource_address
+            formatted_notification[resource_mapped_value].append(
+                notification[instance])
         for instance in formatted_notification[resource_mapped_value]:
             this_delivery_time = instance['time']
             if type(this_delivery_time) != str:
-                format_time = datetime.fromtimestamp(float(this_delivery_time)).\
-                        strftime('%Y-%m-%dT%H:%M:%S%fZ')
+                format_time = datetime.fromtimestamp(
+                    float(this_delivery_time)).strftime('%Y-%m-%dT%H:%M:%S%fZ')
                 instance['time'] = format_time
     else:
-        raise Exception("format_notification_data: No valid source address found in notification")
-    LOG.debug(
-        "format_notification_data: Added parent key for client consumption: %s" %
-        formatted_notification)
+        raise Exception("format_notification_data: No valid source "
+                        "address found in notification")
+    LOG.debug("format_notification_data: Added parent key for client "
+              "consumption: %s" % formatted_notification)
     return formatted_notification
 
 
@@ -100,10 +108,23 @@ def parse_resource_address(resource_address):
         resource_path = resource_path.replace(remove_optional, '')
         resource_address = resource_address.replace(remove_optional, '')
         optional = resource_list[0]
-        LOG.debug("Optional hierarchy found when parsing resource address: %s" % optional)
+        LOG.debug("Optional hierarchy found when parsing resource address: %s"
+                  % optional)
     else:
         optional = None
 
     # resource_address is the full address without any optional hierarchy
     # resource_path is the specific identifier for the resource
     return clusterName, nodeName, resource_path, optional, resource_address
+
+
+def set_nodename_in_resource_address(resource_address, nodename):
+    # The format of resource address is:
+    # /{clusterName}/{siteName}(/optional/hierarchy/..)/{nodeName}/{resource}
+    cluster, _, path, optional, _ = parse_resource_address(
+        resource_address)
+    resource_address = '/' + cluster + '/' + nodename
+    if optional:
+        resource_address += '/' + optional
+    resource_address += path
+    return resource_address
