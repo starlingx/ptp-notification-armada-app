@@ -95,9 +95,17 @@ class CguHandler:
                         'Phase offset': ''
                     }
                     }
+        # Get the input state table start and end lines
+        # Can vary in length depending on NIC types
+        for index, line in enumerate(cgu_output):
+            if "input (idx)" in line:
+                table_start = index + 2
+            if "EEC DPLL:" in line:
+                dpll_start = index
+                table_end = index - 1
 
-        for line in cgu_output[7:14]:
-            # Build a dict out of the 7 line table
+        for line in cgu_output[table_start:table_end]:
+            # Build a dict out of the table
             dict_to_insert = {
                 re.split(' +', line)[1]: {
                     'state': re.split(' +', line)[4],
@@ -110,13 +118,20 @@ class CguHandler:
             cgu_dict['input'].update(dict_to_insert)
 
         # Add the DPLL data below the table
+        # Set the line offsets for each item we want
+        eec_current_ref = dpll_start + 1
+        eec_status = dpll_start + 2
+        pps_current_ref = dpll_start + 5
+        pps_status = dpll_start + 6
+        pps_phase_offset = dpll_start + 7
+
         cgu_dict['EEC DPLL']['Current reference'] = \
-            re.split('[ \t]+', cgu_output[16])[3]
-        cgu_dict['EEC DPLL']['Status'] = re.split('[ \t]+', cgu_output[17])[2]
+            re.split('[ \t]+', cgu_output[eec_current_ref])[-1]
+        cgu_dict['EEC DPLL']['Status'] = re.split('[ \t]+', cgu_output[eec_status])[-1]
         cgu_dict['PPS DPLL']['Current reference'] = \
-            re.split('[ \t]+', cgu_output[20])[3]
-        cgu_dict['PPS DPLL']['Status'] = re.split('[ \t]+', cgu_output[21])[2]
+            re.split('[ \t]+', cgu_output[pps_current_ref])[-1]
+        cgu_dict['PPS DPLL']['Status'] = re.split('[ \t]+', cgu_output[pps_status])[-1]
         cgu_dict['PPS DPLL']['Phase offset'] = \
-            re.split('[ \t]+', cgu_output[22])[3]
+            re.split('[ \t]+', cgu_output[pps_phase_offset])[-1]
 
         self.cgu_output_parsed = cgu_dict
