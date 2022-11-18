@@ -57,21 +57,51 @@ class CguHandlerTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             self.testCguHandler.get_cgu_path_from_pci_addr()
 
-    def test_cgu_output_to_dict(self):
+    def test_cgu_output_to_dict_logan_beach(self):
         reference_dict = {
-                'input':
-               {'CVL-SDP22': {'state': 'invalid', 'priority': {'EEC': '8', 'PPS': '8'}},
-                'CVL-SDP20': {'state': 'invalid', 'priority': {'EEC': '15', 'PPS': '3'}},
-                'C827_0-RCLKA': {'state': 'invalid', 'priority': {'EEC': '4', 'PPS': '4'}},
-                'C827_0-RCLKB': {'state': 'invalid', 'priority': {'EEC': '5', 'PPS': '5'}},
-                'SMA1': {'state': 'invalid', 'priority': {'EEC': '1', 'PPS': '1'}},
-                'SMA2/U.FL2': {'state': 'invalid', 'priority': {'EEC': '2', 'PPS': '2'}},
-                'GNSS-1PPS': {'state': 'valid', 'priority': {'EEC': '0', 'PPS': '0'}}},
-                'EEC DPLL': {'Current reference': 'GNSS-1PPS', 'Status': 'locked_ho_ack'},
-                'PPS DPLL': {'Current reference': 'GNSS-1PPS', 'Status': 'locked_ho_ack',
-                             'Phase offset': '295'}}
+            "input": {
+                "CVL-SDP22": {"state": "invalid", "priority": {"EEC": "8", "PPS": "8"}},
+                "CVL-SDP20": {"state": "invalid", "priority": {"EEC": "15", "PPS": "3"}},
+                "C827_0-RCLKA": {"state": "invalid", "priority": {"EEC": "4", "PPS": "4"}},
+                "C827_0-RCLKB": {"state": "invalid", "priority": {"EEC": "5", "PPS": "5"}},
+                "C827_1-RCLKA": {"state": "invalid", "priority": {"EEC": "6", "PPS": "6"}},
+                "C827_1-RCLKB": {"state": "invalid", "priority": {"EEC": "7", "PPS": "7"}},
+                "SMA1": {"state": "invalid", "priority": {"EEC": "1", "PPS": "1"}},
+                "SMA2/U.FL2": {"state": "invalid", "priority": {"EEC": "2", "PPS": "2"}},
+                "GNSS-1PPS": {"state": "valid", "priority": {"EEC": "0", "PPS": "0"}},
+            },
+            "EEC DPLL": {"Current reference": "GNSS-1PPS", "Status": "locked_ho_acq"},
+            "PPS DPLL": {
+                "Current reference": "GNSS-1PPS",
+                "Status": "locked_ho_acq",
+                "Phase offset": "-86",
+            },
+        }
 
-        self.testCguHandler.cgu_path = testpath + "test_input_files/mock_cgu_output"
+        self.testCguHandler.cgu_path = testpath + "test_input_files/mock_cgu_output_logan_beach"
+        self.testCguHandler.read_cgu()
+        self.testCguHandler.cgu_output_to_dict()
+        self.assertDictEqual(self.testCguHandler.cgu_output_parsed, reference_dict)
+
+    def test_cgu_output_to_dict_westport_channel(self):
+        reference_dict = {
+            "input": {
+                "CVL-SDP22": {"state": "invalid", "priority": {"EEC": "8", "PPS": "8"}},
+                "CVL-SDP20": {"state": "invalid", "priority": {"EEC": "15", "PPS": "3"}},
+                "C827_0-RCLKA": {"state": "invalid", "priority": {"EEC": "4", "PPS": "4"}},
+                "C827_0-RCLKB": {"state": "invalid", "priority": {"EEC": "5", "PPS": "5"}},
+                "SMA1": {"state": "invalid", "priority": {"EEC": "1", "PPS": "1"}},
+                "SMA2/U.FL2": {"state": "invalid", "priority": {"EEC": "2", "PPS": "2"}},
+                "GNSS-1PPS": {"state": "valid", "priority": {"EEC": "0", "PPS": "0"}},
+            },
+            "EEC DPLL": {"Current reference": "GNSS-1PPS", "Status": "locked_ho_ack"},
+            "PPS DPLL": {
+                "Current reference": "GNSS-1PPS",
+                "Status": "locked_ho_ack",
+                "Phase offset": "295",
+            },
+        }
+        self.testCguHandler.cgu_path = testpath + "test_input_files/mock_cgu_output_westport_channel"
         self.testCguHandler.read_cgu()
         self.testCguHandler.cgu_output_to_dict()
         self.assertDictEqual(self.testCguHandler.cgu_output_parsed, reference_dict)
