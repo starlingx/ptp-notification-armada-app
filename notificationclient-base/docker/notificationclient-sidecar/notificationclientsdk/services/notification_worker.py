@@ -71,6 +71,9 @@ class NotificationWorker:
 
         self.service_nodenames = service_nodenames
 
+        nodeinfo_repo = NodeRepo(autocommit=True)
+        nodeinfo_repo.delete(Status=1)
+
         self.__locationinfo_handler = \
             NotificationWorker.LocationInfoHandler(self)
         self.__notification_handler = NotificationHandler()
