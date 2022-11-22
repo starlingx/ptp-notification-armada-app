@@ -129,34 +129,119 @@ class PtpService(object):
     def add_subscription(self, subscription_dto):
         resource_address = None
         if hasattr(subscription_dto, 'ResourceAddress'):
+            version = 2
             _, nodename, _, _, _ = subscription_helper.parse_resource_address(
                 subscription_dto.ResourceAddress)
-            broker_name = nodename
+            LOG.debug("nodename in ResourceAddress is '%s', residing is %s" %
+                      (nodename, self.daemon_control.get_residing_nodename()))
+
             resource_address = subscription_dto.ResourceAddress
+            LOG.debug('Looking for existing subscription for EndpointUri %s '
+                      'ResourceAddress %s' % (subscription_dto.EndpointUri,
+                                              resource_address))
+            entry = self.subscription_repo.get_one(
+                EndpointUri=subscription_dto.EndpointUri,
+                ResourceAddress=resource_address)
+
+            if entry is None:
+                # Did not find matched duplicated, but needs to look for other
+                # cases...
+                if nodename != constants.WILDCARD_ALL_NODES:
+                    # There may be a subscription for all nodes already in
+                    # place
+                    resource_address_star = \
+                        subscription_helper.set_nodename_in_resource_address(
+                            resource_address, constants.WILDCARD_ALL_NODES)
+                    LOG.debug('Additional lookup for existing subscription '
+                              'for EndpointUri %s ResourceAddress %s'
+                              % (subscription_dto.EndpointUri,
+                                 resource_address_star))
+                    if self.subscription_repo.get_one(
+                            EndpointUri=subscription_dto.EndpointUri,
+                            ResourceAddress=resource_address_star) is not None:
+                        LOG.debug('Found existing %s entry in subscription '
+                                  'repo' % constants.WILDCARD_ALL_NODES)
+                        raise client_exception.ServiceError(409)
+
+                if nodename == constants.WILDCARD_CURRENT_NODE:
+                    # There may be a subscription for the residing (current)
+                    # node already in place
+                    resource_address_synonym = \
+                        subscription_helper.set_nodename_in_resource_address(
+                            resource_address,
+                            self.daemon_control.get_residing_nodename())
+                    LOG.debug('In addition, looking for existing subscription '
+                              'for EndpointUri %s ResourceAddress %s' % (
+                                subscription_dto.EndpointUri,
+                                resource_address_synonym))
+                    entry = self.subscription_repo.get_one(
+                        EndpointUri=subscription_dto.EndpointUri,
+                        ResourceAddress=resource_address_synonym)
+
+                if nodename == self.daemon_control.get_residing_nodename():
+                    # There may be a subscription for '.' (current node)
+                    # already in place
+                    resource_address_synonym = \
+                        subscription_helper.set_nodename_in_resource_address(
+                            resource_address, constants.WILDCARD_CURRENT_NODE)
+                    LOG.debug('In addition, looking for existing subscription '
+                              'for EndpointUri %s ResourceAddress %s' % (
+                                subscription_dto.EndpointUri,
+                                resource_address_synonym))
+                    entry = self.subscription_repo.get_one(
+                        EndpointUri=subscription_dto.EndpointUri,
+                        ResourceAddress=resource_address_synonym)
+
+            if entry is not None:
+                LOG.debug('Found existing v2 entry in subscription repo')
+                raise client_exception.ServiceError(409)
+
+            if nodename == constants.WILDCARD_ALL_NODES:
+                broker_names = self.daemon_control.list_of_service_nodenames()
+            else:
+                broker_names = [nodename]
+
         elif hasattr(subscription_dto, 'ResourceType'):
-            broker_name = subscription_dto.ResourceQualifier.NodeName
-        default_node_name = NodeInfoHelper.default_node_name(broker_name)
+            version = 1
 
-        broker_pod_ip, supported_resource_types = self.__get_node_info(
-            default_node_name)
+            resource_qualifier_dto = \
+                subscription_dto.ResourceQualifier.to_dict()
+            LOG.debug('Looking for existing subscription for EndpointUri %s '
+                      'ResourceQualifier %s' % (subscription_dto.EndpointUri,
+                                                resource_qualifier_dto))
+            entries = self.subscription_repo.get(
+                EndpointUri=subscription_dto.EndpointUri)
+            for entry in entries:
+                resource_qualifier_json = entry.ResourceQualifierJson or '{}'
+                resource_qualifier_repo = json.loads(resource_qualifier_json)
+                if resource_qualifier_dto == resource_qualifier_repo:
+                    LOG.debug('Found existing v1 entry in subscription repo')
+                    raise client_exception.ServiceError(409)
 
-        if not broker_pod_ip:
-            LOG.warning("Node {0} is not available yet".format(
-                default_node_name))
-            raise client_exception.NodeNotAvailable(broker_name)
+            broker_names = [subscription_dto.ResourceQualifier.NodeName]
 
-        if ResourceType.TypePTP not in supported_resource_types:
-            LOG.warning("Resource {0}@{1} is not available yet".format(
-                ResourceType.TypePTP, default_node_name))
-            raise client_exception.ResourceNotAvailable(broker_name,
-                                                        ResourceType.TypePTP)
+        nodes = {}  # node-ptpstatus pairs
+        for broker in broker_names:
+            default_node_name = NodeInfoHelper.default_node_name(broker)
+            broker_pod_ip, supported_resource_types = self.__get_node_info(
+                default_node_name)
 
-        # get initial resource status
-        if default_node_name:
-            ptpstatus = None
+            if not broker_pod_ip:
+                LOG.warning("Node {0} is not available yet".format(
+                    default_node_name))
+                raise client_exception.NodeNotAvailable(broker)
+
+            if ResourceType.TypePTP not in supported_resource_types:
+                LOG.warning("Resource {0}@{1} is not available yet".format(
+                    ResourceType.TypePTP, default_node_name))
+                raise client_exception.ResourceNotAvailable(
+                    broker, ResourceType.TypePTP)
+
+            # get initial resource status
             ptpstatus = self._query(default_node_name, broker_pod_ip,
                                     resource_address, optional=None)
-            LOG.info("initial ptpstatus:{0}".format(ptpstatus))
+            LOG.info("Initial ptpstatus for {0}:{1}".format(default_node_name,
+                                                            ptpstatus))
 
             # construct subscription entry
             if constants.PTP_V1_KEY in ptpstatus:
@@ -171,74 +256,38 @@ class PtpService(object):
                         ptpstatus[item]['time']).strftime(
                             '%Y-%m-%dT%H:%M:%S%fZ')
 
-            # avoid duplicated subscription
-            entry = None
-            if hasattr(subscription_dto, 'ResourceType'):
-                version = 1
-                resource_qualifier_dto = \
-                    subscription_dto.ResourceQualifier.to_dict()
-                LOG.debug('Looking for existing subscription for '
-                          'EndpointUri %s ResourceQualifier %s'
-                          % (subscription_dto.EndpointUri,
-                             resource_qualifier_dto))
-                entries = self.subscription_repo.get(
-                    EndpointUri=subscription_dto.EndpointUri
-                )
-                for e in entries:
-                    resource_qualifier_json = e.ResourceQualifierJson or '{}'
-                    resource_qualifier_repo = json.loads(
-                        resource_qualifier_json)
-                    if resource_qualifier_dto == resource_qualifier_repo:
-                        entry = e
-                        break
-            else:
-                version = 2
+            nodes[default_node_name] = ptpstatus
 
-                # Replace eventual '.' in ResourceAddress by the actual
-                # nodename
-                subscription_dto.ResourceAddress = \
-                    subscription_helper.set_nodename_in_resource_address(
-                        subscription_dto.ResourceAddress, default_node_name)
+        subscription_orm = SubscriptionOrm(**subscription_dto.to_orm())
+        subscription_orm.InitialDeliveryTimestamp = timestamp
+        entry = self.subscription_repo.add(subscription_orm)
 
-                LOG.debug('Looking for existing subscription for '
-                          'EndpointUri %s ResourceAddress %s'
-                          % (subscription_dto.EndpointUri,
-                             subscription_dto.ResourceAddress))
-                entry = self.subscription_repo.get_one(
-                    EndpointUri=subscription_dto.EndpointUri,
-                    ResourceAddress=subscription_dto.ResourceAddress
-                )
-            if entry:
-                LOG.debug('Found existing entry in subscription repo')
-                raise client_exception.ServiceError(409)
+        # Delivery the initial notification of ptp status
+        if version == 1:
+            subscription_dto2 = SubscriptionInfoV1(entry)
+        else:
+            subscription_dto2 = SubscriptionInfoV2(entry)
 
-            subscription_orm = SubscriptionOrm(**subscription_dto.to_orm())
-            subscription_orm.InitialDeliveryTimestamp = timestamp
-            entry = self.subscription_repo.add(subscription_orm)
-
-            # Delivery the initial notification of ptp status
-            if version == 1:
-                subscription_dto2 = SubscriptionInfoV1(entry)
-            else:
-                subscription_dto2 = SubscriptionInfoV2(entry)
-
+        for node in nodes.items():
             try:
-                subscription_helper.notify(subscription_dto2, ptpstatus)
-                LOG.info("initial ptpstatus is delivered successfully")
+                subscription_helper.notify(subscription_dto2, node[1])
+                LOG.info("Initial ptpstatus of {0} is delivered successfully"
+                         "".format(node[0]))
             except Exception as ex:
-                LOG.warning("initial ptpstatus is not delivered:{0}".format(
-                    str(ex)))
+                LOG.warning("Initial ptpstatus of {0} is not delivered:{1}"
+                            "".format(node[0], str(ex)))
                 raise client_exception.InvalidEndpoint(
                     subscription_dto.EndpointUri)
 
-            try:
-                # commit the subscription entry
-                self.subscription_repo.commit()
-                self.daemon_control.refresh()
-            except Exception as ex:
-                LOG.warning("subscription is not added successfully:"
-                            "{0}".format(str(ex)))
-                raise ex
+        try:
+            # commit the subscription entry
+            self.subscription_repo.commit()
+            self.daemon_control.refresh()
+        except Exception as ex:
+            LOG.warning("subscription is not added successfully:"
+                        "{0}".format(str(ex)))
+            raise ex
+
         return subscription_dto2
 
     def remove_subscription(self, subscriptionid):

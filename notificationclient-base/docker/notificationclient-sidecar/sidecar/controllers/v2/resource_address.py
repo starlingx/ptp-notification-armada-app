@@ -34,7 +34,7 @@ class ResourceAddressController(object):
             _, nodename, resource, optional, self.resource_address = \
                 subscription_helper.parse_resource_address(
                     self.resource_address)
-            if nodename == '.':
+            if nodename == constants.WILDCARD_CURRENT_NODE:
                 nodename = notification_control.get_residing_nodename()
             LOG.debug('Nodename to query: %s' % nodename)
             if not notification_control.in_service_nodenames(nodename):
