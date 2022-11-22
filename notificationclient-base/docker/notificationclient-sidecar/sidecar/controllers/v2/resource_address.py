@@ -39,17 +39,14 @@ class ResourceAddressController(object):
             LOG.debug('Nodename to query: %s' % nodename)
             if not notification_control.in_service_nodenames(nodename):
                 LOG.warning("Node {} is not available".format(nodename))
-                abort(404)
+                raise client_exception.NodeNotAvailable(nodename)
             if resource not in constants.VALID_SOURCE_URI:
                 LOG.warning("Resource {} is not valid".format(resource))
-                abort(404)
+                raise client_exception.ResourceNotAvailable(resource, nodename)
             ptpservice = PtpService(notification_control)
             ptpstatus = ptpservice.query(nodename,
                                          self.resource_address, optional)
             LOG.debug('Got ptpstatus: %s' % ptpstatus)
-            # Change time from float to ascii format
-            # ptpstatus['time'] = time.strftime('%Y-%m-%dT%H:%M:%SZ',
-            #                                   time.gmtime(ptpstatus['time']))
             for item in ptpstatus:
                 ptpstatus[item]['time'] = datetime.fromtimestamp(
                     ptpstatus[item]['time']).strftime(

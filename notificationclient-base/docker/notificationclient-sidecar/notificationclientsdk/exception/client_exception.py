@@ -27,8 +27,14 @@ class InvalidEndpoint(Exception):
         self.endpoint_uri = endpoint_uri
 
     def __str__(self):
-        return "Endpoint is invalid:{0}".format(self.endpoint_uri)
+        return "Endpoint is invalid: {0}".format(self.endpoint_uri)
 
+class InvalidResource(Exception):
+    def __init__(self, resource):
+        self.resource = resource
+
+    def __str__(self):
+        return "Resource is invalid: {0}".format(self.resource)
 
 class InvalidSubscription(Exception):
     def __init__(self, subscriptioninfo):

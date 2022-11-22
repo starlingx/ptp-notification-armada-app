@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 from notificationclientsdk.common.helpers import constants
 from notificationclientsdk.common.helpers import log_helper
+from notificationclientsdk.exception import client_exception
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
@@ -31,6 +32,8 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
             response.raise_for_status()
             result = True
             return response
+        except client_exception.InvalidResource as ex:
+            raise ex
         except requests.exceptions.ConnectionError as errc:
             if retry > 0:
                 LOG.warning("Retry notifying due to: {0}".format(str(errc)))
@@ -62,6 +65,8 @@ def format_notification_data(subscriptioninfo, notification):
     elif hasattr(subscriptioninfo, 'ResourceAddress'):
         _, _, resource_path, _, _ = parse_resource_address(
             subscriptioninfo.ResourceAddress)
+        if resource_path not in constants.RESOURCE_ADDRESS_MAPPINGS.keys():
+            raise client_exception.InvalidResource(resource_path)
         resource_mapped_value = constants.RESOURCE_ADDRESS_MAPPINGS[
             resource_path]
         formatted_notification = {resource_mapped_value: []}

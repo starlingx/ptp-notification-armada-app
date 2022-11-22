@@ -8,6 +8,7 @@ import oslo_messaging
 import logging
 import json
 import kombu
+import requests
 from datetime import datetime
 
 from notificationclientsdk.client.notificationservice \
@@ -244,6 +245,7 @@ class PtpService(object):
                                                             ptpstatus))
 
             # construct subscription entry
+            timestamp = None
             if constants.PTP_V1_KEY in ptpstatus:
                 timestamp = ptpstatus[constants.PTP_V1_KEY].get(
                     'EventTimestamp', None)
@@ -273,11 +275,15 @@ class PtpService(object):
                 subscription_helper.notify(subscription_dto2, node[1])
                 LOG.info("Initial ptpstatus of {0} is delivered successfully"
                          "".format(node[0]))
+            except requests.exceptions.RequestException as ex:
+                LOG.warning("initial ptpstatus is not delivered: {0}".format(
+                    str(ex)))
+                raise client_exception.InvalidEndpoint(
+                    subscription_dto2.EndpointUri)
             except Exception as ex:
                 LOG.warning("Initial ptpstatus of {0} is not delivered:{1}"
                             "".format(node[0], str(ex)))
-                raise client_exception.InvalidEndpoint(
-                    subscription_dto.EndpointUri)
+                raise ex
 
         try:
             # commit the subscription entry
