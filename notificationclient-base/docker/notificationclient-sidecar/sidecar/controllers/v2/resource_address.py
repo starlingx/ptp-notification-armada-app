@@ -65,6 +65,9 @@ class ResourceAddressController(object):
             LOG.warning("Client side error:{0},{1}".format(type(ex), str(ex)))
             # raise ex
             abort(400)
+        except TypeError as ex:
+            LOG.error("Resource {0} not found on {1}".format(self.resource_address, nodename))
+            abort(404)
         except HTTPServerError as ex:
             LOG.error("Server side error:{0},{1}".format(type(ex), str(ex)))
             # raise ex
