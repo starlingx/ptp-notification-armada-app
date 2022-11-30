@@ -124,6 +124,10 @@ class SubscriptionController(rest.RestController):
         self.subscription_id = subscription_id
 
     @expose('json')
+    def post(self):
+        abort(404)
+
+    @expose('json')
     def get(self):
         try:
             repo = SubscriptionRepo(defaults['dbcontext'].get_session(),

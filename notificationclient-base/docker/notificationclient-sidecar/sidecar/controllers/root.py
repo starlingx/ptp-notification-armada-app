@@ -57,8 +57,7 @@ class V2Controller(rest.RestController):
     def _lookup(self, primary_key, *remainder):
         if primary_key:
             if 'subscriptions' == primary_key.lower():
-                if not remainder:
-                    return SubscriptionsControllerV2(), remainder
+                return SubscriptionsControllerV2(), remainder
             elif remainder:
                 if 'currentstate' == remainder[-1].lower():
                     resource_address_array = remainder[:-1]
