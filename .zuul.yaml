@@ -52,10 +52,10 @@
       - starlingx/update
       - starlingx/utilities
     files:
-      - python-k8sapp-ptp-notification/*
+      - python3-k8sapp-ptp-notification/*
     vars:
       tox_envlist: pylint
-      tox_extra_args: -c python-k8sapp-ptp-notification/k8sapp_ptp_notification/tox.ini
+      tox_extra_args: -c python3-k8sapp-ptp-notification/k8sapp_ptp_notification/tox.ini
 
 - secret:
     name: stx-ptp-notification-armada-app-github-secret

@@ -1,9 +1,7 @@
 ---
-debname: stx-ptp-notification-helm
+debname: python3-k8sapp-ptp-notification
 debver: 1.0-1
-src_path: stx-ptp-notification-helm
-src_files:
-  - ${MY_REPO}/stx/helm-charts/psp-rolebinding/psp-rolebinding
+src_path: k8sapp_ptp_notification
 revision:
   dist: $STX_DIST
   GITREVCOUNT:

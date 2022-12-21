@@ -1,1 +1,0 @@
-stx-ptp-notification-helm
