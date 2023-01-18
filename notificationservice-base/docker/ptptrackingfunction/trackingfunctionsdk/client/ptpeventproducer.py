@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2022 Wind River Systems, Inc.
+# Copyright (c) 2021-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,9 +17,7 @@ import logging
 LOG = logging.getLogger(__name__)
 
 from trackingfunctionsdk.common.helpers import log_helper
-
 log_helper.config_logger(LOG)
-
 
 class PtpEventProducer(object):
     class ListenerEndpoint(object):
@@ -32,28 +30,28 @@ class PtpEventProducer(object):
             pass
 
         def QueryStatus(self, ctx, **rpc_kwargs):
-            LOG.debug("PtpEventProducer QueryStatus called %s" % rpc_kwargs)
+            LOG.debug("PtpEventProducer QueryStatus called %s" %rpc_kwargs)
             if self.handler:
                 return self.handler.query_status(**rpc_kwargs)
             else:
                 return None
 
         def TriggerDelivery(self, ctx, **rpc_kwargs):
-            LOG.debug("PtpEventProducer TriggerDelivery called %s" % rpc_kwargs)
+            LOG.debug ("PtpEventProducer TriggerDelivery called %s" %rpc_kwargs)
             if self.handler:
                 return self.handler.trigger_delivery(**rpc_kwargs)
             else:
                 return None
 
     def __init__(self, node_name, local_broker_transport_endpoint,
-                 registration_broker_transport_endpoint=None):
+    registration_broker_transport_endpoint=None):
         self.Id = id(self)
         self.node_name = node_name
         self.local_broker_client = BrokerClientBase(
             'LocalPtpEventProducer', local_broker_transport_endpoint)
         if registration_broker_transport_endpoint:
             self.registration_broker_client = BrokerClientBase(
-                'AllPtpEventProducer', registration_broker_transport_endpoint)
+            'AllPtpEventProducer', registration_broker_transport_endpoint)
         else:
             self.registration_broker_client = None
         return
@@ -69,16 +67,14 @@ class PtpEventProducer(object):
 
     def publish_status(self, ptpstatus, retry=3):
         result = False
-        result1 = self.publish_status_local(ptpstatus,
-                                            retry) if self.local_broker_client else result
-        result2 = self.publish_status_all(ptpstatus,
-                                          retry) if self.registration_broker_client else result
+        result1 = self.publish_status_local(ptpstatus, retry) if self.local_broker_client else result
+        result2 = self.publish_status_all(ptpstatus, retry) if self.registration_broker_client else result
         return result1, result2
 
-    def publish_status_local(self, ptpstatus, source, retry=3):
+    def publish_status_local(self, ptpstatus, retry=3):
         if not self.local_broker_client:
             return False
-        topic = '{0}-Event-{1}'.format(source, self.node_name)
+        topic='PTP-Event-{0}'.format(self.node_name)
         server = None
         isretrystopped = False
         while not isretrystopped:
@@ -101,7 +97,7 @@ class PtpEventProducer(object):
     def publish_status_all(self, ptpstatus, retry=3):
         if not self.registration_broker_client:
             return False
-        topic_all = 'PTP-Event-*'
+        topic_all='PTP-Event-*'
         server = None
         isretrystopped = False
         while not isretrystopped:
@@ -118,14 +114,13 @@ class PtpEventProducer(object):
 
         if isretrystopped:
             LOG.error("Failed to publish ptp status:{0}@Topic:{1}".format(
-                ptpstatus, topic_all))
+                ptpstatus, topic))
         return isretrystopped == False
 
     def start_status_listener(self, handler=None):
         result = False
         result1 = self.start_status_listener_local(handler) if self.local_broker_client else result
-        result2 = self.start_status_listener_all(
-            handler) if self.registration_broker_client else result
+        result2 = self.start_status_listener_all(handler) if self.registration_broker_client else result
         result = result1 and result2
         return result
 
@@ -133,8 +128,8 @@ class PtpEventProducer(object):
         if not self.local_broker_client:
             return False
 
-        topic = 'PTP-Status'
-        server = 'PTP-Tracking-{0}'.format(self.node_name)
+        topic='PTP-Status'
+        server='PTP-Tracking-{0}'.format(self.node_name)
         endpoints = [PtpEventProducer.ListenerEndpoint(handler)]
 
         self.local_broker_client.add_listener(
@@ -145,8 +140,8 @@ class PtpEventProducer(object):
         if not self.registration_broker_client:
             return False
 
-        topic = 'PTP-Status'
-        server = 'PTP-Tracking-{0}'.format(self.node_name)
+        topic='PTP-Status'
+        server='PTP-Tracking-{0}'.format(self.node_name)
         endpoints = [PtpEventProducer.ListenerEndpoint(handler)]
 
         self.registration_broker_client.add_listener(
@@ -164,8 +159,8 @@ class PtpEventProducer(object):
         if not self.local_broker_client:
             return False
 
-        topic = 'PTP-Status'
-        server = "PTP-Tracking-{0}".format(self.node_name)
+        topic='PTP-Status'
+        server="PTP-Tracking-{0}".format(self.node_name)
         self.local_broker_client.remove_listener(
             topic, server)
 
@@ -173,8 +168,8 @@ class PtpEventProducer(object):
         if not self.registration_broker_client:
             return False
 
-        topic = 'PTP-Status'
-        server = "PTP-Tracking-{0}".format(self.node_name)
+        topic='PTP-Status'
+        server="PTP-Tracking-{0}".format(self.node_name)
         self.registration_broker_client.remove_listener(
             topic, server)
 
@@ -189,15 +184,15 @@ class PtpEventProducer(object):
         if not self.local_broker_client:
             return False
 
-        topic = 'PTP-Status'
-        server = "PTP-Tracking-{0}".format(self.node_name)
+        topic='PTP-Status'
+        server="PTP-Tracking-{0}".format(self.node_name)
         return self.local_broker_client.is_listening(
             topic, server)
 
     def is_listening_all(self):
         if not self.registration_broker_client:
             return False
-        topic = 'PTP-Status'
-        server = "PTP-Tracking-{0}".format(self.node_name)
+        topic='PTP-Status'
+        server="PTP-Tracking-{0}".format(self.node_name)
         return self.registration_broker_client.is_listening(
             topic, server)

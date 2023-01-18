@@ -1,0 +1,4 @@
+BUILDER=docker
+LABEL=notificationservice-base-v2
+DOCKER_CONTEXT=../docker
+DOCKER_FILE=./Dockerfile

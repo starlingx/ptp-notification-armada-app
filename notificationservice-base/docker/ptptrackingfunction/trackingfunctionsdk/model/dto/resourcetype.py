@@ -7,4 +7,3 @@ EnumResourceType = wtypes.Enum(str, 'PTP', 'FPGA')
 class ResourceType(object):
     TypePTP = "PTP"
     TypeFPGA = "FPGA"
-    TypeGNSS = "GNSS"
