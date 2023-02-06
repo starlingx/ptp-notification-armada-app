@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -66,6 +66,23 @@ location:
     pullPolicy: IfNotPresent
 
 ptptracking:
+  enabled: True
+  imagePullSecrets: default-registry-key
+  ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
+  ptp4lServiceName: ptp4l-legacy
+  phc2sysServiceName: phc2sys-legacy
+  logging_level: INFO
+  image:
+    repository: starlingx/notificationservice-base
+    tag: master-debian-stable-20230205T070000Z.0
+    pullPolicy: IfNotPresent
+  device:
+    simulated: false
+    holdover_seconds: 15
+    poll_freq_seconds: 2
+
+ptptrackingv2:
+  enabled: True
   imagePullSecrets: default-registry-key
   ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
   ptp4lServiceName: True
@@ -73,8 +90,8 @@ ptptracking:
   ts2phcServiceName: True
   log_level: INFO
   image:
-    repository: starlingx/notificationservice-base
-    tag: stx.8.0-v2.0.2
+    repository: starlingx/notificationservice-base-v2
+    tag: master-debian-stable-20230205T070000Z.0
     pullPolicy: IfNotPresent
   control_timeout: 2
   device:

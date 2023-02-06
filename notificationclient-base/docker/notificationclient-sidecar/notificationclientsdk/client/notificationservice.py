@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2022 Wind River Systems, Inc.
+# Copyright (c) 2021-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -63,7 +63,7 @@ class NotificationServiceClient(BrokerClientBase):
                               resource_qualifier_json=None,
                               resource_address=None,
                               optional=None):
-        topic = '{0}-Status'.format(resource_type)
+        topic = '{0}-Status-v2'.format(resource_type)
         server = '{0}-Tracking-{1}'.format(resource_type, self.target_node_name)
         return self.call(
             topic, server, 'QueryStatus',
@@ -76,7 +76,7 @@ class NotificationServiceClient(BrokerClientBase):
         if not status_handler:
             status_handler = NotificationHandlerBase()
 
-        topic='{0}-Event-{1}'.format(resource_type, self.broker_name)
+        topic='{0}-Event-v2-{1}'.format(resource_type, self.broker_name)
         server="{0}-EventListener-{1}".format(resource_type, self.Id)
         endpoints = [NotificationServiceClient.ListenerEndpoint(status_handler)]
 
@@ -85,14 +85,14 @@ class NotificationServiceClient(BrokerClientBase):
         return True
 
     def remove_resource_status_listener(self, resource_type):
-        topic='{0}-Event-{1}'.format(resource_type, self.broker_name)
+        topic='{0}-Event-v2-{1}'.format(resource_type, self.broker_name)
         server="{0}-EventListener-{1}".format(resource_type, self.Id)
         super(NotificationServiceClient, self).remove_listener(
             topic, server)
         pass
 
     def is_listening_on_resource(self, resource_type):
-        topic='{0}-Event-{1}'.format(resource_type, self.broker_name)
+        topic='{0}-Event-v2-{1}'.format(resource_type, self.broker_name)
         server="{0}-EventListener-{1}".format(resource_type, self.Id)
         return super(NotificationServiceClient, self).is_listening(
             topic, server)

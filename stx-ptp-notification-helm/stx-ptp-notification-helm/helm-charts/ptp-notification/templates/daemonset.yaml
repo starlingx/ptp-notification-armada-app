@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -91,9 +91,10 @@ spec:
         volumeMounts:
           - name: scripts
             mountPath: /mnt
-      - name: {{ .Chart.Name }}-ptptracking
-        image: "{{ .Values.ptptracking.image.repository }}:{{ .Values.ptptracking.image.tag }}"
-        imagePullPolicy: {{ .Values.ptptracking.image.pullPolicy }}
+{{- if .Values.ptptrackingv2.enabled }}
+      - name: {{ .Chart.Name }}-ptptrackingv2
+        image: "{{ .Values.ptptrackingv2.image.repository }}:{{ .Values.ptptrackingv2.image.tag }}"
+        imagePullPolicy: {{ .Values.ptptrackingv2.image.pullPolicy }}
         tty: true
         stdin: true
         env:
@@ -110,13 +111,13 @@ spec:
           - name: THIS_NAMESPACE
             value: {{ .Values.global.namespace }}
           - name: PTP_DEVICE_SIMULATED
-            value: "{{ .Values.ptptracking.device.simulated }}"
+            value: "{{ .Values.ptptrackingv2.device.simulated }}"
           - name: PTP_HOLDOVER_SECONDS
-            value: "{{ .Values.ptptracking.device.holdover_seconds }}"
+            value: "{{ .Values.ptptrackingv2.device.holdover_seconds }}"
           - name: OS_CLOCK_HOLDOVER_SECONDS
-            value: "{{ .Values.ptptracking.osclock.holdover_seconds }}"
+            value: "{{ .Values.ptptrackingv2.osclock.holdover_seconds }}"
           - name: OVERALL_HOLDOVER_SECONDS
-            value: "{{ .Values.ptptracking.overall.holdover_seconds }}"
+            value: "{{ .Values.ptptrackingv2.overall.holdover_seconds }}"
           - name: NOTIFICATIONSERVICE_USER
             value: "admin"
           - name: NOTIFICATIONSERVICE_PASS
@@ -132,16 +133,16 @@ spec:
           - name: REGISTRATION_HOST
             value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
           - name: PTP4L_SERVICE_NAME
-            value: "{{ .Values.ptptracking.ptp4lServiceName }}"
+            value: "{{ .Values.ptptrackingv2.ptp4lServiceName }}"
           - name: PHC2SYS_SERVICE_NAME
-            value: "{{ .Values.ptptracking.phc2sysServiceName }}"
+            value: "{{ .Values.ptptrackingv2.phc2sysServiceName }}"
           - name: TS2PHC_SERVICE_NAME
-            value: "{{ .Values.ptptracking.ts2phcServiceName }}"
+            value: "{{ .Values.ptptrackingv2.ts2phcServiceName }}"
           - name: LOGGING_LEVEL
-            value: "{{ .Values.ptptracking.log_level }}"
+            value: "{{ .Values.ptptrackingv2.log_level }}"
           - name: CONTROL_TIMEOUT
-            value: "{{ .Values.ptptracking.control_timeout }}"
-        command: ["python3", "/mnt/ptptracking_start.py"]
+            value: "{{ .Values.ptptrackingv2.control_timeout }}"
+        command: ["python3", "/mnt/ptptracking_start_v2.py"]
         securityContext:
           privileged: true
           capabilities:
@@ -150,13 +151,10 @@ spec:
         volumeMounts:
           - name: scripts
             mountPath: /mnt
-      {{ if .Values.ptptracking.device.simulated }}
+      {{ if .Values.ptptrackingv2.device.simulated }}
       {{ else }}
           - name: ptpdir
             mountPath: /var/run/
-            readOnly: false
-          - name: varrun
-            mountPath: {{ .Values.ptptracking.ptp4lSocket }}
             readOnly: false
           - name: pmc
             mountPath: /usr/sbin/pmc
@@ -178,6 +176,76 @@ spec:
             mountPath: /host/proc/
           - name: hostsys
             mountPath: /hostsys/
+            readOnly: true
+{{ end }}
+{{- if .Values.ptptracking.enabled }}
+      - name: {{ .Chart.Name }}-ptptracking
+        image: "{{ .Values.ptptracking.image.repository }}:{{ .Values.ptptracking.image.tag }}"
+        imagePullPolicy: {{ .Values.ptptracking.image.pullPolicy }}
+        tty: true
+        stdin: true
+        env:
+          - name: THIS_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: THIS_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: THIS_NAMESPACE
+            value: {{ .Values.global.namespace }}
+          - name: PTP_DEVICE_SIMULATED
+            value: "{{ .Values.ptptracking.device.simulated }}"
+          - name: PTP_HOLDOVER_SECONDS
+            value: "{{ .Values.ptptracking.device.holdover_seconds }}"
+          - name: PTP_POLL_FREQ_SECONDS
+            value: "{{ .Values.ptptracking.device.poll_freq_seconds }}"
+          - name: NOTIFICATIONSERVICE_USER
+            value: "admin"
+          - name: NOTIFICATIONSERVICE_PASS
+            value: "admin"
+          - name: NOTIFICATIONSERVICE_PORT
+            value: "5672"
+          - name: REGISTRATION_USER
+            value: "admin"
+          - name: REGISTRATION_PASS
+            value: "admin"
+          - name: REGISTRATION_PORT
+            value: "5672"
+          - name: REGISTRATION_HOST
+            value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
+          - name: PTP4L_SERVICE_NAME
+            value: "{{ .Values.ptptracking.ptp4lServiceName }}"
+          - name: PHC2SYS_SERVICE_NAME
+            value: "{{ .Values.ptptracking.phc2sysServiceName }}"
+          - name: PYTHONPATH
+            value: "/opt/ptptrackingfunction"
+          - name: LOGGING_LEVEL
+            value: "{{ .Values.ptptracking.logging_level }}"
+        command: ["python3", "/mnt/ptptracking_start.py"]
+        securityContext:
+          privileged: true
+          capabilities:
+              add:
+              - CAP_SYS_ADMIN
+        volumeMounts:
+          - name: scripts
+            mountPath: /mnt
+      {{ if .Values.ptptracking.device.simulated }}
+      {{ else }}
+          - name: ptpdir
+            mountPath: /var/run/
+            readOnly: false
+          - name: varrun
+            mountPath: {{ .Values.ptptracking.ptp4lSocket }}
+            readOnly: false
+          - name: pmc
+            mountPath: /usr/sbin/pmc
+            readOnly: false
+      {{ end }}
+          - name: conf
+            mountPath: /ptp/
             readOnly: true
       volumes:
         - name: scripts
@@ -219,6 +287,7 @@ spec:
           hostPath:
             path: /sys/
             type: Directory
+{{ end }}
       tolerations:
       - key: "node-role.kubernetes.io/master"
         operator: "Exists"

@@ -78,7 +78,7 @@ class PtpEventProducer(object):
     def publish_status_local(self, ptpstatus, source, retry=3):
         if not self.local_broker_client:
             return False
-        topic = '{0}-Event-{1}'.format(source, self.node_name)
+        topic = '{0}-Event-v2-{1}'.format(source, self.node_name)
         server = None
         isretrystopped = False
         while not isretrystopped:
@@ -101,7 +101,7 @@ class PtpEventProducer(object):
     def publish_status_all(self, ptpstatus, retry=3):
         if not self.registration_broker_client:
             return False
-        topic_all = 'PTP-Event-*'
+        topic_all = 'PTP-Event-v2-*'
         server = None
         isretrystopped = False
         while not isretrystopped:
@@ -133,7 +133,7 @@ class PtpEventProducer(object):
         if not self.local_broker_client:
             return False
 
-        topic = 'PTP-Status'
+        topic = 'PTP-Status-v2'
         server = 'PTP-Tracking-{0}'.format(self.node_name)
         endpoints = [PtpEventProducer.ListenerEndpoint(handler)]
 
@@ -145,7 +145,7 @@ class PtpEventProducer(object):
         if not self.registration_broker_client:
             return False
 
-        topic = 'PTP-Status'
+        topic = 'PTP-Status-v2'
         server = 'PTP-Tracking-{0}'.format(self.node_name)
         endpoints = [PtpEventProducer.ListenerEndpoint(handler)]
 
@@ -164,7 +164,7 @@ class PtpEventProducer(object):
         if not self.local_broker_client:
             return False
 
-        topic = 'PTP-Status'
+        topic = 'PTP-Status-v2'
         server = "PTP-Tracking-{0}".format(self.node_name)
         self.local_broker_client.remove_listener(
             topic, server)
@@ -173,7 +173,7 @@ class PtpEventProducer(object):
         if not self.registration_broker_client:
             return False
 
-        topic = 'PTP-Status'
+        topic = 'PTP-Status-v2'
         server = "PTP-Tracking-{0}".format(self.node_name)
         self.registration_broker_client.remove_listener(
             topic, server)
@@ -189,7 +189,7 @@ class PtpEventProducer(object):
         if not self.local_broker_client:
             return False
 
-        topic = 'PTP-Status'
+        topic = 'PTP-Status-v2'
         server = "PTP-Tracking-{0}".format(self.node_name)
         return self.local_broker_client.is_listening(
             topic, server)
@@ -197,7 +197,7 @@ class PtpEventProducer(object):
     def is_listening_all(self):
         if not self.registration_broker_client:
             return False
-        topic = 'PTP-Status'
+        topic = 'PTP-Status-v2'
         server = "PTP-Tracking-{0}".format(self.node_name)
         return self.registration_broker_client.is_listening(
             topic, server)
