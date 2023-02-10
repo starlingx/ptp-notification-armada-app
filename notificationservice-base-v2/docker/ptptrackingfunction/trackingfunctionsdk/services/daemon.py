@@ -109,7 +109,7 @@ class PtpWatcherDefault:
                             'data_type': data_type,
                             'ResourceAddress': resource_address,
                             'value_type': value_type,
-                            'value': sync_state
+                            'value': sync_state.upper()
                         }
                     ]
                 }
@@ -552,7 +552,7 @@ class PtpWatcherDefault:
                             'data_type': constants.DATA_TYPE_NOTIFICATION,
                             'ResourceAddress': resource_address,
                             'value_type': constants.VALUE_TYPE_ENUMERATION,
-                            'value': sync_state
+                            'value': sync_state.upper()
                         }
                     ]
                 }
@@ -598,7 +598,7 @@ class PtpWatcherDefault:
                             'data_type': constants.DATA_TYPE_NOTIFICATION,
                             'ResourceAddress': resource_address,
                             'value_type': constants.VALUE_TYPE_ENUMERATION,
-                            'value': sync_state
+                            'value': sync_state.upper()
                         }
                     ]
                 }
@@ -656,7 +656,7 @@ class PtpWatcherDefault:
                                 'data_type': constants.DATA_TYPE_NOTIFICATION,
                                 'ResourceAddress': resource_address,
                                 'value_type': constants.VALUE_TYPE_ENUMERATION,
-                                'value': sync_state
+                                'value': sync_state.upper()
                             }
                         ]
                     }
@@ -729,7 +729,7 @@ class PtpWatcherDefault:
                                 'data_type': constants.DATA_TYPE_NOTIFICATION,
                                 'ResourceAddress': resource_address,
                                 'value_type': constants.VALUE_TYPE_ENUMERATION,
-                                'value': sync_state
+                                'value': sync_state.upper()
                             }
                         ]
                     }
