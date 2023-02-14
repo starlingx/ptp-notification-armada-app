@@ -275,7 +275,7 @@ This operation does not accept a request body.
                "data_type": "notification",
                "ResourceAddress": "/././sync/sync-status/sync-state",
                "value_type": "enumeration",
-               "value": "Locked"
+               "value": "LOCKED"
             }
          ]
       }
@@ -320,7 +320,7 @@ This operation does not accept a request body.
                   "data_type": "notification",
                   "ResourceAddress": "/././sync/ptp-status/lock-state",
                   "value_type": "enumeration",
-                  "value": "Locked"
+                  "value": "LOCKED"
                }
             ]
          }
@@ -343,7 +343,7 @@ This operation does not accept a request body.
                   "data_type": "notification",
                   "ResourceAddress": "/././sync/sync-status/os-clock-sync-state",
                   "value_type": "enumeration",
-                  "value": "Locked"
+                  "value": "LOCKED"
                }
             ]
          }
@@ -366,7 +366,7 @@ This operation does not accept a request body.
                   "data_type": "notification",
                   "ResourceAddress": "/././sync/sync-status/sync-state",
                   "value_type": "enumeration",
-                  "value": "Locked"
+                  "value": "LOCKED"
                }
             ]
          }
@@ -389,7 +389,7 @@ This operation does not accept a request body.
                   "data_type": "notification",
                   "ResourceAddress": "/././sync/gnss-status/gnss-sync-status",
                   "value_type": "enumeration",
-                  "value": "Locked"
+                  "value": "LOCKED"
                }
             ]
          }
@@ -461,7 +461,7 @@ badRequest (400), itemNotFound (404), tiemout(408)
                "data_type": "notification",
                "ResourceAddress": "/././sync/sync-status/sync-state",
                "value_type": "enumeration",
-               "value": "Holdover"
+               "value": "HOLDOVER"
             }
          ]
       }
