@@ -247,6 +247,7 @@ spec:
           - name: conf
             mountPath: /ptp/
             readOnly: true
+{{ end }}
       volumes:
         - name: scripts
           configMap:
@@ -287,7 +288,6 @@ spec:
           hostPath:
             path: /sys/
             type: Directory
-{{ end }}
       tolerations:
       - key: "node-role.kubernetes.io/master"
         operator: "Exists"
