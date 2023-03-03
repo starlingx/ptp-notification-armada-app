@@ -123,9 +123,8 @@ class PtpWatcherDefault:
             if resource_address:
                 _, nodename, resource_path = utils.parse_resource_address(
                     resource_address)
-                if resource_path == constants.SOURCE_SYNC_ALL:
-                    resource_path = constants.SOURCE_SYNC_SYNC_STATE
-                if resource_path == constants.SOURCE_SYNC_GNSS_SYNC_STATUS:
+                if resource_path == constants.SOURCE_SYNC_GNSS_SYNC_STATUS or \
+                   resource_path == constants.SOURCE_SYNC_ALL:
                     self.watcher.gnsstracker_context_lock.acquire()
                     if optional and self.watcher.gnsstracker_context.get(optional):
                         sync_state = \
@@ -135,7 +134,10 @@ class PtpWatcherDefault:
                             self.watcher.gnsstracker_context[optional].get(
                                 'last_event_time', time.time())
                         lastStatus[optional] = self._build_event_response(
-                            resource_path, last_event_time, resource_address,
+                            constants.SOURCE_SYNC_GNSS_SYNC_STATUS,
+                            last_event_time,
+                            utils.format_resource_address(nodename,
+                                constants.SOURCE_SYNC_GNSS_SYNC_STATUS),
                             sync_state)
                     elif not optional:
                         for config in self.daemon_context['GNSS_INSTANCES']:
@@ -146,12 +148,16 @@ class PtpWatcherDefault:
                                 self.watcher.gnsstracker_context[config].get(
                                     'last_event_time', time.time())
                             lastStatus[config] = self._build_event_response(
-                                resource_path, last_event_time,
-                                resource_address, sync_state)
+                                constants.SOURCE_SYNC_GNSS_SYNC_STATUS,
+                                last_event_time,
+                                utils.format_resource_address(nodename,
+                                    constants.SOURCE_SYNC_GNSS_SYNC_STATUS),
+                                sync_state)
                     else:
                         lastStatus = None
                     self.watcher.gnsstracker_context_lock.release()
-                elif resource_path == constants.SOURCE_SYNC_PTP_CLOCK_CLASS:
+                if resource_path == constants.SOURCE_SYNC_PTP_CLOCK_CLASS or \
+                   resource_path == constants.SOURCE_SYNC_ALL:
                     self.watcher.ptptracker_context_lock.acquire()
                     if optional and self.watcher.ptptracker_context.get(optional):
                         clock_class = \
@@ -161,9 +167,11 @@ class PtpWatcherDefault:
                             self.watcher.ptptracker_context[optional].get(
                                 'last_clock_class_event_time', time.time())
                         lastStatus[optional] = self._build_event_response(
-                            resource_path, last_clock_class_event_time,
-                            resource_address, clock_class,
-                            constants.VALUE_TYPE_METRIC)
+                            constants.SOURCE_SYNC_PTP_CLOCK_CLASS,
+                            last_clock_class_event_time,
+                            utils.format_resource_address(nodename,
+                                constants.SOURCE_SYNC_PTP_CLOCK_CLASS),
+                            clock_class, constants.VALUE_TYPE_METRIC)
                     elif not optional:
                         for config in self.daemon_context['PTP4L_INSTANCES']:
                             clock_class = \
@@ -174,13 +182,16 @@ class PtpWatcherDefault:
                                     'last_clock_class_event_time',
                                     time.time())
                             lastStatus[config] = self._build_event_response(
-                                resource_path, last_clock_class_event_time,
-                                resource_address, clock_class,
-                                constants.VALUE_TYPE_METRIC)
+                                constants.SOURCE_SYNC_PTP_CLOCK_CLASS,
+                                last_clock_class_event_time,
+                                utils.format_resource_address(nodename,
+                                    constants.SOURCE_SYNC_PTP_CLOCK_CLASS),
+                                clock_class, constants.VALUE_TYPE_METRIC)
                     else:
                         lastStatus = None
                     self.watcher.ptptracker_context_lock.release()
-                elif resource_path == constants.SOURCE_SYNC_PTP_LOCK_STATE:
+                if resource_path == constants.SOURCE_SYNC_PTP_LOCK_STATE or \
+                   resource_path == constants.SOURCE_SYNC_ALL:
                     self.watcher.ptptracker_context_lock.acquire()
                     if optional and self.watcher.ptptracker_context.get(optional):
                         sync_state = \
@@ -190,7 +201,10 @@ class PtpWatcherDefault:
                             self.watcher.ptptracker_context[optional].get(
                                 'last_event_time', time.time())
                         lastStatus[optional] = self._build_event_response(
-                            resource_path, last_event_time, resource_address,
+                            constants.SOURCE_SYNC_PTP_LOCK_STATE,
+                            last_event_time,
+                            utils.format_resource_address(nodename,
+                                constants.SOURCE_SYNC_PTP_LOCK_STATE),
                             sync_state)
                     elif not optional:
                         for config in self.daemon_context['PTP4L_INSTANCES']:
@@ -201,13 +215,17 @@ class PtpWatcherDefault:
                                 self.watcher.ptptracker_context[config].get(
                                     'last_event_time', time.time())
                             lastStatus[config] = self._build_event_response(
-                                resource_path, last_event_time,
-                                resource_address, sync_state)
+                                constants.SOURCE_SYNC_PTP_LOCK_STATE,
+                                last_event_time,
+                                utils.format_resource_address(nodename,
+                                    constants.SOURCE_SYNC_PTP_LOCK_STATE),
+                                sync_state)
                     else:
                         lastStatus = None
                     self.watcher.ptptracker_context_lock.release()
 
-                elif resource_path == constants.SOURCE_SYNC_OS_CLOCK:
+                if resource_path == constants.SOURCE_SYNC_OS_CLOCK or \
+                   resource_path == constants.SOURCE_SYNC_ALL:
                     self.watcher.osclocktracker_context_lock.acquire()
                     sync_state = \
                         self.watcher.osclocktracker_context.get(
@@ -217,9 +235,12 @@ class PtpWatcherDefault:
                             'last_event_time', time.time())
                     self.watcher.osclocktracker_context_lock.release()
                     lastStatus['os_clock_status'] = self._build_event_response(
-                        resource_path, last_event_time, resource_address,
+                        constants.SOURCE_SYNC_OS_CLOCK, last_event_time,
+                        utils.format_resource_address(nodename,
+                            constants.SOURCE_SYNC_OS_CLOCK),
                         sync_state)
-                elif resource_path == constants.SOURCE_SYNC_SYNC_STATE:
+                if resource_path == constants.SOURCE_SYNC_SYNC_STATE or \
+                   resource_path == constants.SOURCE_SYNC_ALL:
                     self.watcher.overalltracker_context_lock.acquire()
                     sync_state = self.watcher.overalltracker_context.get(
                         'sync_state', OverallClockState.Freerun)
@@ -228,7 +249,9 @@ class PtpWatcherDefault:
                     self.watcher.overalltracker_context_lock.release()
                     lastStatus['overall_sync_status'] = \
                         self._build_event_response(
-                            resource_path, last_event_time, resource_address,
+                            constants.SOURCE_SYNC_SYNC_STATE, last_event_time,
+                            utils.format_resource_address(nodename,
+                                constants.SOURCE_SYNC_SYNC_STATE),
                             sync_state)
                 LOG.debug("query_status: {}".format(lastStatus))
             else:

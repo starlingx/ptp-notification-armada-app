@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2022 Wind River Systems, Inc.
+# Copyright (c) 2021-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -82,7 +82,9 @@ class NotificationHandler(NotificationHandlerBase):
                 if entry.ResourceAddress:
                     _, entry_node_name, entry_resource_path, _, _ = \
                             subscription_helper.parse_resource_address(entry.ResourceAddress)
-                    if entry_resource_path not in resource_address:
+                    _, _, event_resource_path, _, _ = \
+                            subscription_helper.parse_resource_address(resource_address)
+                    if not event_resource_path.startswith(entry_resource_path):
                         continue
                     subscription_dto2 = SubscriptionInfoV2(entry)
                 else:

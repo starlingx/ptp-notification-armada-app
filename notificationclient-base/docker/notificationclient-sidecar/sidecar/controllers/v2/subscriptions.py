@@ -63,6 +63,8 @@ class SubscriptionsControllerV2(rest.RestController):
             return subscription
         except client_exception.ServiceError as err:
             abort(int(str(err)))
+        except client_exception.SubscriptionAlreadyExists as ex:
+            abort(409, str(ex))
         except client_exception.InvalidSubscription:
             abort(400)
         except client_exception.InvalidEndpoint as ex:
