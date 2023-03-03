@@ -1,6 +1,8 @@
-maintain_user_overrides: true
-
 app_name: @APP_NAME@
 app_version: @APP_VERSION@
 helm_repo: @HELM_REPO@
-
+maintain_user_overrides: true
+upgrades:
+  auto_update: true
+behaviour:
+  platform_managed_app: true
