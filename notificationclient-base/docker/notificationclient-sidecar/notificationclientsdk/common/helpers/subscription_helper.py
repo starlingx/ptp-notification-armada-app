@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2022 Wind River Systems, Inc.
+# Copyright (c) 2021-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -24,12 +24,13 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
         retry = retry - 1
         try:
             headers = {'Content-Type': 'application/json'}
-            data = format_notification_data(subscriptioninfo, notification)
-            data = json.dumps(data)
             url = subscriptioninfo.EndpointUri
-            response = requests.post(url, data=data, headers=headers,
-                                     timeout=timeout)
-            response.raise_for_status()
+            for item in notification:
+                data = format_notification_data(subscriptioninfo, {item: notification[item]})
+                data = json.dumps(data)
+                response = requests.post(url, data=data, headers=headers,
+                                        timeout=timeout)
+                response.raise_for_status()
             result = True
             return response
         except client_exception.InvalidResource as ex:

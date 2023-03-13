@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2022 Wind River Systems, Inc.
+# Copyright (c) 2021-2023 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -127,75 +127,97 @@ class PtpService(object):
                 notificationservice_client.cleanup()
                 del notificationservice_client
 
+    def _match_resource_address(self, resource_address_a, resource_address_b):
+
+        clustername_a, nodename_a, resource_path_a, _, _ = \
+            subscription_helper.parse_resource_address(
+                resource_address_a)
+
+        clustername_b, nodename_b, resource_path_b, _, _ = \
+            subscription_helper.parse_resource_address(
+                resource_address_b)
+
+        # Compare cluster names
+        if clustername_a != clustername_b:
+            return False, "clusterName {0} is different from {1}".format(
+                clustername_a, clustername_b)
+
+        # Compare node names
+        # If one of them is '*' skip comparison
+        if nodename_a != constants.WILDCARD_ALL_NODES and \
+           nodename_b != constants.WILDCARD_ALL_NODES:
+
+            # If one of the nodename is '.' replace by
+            # current node.
+            if nodename_a == constants.WILDCARD_CURRENT_NODE:
+                nodename_a = self.daemon_control.get_residing_nodename()
+            if nodename_b == constants.WILDCARD_CURRENT_NODE:
+                nodename_b = self.daemon_control.get_residing_nodename()
+
+            if nodename_a != nodename_b:
+                return False, "nodeName {0} is different from {1}".format(
+                    nodename_a, nodename_b)
+
+        # Compare resource path
+        if resource_path_a == resource_path_b:
+            return True, "resourceAddress {0} is equal to {1}".format(
+                resource_address_a, resource_address_b)
+
+        if resource_path_a.startswith(resource_path_b):
+            return True, "resourceAddress {1} contains {0}".format(
+                resource_address_a, resource_address_b)
+
+        if resource_path_b.startswith(resource_path_a):
+            return True, "resourceAddress {0} contains {1}".format(
+                resource_address_a, resource_address_b)
+
+        return False, "resourceAddress {0} is different from {1}".format(
+            resource_address_a, resource_address_b)
+
+
     def add_subscription(self, subscription_dto):
         resource_address = None
         if hasattr(subscription_dto, 'ResourceAddress'):
             version = 2
-            _, nodename, _, _, _ = subscription_helper.parse_resource_address(
-                subscription_dto.ResourceAddress)
-            LOG.debug("nodename in ResourceAddress is '%s', residing is %s" %
-                      (nodename, self.daemon_control.get_residing_nodename()))
-
+            endpoint = subscription_dto.EndpointUri
             resource_address = subscription_dto.ResourceAddress
+
             LOG.debug('Looking for existing subscription for EndpointUri %s '
-                      'ResourceAddress %s' % (subscription_dto.EndpointUri,
-                                              resource_address))
+                      'ResourceAddress %s' % (endpoint, resource_address))
+
             entry = self.subscription_repo.get_one(
-                EndpointUri=subscription_dto.EndpointUri,
+                EndpointUri=endpoint,
                 ResourceAddress=resource_address)
 
+            # Did not find matched duplicated, but needs to look for other
+            # cases...
             if entry is None:
-                # Did not find matched duplicated, but needs to look for other
-                # cases...
-                if nodename != constants.WILDCARD_ALL_NODES:
-                    # There may be a subscription for all nodes already in
-                    # place
-                    resource_address_star = \
-                        subscription_helper.set_nodename_in_resource_address(
-                            resource_address, constants.WILDCARD_ALL_NODES)
-                    LOG.debug('Additional lookup for existing subscription '
-                              'for EndpointUri %s ResourceAddress %s'
-                              % (subscription_dto.EndpointUri,
-                                 resource_address_star))
-                    if self.subscription_repo.get_one(
-                            EndpointUri=subscription_dto.EndpointUri,
-                            ResourceAddress=resource_address_star) is not None:
-                        LOG.debug('Found existing %s entry in subscription '
-                                  'repo' % constants.WILDCARD_ALL_NODES)
-                        raise client_exception.ServiceError(409)
 
-                if nodename == constants.WILDCARD_CURRENT_NODE:
-                    # There may be a subscription for the residing (current)
-                    # node already in place
-                    resource_address_synonym = \
-                        subscription_helper.set_nodename_in_resource_address(
-                            resource_address,
-                            self.daemon_control.get_residing_nodename())
-                    LOG.debug('In addition, looking for existing subscription '
-                              'for EndpointUri %s ResourceAddress %s' % (
-                                subscription_dto.EndpointUri,
-                                resource_address_synonym))
-                    entry = self.subscription_repo.get_one(
-                        EndpointUri=subscription_dto.EndpointUri,
-                        ResourceAddress=resource_address_synonym)
+                subscriptions = self.subscription_repo.get(
+                    EndpointUri=endpoint)
 
-                if nodename == self.daemon_control.get_residing_nodename():
-                    # There may be a subscription for '.' (current node)
-                    # already in place
-                    resource_address_synonym = \
-                        subscription_helper.set_nodename_in_resource_address(
-                            resource_address, constants.WILDCARD_CURRENT_NODE)
-                    LOG.debug('In addition, looking for existing subscription '
-                              'for EndpointUri %s ResourceAddress %s' % (
-                                subscription_dto.EndpointUri,
-                                resource_address_synonym))
-                    entry = self.subscription_repo.get_one(
-                        EndpointUri=subscription_dto.EndpointUri,
-                        ResourceAddress=resource_address_synonym)
+                for subscription in subscriptions:
+                    match, message = self._match_resource_address(
+                        subscription.ResourceAddress, resource_address)
+
+                    if match:
+                        entry = subscription
+                        LOG.debug(message)
+                        break
 
             if entry is not None:
                 LOG.debug('Found existing v2 entry in subscription repo')
-                raise client_exception.ServiceError(409)
+                subscriptioninfo = {
+                    'SubscriptionId': entry.SubscriptionId,
+                    'UriLocation': entry.UriLocation,
+                    'EndpointUri': entry.EndpointUri,
+                    'ResourceAddress': entry.ResourceAddress
+                }
+                raise client_exception.SubscriptionAlreadyExists(
+                    subscriptioninfo)
+            
+            _, nodename, _, _, _ = subscription_helper.parse_resource_address(
+                resource_address)
 
             if nodename == constants.WILDCARD_ALL_NODES:
                 broker_names = self.daemon_control.list_of_service_nodenames()

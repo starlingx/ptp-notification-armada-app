@@ -44,6 +44,13 @@ class InvalidSubscription(Exception):
         return "Subscription is invalid:{0}".format(
             self.subscriptioninfo.to_dict())
 
+class SubscriptionAlreadyExists(Exception):
+    def __init__(self, subscriptioninfo):
+        self.subscriptioninfo = subscriptioninfo
+
+    def __str__(self):
+        return "Subscription already exists: {0}".format(
+            self.subscriptioninfo)
 
 class ServiceError(Exception):
     def __init__(self, code, *args):
