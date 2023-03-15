@@ -25,12 +25,21 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
         try:
             headers = {'Content-Type': 'application/json'}
             url = subscriptioninfo.EndpointUri
-            for item in notification:
-                data = format_notification_data(subscriptioninfo, {item: notification[item]})
+            if 'ResourceType' in notification:
+                # version 1
+                data = format_notification_data(subscriptioninfo, notification)
                 data = json.dumps(data)
                 response = requests.post(url, data=data, headers=headers,
                                         timeout=timeout)
                 response.raise_for_status()
+            else:
+                # version 2
+                for item in notification:
+                    data = format_notification_data(subscriptioninfo, {item: notification[item]})
+                    data = json.dumps(data)
+                    response = requests.post(url, data=data, headers=headers,
+                                            timeout=timeout)
+                    response.raise_for_status()
             result = True
             return response
         except client_exception.InvalidResource as ex:
