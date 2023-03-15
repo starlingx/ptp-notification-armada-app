@@ -162,12 +162,12 @@ class BrokerClientBase(object):
             namespace=self.broker_endpoint.Namespace)
         # note: the call might stuck here on 'Connection failed' and retry forever
         # due to the tcp connection is unreachable: 'AMQP server on <broker host>:<port> is unreachable: timed out'
-        queryclient = oslo_messaging.RPCClient(self.transport, target, timeout = timeout, retry = retry)
+        queryclient = oslo_messaging.get_rpc_client(self.transport, target, timeout = timeout, retry = retry)
         return queryclient.call({}, api_name, **api_kwargs)
 
     def cast(self, topic, api_name, timeout=None, retry=None, **api_kwargs):
         target = oslo_messaging.Target(
             topic=topic, fanout=True, version=self.broker_endpoint.Version,
             namespace=self.broker_endpoint.Namespace)
-        queryclient = oslo_messaging.RPCClient(self.transport, target, timeout = timeout, retry = retry)
+        queryclient = oslo_messaging.get_rpc_client(self.transport, target, timeout = timeout, retry = retry)
         queryclient.cast({}, api_name, **api_kwargs)
