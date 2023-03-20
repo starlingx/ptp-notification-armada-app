@@ -102,12 +102,12 @@ class BrokerClientBase(object):
         target = oslo_messaging.Target(
             topic=topic, server=server, version=self.broker_endpoint.Version,
             namespace=self.broker_endpoint.Namespace)
-        queryclient = oslo_messaging.RPCClient(self.transport, target, timeout = 2, retry = 0)
+        queryclient = oslo_messaging.get_rpc_client(self.transport, target, timeout = 2, retry = 0)
         return queryclient.call({}, api_name, **api_kwargs)
 
     def cast(self, topic, api_name, **api_kwargs):
         target = oslo_messaging.Target(
             topic=topic, fanout=True, version=self.broker_endpoint.Version,
             namespace=self.broker_endpoint.Namespace)
-        queryclient = oslo_messaging.RPCClient(self.transport, target)
+        queryclient = oslo_messaging.get_rpc_client(self.transport, target)
         queryclient.cast({}, api_name, **api_kwargs)

@@ -107,7 +107,7 @@ target = oslo_messaging.Target(
     fanout=True,
     version='1.0', namespace='notification')
 
-client = oslo_messaging.RPCClient(transport, target)
+client = oslo_messaging.get_rpc_client(transport, target)
 LocationInfo = {
             'NodeName': THIS_NODE_NAME,
             'PodIP': THIS_POD_IP,

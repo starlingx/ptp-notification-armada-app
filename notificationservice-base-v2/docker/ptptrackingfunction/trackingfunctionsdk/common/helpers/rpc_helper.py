@@ -16,7 +16,7 @@ def setup_client(rpc_endpoint_info, topic, server):
                                    version=rpc_endpoint_info.Version,
                                    server=server,
                                    namespace=rpc_endpoint_info.Namespace)
-    client = oslo_messaging.RPCClient(transport, target)
+    client = oslo_messaging.get_rpc_client(transport, target)
     return client
 
 def get_transport(rpc_endpoint_info):
