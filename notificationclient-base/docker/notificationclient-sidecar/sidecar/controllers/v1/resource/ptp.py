@@ -47,6 +47,9 @@ class CurrentStateController(rest.RestController):
                     LOG.debug('Querying nodename: %s' % nodename)
                     ptpstatus = ptpservice.query(nodename)
                     LOG.debug('Got ptpstatus: %s' % ptpstatus)
+                    if ptpstatus == {}:
+                        raise client_exception.ResourceNotAvailable('PTP',
+                                                                    nodename)
                     # response.status = 200
                     return ptpstatus
                 except client_exception.NodeNotAvailable as ex:

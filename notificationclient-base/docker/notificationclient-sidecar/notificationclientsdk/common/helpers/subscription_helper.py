@@ -40,6 +40,14 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
                     response = requests.post(url, data=data, headers=headers,
                                             timeout=timeout)
                     response.raise_for_status()
+            if notification == {}:
+                if hasattr(subscriptioninfo, 'ResourceType'):
+                    resource = "{'ResourceType':'" + \
+                        subscriptioninfo.ResourceType + "'}"
+                elif hasattr(subscriptioninfo, 'ResourceAddress'):
+                    _, _, resource, _, _ = parse_resource_address(
+                        subscriptioninfo.ResourceAddress)
+                raise client_exception.InvalidResource(resource)
             result = True
             return response
         except client_exception.InvalidResource as ex:

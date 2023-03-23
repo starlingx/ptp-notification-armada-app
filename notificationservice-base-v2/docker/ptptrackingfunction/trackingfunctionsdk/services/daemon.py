@@ -254,31 +254,6 @@ class PtpWatcherDefault:
                                 constants.SOURCE_SYNC_SYNC_STATE),
                             sync_state)
                 LOG.debug("query_status: {}".format(lastStatus))
-            else:
-                # Request is for PTP v1 notification
-                # PTP v1 only supports single instance ptp
-                instance = self.daemon_context['PTP4L_INSTANCES'][0]
-                if len(self.daemon_context['PTP4L_INSTANCES']) > 1:
-                    LOG.warning("Multiple ptp4l instances configured, "
-                                "retrieving status for %s" % instance)
-                self.watcher.ptptracker_context_lock.acquire()
-                sync_state = self.watcher.ptptracker_context[instance].get(
-                    'sync_state', PtpState.Freerun)
-                last_event_time = \
-                    self.watcher.ptptracker_context[instance].get(
-                        'last_event_time', time.time())
-                lastStatus[constants.PTP_V1_KEY] = {
-                    'ResourceType': ResourceType.TypePTP,
-                    'EventData': {
-                        'State': sync_state
-                    },
-                    'ResourceQualifier': {
-                        'NodeName': self.watcher.node_name
-                    },
-                    'EventTimestamp': last_event_time
-                }
-                self.watcher.ptptracker_context_lock.release()
-                LOG.warning("query_status PTP v1: {}".format(lastStatus))
 
             return lastStatus
 

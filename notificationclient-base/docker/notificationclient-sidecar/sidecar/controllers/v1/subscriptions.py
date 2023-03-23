@@ -73,6 +73,8 @@ class SubscriptionsControllerV1(rest.RestController):
             abort(400)
         except client_exception.InvalidEndpoint:
             abort(400)
+        except client_exception.InvalidResource as ex:
+            abort(400, str(ex))
         except client_exception.NodeNotAvailable:
             abort(404)
         except client_exception.ResourceNotAvailable:
