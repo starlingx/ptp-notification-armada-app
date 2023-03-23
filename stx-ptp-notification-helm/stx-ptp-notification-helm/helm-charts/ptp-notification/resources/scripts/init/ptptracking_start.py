@@ -16,6 +16,8 @@ log_helper.config_logger(LOG)
 import os
 import json
 import time
+import glob
+import re
 import oslo_messaging
 from oslo_config import cfg
 from trackingfunctionsdk.services.daemon import DaemonControl
@@ -64,7 +66,75 @@ sqlalchemy_conf = {
 }
 sqlalchemy_conf_json = json.dumps(sqlalchemy_conf)
 default_daemoncontrol = DaemonControl(sqlalchemy_conf_json, json.dumps(context))
-default_daemoncontrol.refresh()
-while True:
-    pass
 
+if os.path.exists('/ptp/linuxptp/ptpinstance'):
+    LINUXPTP_CONFIG_PATH = '/ptp/linuxptp/ptpinstance/'
+elif os.path.exists('/ptp/ptpinstance'):
+    LINUXPTP_CONFIG_PATH = '/ptp/ptpinstance/'
+else:
+    LINUXPTP_CONFIG_PATH = '/ptp/'
+
+ptp4l_service_name = os.environ.get('PTP4L_SERVICE_NAME', 'ptp4l')
+phc2sys_service_name = os.environ.get('PHC2SYS_SERVICE_NAME', 'phc2sys')
+
+pmc = False
+ptp4l = False
+phc2sys = False
+ptp4lconf = False
+phc2sysconf = False
+
+if os.path.isfile('/usr/sbin/pmc'):
+    pmc = True
+
+# Check ptp4l config, auto-detect if not found
+if os.path.isfile('%sptp4l-%s.conf' % (LINUXPTP_CONFIG_PATH, ptp4l_service_name)):
+    ptp4lconf = True
+else:
+    try:
+        LOG.warning("Unable to locate ptp4l config file, attempting to auto-detect")
+        ptp4l_detect_config = glob.glob(LINUXPTP_CONFIG_PATH + "ptp4l*.conf")[0]
+        pattern = '(?<=' + LINUXPTP_CONFIG_PATH + 'ptp4l-).*(?=.conf)'
+        match = re.search(pattern, ptp4l_detect_config)
+        ptp4l_service_name = match.group()
+        LOG.info("Using ptp4l conf: %s and ptp4l service name %s"
+                % (ptp4l_detect_config, ptp4l_service_name))
+        LOG.info("Set Helm overrides to override auto-detection")
+        ptp4lconf = True
+    except:
+        LOG.warning("Unable to locate ptp4l config, auto-detect failed.")
+
+# Check phc2sys config, auto-detect if not found
+if os.path.isfile('%sphc2sys-%s.conf' % (LINUXPTP_CONFIG_PATH, phc2sys_service_name)):
+    phc2sysconf = True
+else:
+    try:
+        LOG.warning("Unable to locate phc2sys config file, attempting to auto-detect")
+        phc2sys_detect_config = glob.glob(LINUXPTP_CONFIG_PATH + "phc2sys*.conf")[0]
+        pattern = '(?<=' + LINUXPTP_CONFIG_PATH + 'phc2sys-).*(?=.conf)'
+        match = re.search(pattern, phc2sys_detect_config)
+        phc2sys_service_name = match.group()
+        LOG.info("Using phc2sys conf: %s and phc2sys service name: %s"
+                % (phc2sys_detect_config, phc2sys_service_name))
+        LOG.info("Set Helm overrides to override auto-detection")
+        phc2sysconf = True
+    except:
+        LOG.warning("Unable to locate phc2sys config, auto-detect failed.")
+
+# Check that ptp4l and phc2sys are running
+if os.path.isfile('/var/run/ptp4l-%s.pid' % ptp4l_service_name):
+    ptp4l = True
+else:
+    LOG.warning("Unable to locate .pid file for %s" % ptp4l_service_name)
+if os.path.isfile('/var/run/phc2sys-%s.pid' % phc2sys_service_name):
+    phc2sys = True
+else:
+    LOG.warning("Unable to locate .pid file for %s" % phc2sys_service_name)
+
+
+if pmc and ptp4l and phc2sys and ptp4lconf and phc2sysconf:
+    LOG.info("Located ptp4l and phc2sys configs, starting ptp-notification")
+    default_daemoncontrol.refresh()
+else:
+    LOG.warning("Please configure application overrides and ensure that ptp services are running.")
+    while True:
+        pass
