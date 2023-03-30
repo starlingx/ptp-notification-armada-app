@@ -74,7 +74,7 @@ ptptracking:
   logging_level: INFO
   image:
     repository: starlingx/notificationservice-base
-    tag: stx.9.0-v2.1.0
+    tag: stx.9.0-v2.1.1
     pullPolicy: IfNotPresent
   device:
     simulated: false
@@ -91,7 +91,7 @@ ptptrackingv2:
   log_level: INFO
   image:
     repository: starlingx/notificationservice-base-v2
-    tag: stx.9.0-v2.1.0
+    tag: stx.9.0-v2.1.1
     pullPolicy: IfNotPresent
   control_timeout: 2
   device:
