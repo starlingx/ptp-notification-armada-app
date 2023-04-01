@@ -2,8 +2,6 @@
 debname: stx-ptp-notification-helm
 debver: 1.0-1
 src_path: stx-ptp-notification-helm
-src_files:
-  - ${MY_REPO}/stx/helm-charts/psp-rolebinding/psp-rolebinding
 revision:
   dist: $STX_DIST
   GITREVCOUNT:

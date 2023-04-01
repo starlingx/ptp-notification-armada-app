@@ -27,7 +27,6 @@ override_dh_auto_build:
 
 	# Create the TGZ file.
 	cd helm-charts && make ptp-notification
-	cd helm-charts && make psp-rolebinding
 
 	# Terminate the helm chart server.
 	pkill chartmuseum

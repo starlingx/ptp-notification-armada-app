@@ -9,4 +9,3 @@ namespace: notification
 resources:
   - base
   - ptp-notification
-  - ptp-notification-psp-rolebinding
