@@ -71,6 +71,7 @@ ptptracking:
   ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
   ptp4lServiceName: ptp4l-legacy
   phc2sysServiceName: phc2sys-legacy
+  phc2sysComSocket: False
   logging_level: INFO
   image:
     repository: starlingx/notificationservice-base

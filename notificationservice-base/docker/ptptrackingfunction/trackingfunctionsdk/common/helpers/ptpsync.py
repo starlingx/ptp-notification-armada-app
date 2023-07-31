@@ -12,8 +12,10 @@
 # Sync status provided as: 'Locked', 'Holdover', 'Freerun'
 #
 #
+import configparser
 import errno, os
 import os.path
+import socket
 import sys
 import subprocess
 import datetime
@@ -36,6 +38,9 @@ ptp_oper_dict = {
 
 ptp4l_service_name = os.environ.get('PTP4L_SERVICE_NAME', 'ptp4l')
 phc2sys_service_name = os.environ.get('PHC2SYS_SERVICE_NAME', 'phc2sys')
+phc2sys_com_socket = os.environ.get('PHC2SYS_COM_SOCKET', "false")
+phc2sys_config_file_path = '%sphc2sys-%s.conf' % (constants.LINUXPTP_CONFIG_PATH,
+                                                  phc2sys_service_name)
 
 # run subprocess and returns out, err, errcode
 def run_shell2(dir, ctx, args):
@@ -65,7 +70,36 @@ def check_critical_resources():
         phc2sys = True
     if os.path.isfile('%sptp4l-%s.conf' % (constants.LINUXPTP_CONFIG_PATH, ptp4l_service_name)):
         ptp4lconf = True
+    if phc2sys_com_socket != "false":
+        # User enabled phc2sys HA source clock validation
+        phc2sys_source_clock = check_phc2sys_ha_source()
+        if phc2sys_source_clock is None:
+            phc2sys = False
+            LOG.warning("No Phc2sys HA source clock found")
     return pmc, ptp4l, phc2sys, ptp4lconf
+
+def check_phc2sys_ha_source():
+    query = 'clock source'
+    try:
+        client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client_socket.connect(phc2sys_com_socket)
+        client_socket.send(query.encode())
+        response = client_socket.recv(1024)
+        response = response.decode()
+        if response == "None":
+            response = None
+        return response
+    except ConnectionRefusedError as err:
+        LOG.error("Error connecting to phc2sys socket for instance %s: %s" % (
+            phc2sys_service_name, err))
+        return None
+    except FileNotFoundError as err:
+        LOG.error("Error connecting to phc2sys socket for instance %s: %s" % (
+            phc2sys_service_name, err))
+        return None
+    finally:
+        if hasattr(client_socket, 'close'):
+            client_socket.close()
 
 def check_results(result, total_ptp_keywords, port_count):
     # sync state is in 'Locked' state and will be overwritten if

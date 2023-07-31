@@ -24,6 +24,16 @@ class OsClockMonitorTests(unittest.TestCase):
         self.clockmon.set_phc2sys_instance()
         assert self.clockmon.phc2sys_instance == "phc2sys-test"
 
+    def test_parse_phc2sys_config(self):
+        self.clockmon = OsClockMonitor(phc2sys_config=phc2sys_test_config, init=False)
+        self.clockmon.phc2sys_config = testpath + "test_input_files/phc2sys-test.conf"
+        self.clockmon.parse_phc2sys_config()
+        assert 'ha_enabled' not in self.clockmon.config['global'].keys()
+
+        self.clockmon.phc2sys_config = testpath + "test_input_files/phc2sys-ha-test.conf"
+        self.clockmon.parse_phc2sys_config()
+        assert 'ha_enabled' in self.clockmon.config['global'].keys()
+
     def test_check_config_file_interface(self):
         self.clockmon = OsClockMonitor(phc2sys_config=phc2sys_test_config, init=False)
         self.clockmon.phc2sys_config = testpath + "test_input_files/phc2sys-test.conf"

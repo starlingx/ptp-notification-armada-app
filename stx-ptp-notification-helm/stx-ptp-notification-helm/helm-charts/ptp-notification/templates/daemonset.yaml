@@ -219,6 +219,8 @@ spec:
             value: "{{ .Values.ptptracking.ptp4lServiceName }}"
           - name: PHC2SYS_SERVICE_NAME
             value: "{{ .Values.ptptracking.phc2sysServiceName }}"
+          - name: PHC2SYS_COM_SOCKET
+            value: "{{ .Values.ptptracking.phc2sysComSocket }}"
           - name: PYTHONPATH
             value: "/opt/ptptrackingfunction"
           - name: LOGGING_LEVEL

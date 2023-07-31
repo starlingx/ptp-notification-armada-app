@@ -3,11 +3,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
+import configparser
 import datetime
 import logging
 import os
-import subprocess
 import re
+import socket
+import subprocess
 from glob import glob
 
 from trackingfunctionsdk.common.helpers import log_helper
@@ -19,23 +21,37 @@ log_helper.config_logger(LOG)
 
 
 class OsClockMonitor:
-    _state = OsClockState()
-    last_event_time = None
-    phc2sys_instance = None
-    phc2sys_config = None
-    phc_interface = None
-    ptp_device = None
-    offset = None
 
     def __init__(self, phc2sys_config, init=True):
+        self._state = OsClockState()
+        self.last_event_time = None
+        self.phc2sys_instance = None
+        self.phc_interface = None
+        self.ptp_device = None
+        self.offset = None
         self.phc2sys_config = phc2sys_config
+        self.config = None
+        self.phc2sys_ha_enabled = False
+        self.phc2sys_com_socket = None
+
         self.set_phc2sys_instance()
 
         """Normally initialize all fields, but allow these to be skipped to
         assist with unit testing or to short-circuit values if required.
         """
         if init:
-            self.get_os_clock_time_source()
+            self.parse_phc2sys_config()
+            if 'global' not in self.config.keys():
+                self.phc2sys_ha_enabled = False
+            elif 'ha_enabled' in self.config['global'].keys() \
+                    and self.config['global']['ha_enabled'] == '1':
+                self.phc2sys_ha_enabled = True
+                self.phc2sys_com_socket = self.config['global'].get('ha_phc2sys_com_socket', None)
+
+            if self.phc2sys_ha_enabled is True:
+                self.set_phc2sys_ha_interface_and_phc
+            else:
+                self.get_os_clock_time_source()
             self.get_os_clock_offset()
             self.set_os_clock_state()
 
@@ -45,6 +61,55 @@ class OsClockMonitor:
         self.phc2sys_instance = self.phc2sys_instance.split(".")[0]
         LOG.debug("phc2sys config file: %s" % self.phc2sys_config)
         LOG.debug("phc2sys instance name: %s" % self.phc2sys_instance)
+
+    def parse_phc2sys_config(self):
+        LOG.debug("Parsing %s" % self.phc2sys_config)
+        config = configparser.ConfigParser(delimiters=' ')
+        config.read(self.phc2sys_config)
+        self.config = config
+
+    def query_phc2sys_socket(self, query, unix_socket=None):
+        if unix_socket:
+            try:
+                client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                client_socket.connect(unix_socket)
+                client_socket.send(query.encode())
+                response = client_socket.recv(1024)
+                response = response.decode()
+                if response == "None":
+                    response = None
+                return response
+            except ConnectionRefusedError as err:
+                LOG.error("Error connecting to phc2sys socket for instance %s: %s" % (
+                    self.phc2sys_instance, err))
+                return None
+            except FileNotFoundError as err:
+                LOG.error("Error connecting to phc2sys socket for instance %s: %s" % (
+                    self.phc2sys_instance, err))
+                return None
+            finally:
+                if hasattr(client_socket, 'close'):
+                    client_socket.close()
+        else:
+            LOG.warning("No socket path supplied for instance %s" % self.instance_name)
+            return None
+
+    def set_phc2sys_ha_interface_and_phc(self):
+        update_phc_interface = self.query_phc2sys_socket('clock source', self.phc2sys_com_socket)
+        if update_phc_interface is None:
+            LOG.info("No PHC device found for HA phc2sys, status is FREERUN.")
+            self._state = OsClockState.Freerun
+            self.phc_interface = update_phc_interface
+            self.ptp_device = None
+        elif update_phc_interface != self.phc_interface:
+            LOG.info("Phc2sys source interface changed from %s to %s" 
+                     % (self.phc_interface, update_phc_interface))
+            self.phc_interface = update_phc_interface
+
+        if self.phc_interface is not None:
+            self.ptp_device = self._get_interface_phc_device()
+
+        LOG.debug("Phc2sys HA interface: %s ptp_device: %s" % (self.phc_interface, self.ptp_device))
 
     def get_os_clock_time_source(self, pidfile_path="/var/run/"):
         """Determine which PHC is disciplining the OS clock"""
@@ -104,7 +169,7 @@ class OsClockMonitor:
         if len(ptp_device) == 0:
             # Try the 0th interface instead, required for some NIC types
             phc_interface_base = self.phc_interface[:-1] + "0"
-            LOG.error("No ptp device found at %s trying %s instead"
+            LOG.info("No ptp device found at %s trying %s instead"
                       % (pattern, phc_interface_base))
             pattern = "/hostsys/class/net/" + phc_interface_base + \
                       "/device/ptp/*"
@@ -122,6 +187,11 @@ class OsClockMonitor:
 
     def get_os_clock_offset(self):
         """Get the os CLOCK_REALTIME offset"""
+
+        if self.phc2sys_ha_enabled is True:
+            # Refresh the HA source interface before checking offset
+            self.set_phc2sys_ha_interface_and_phc()
+
         if self.ptp_device is None:
             # This may happen in virtualized environments
             LOG.warning("No PTP device. Defaulting offset value to 0.")
