@@ -134,8 +134,14 @@ spec:
             value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
           - name: PTP4L_SERVICE_NAME
             value: "{{ .Values.ptptrackingv2.ptp4lServiceName }}"
+          - name: PTP4L_CLOCK_CLASS_LOCKED_LIST
+            value: "{{ .Values.ptptrackingv2.ptp4lClockClassLockedList }}"
+          - name: PTP4L_UTC_OFFSET
+            value: "{{ .Values.ptptrackingv2.ptp4lUtcOffset }}"
           - name: PHC2SYS_SERVICE_NAME
             value: "{{ .Values.ptptrackingv2.phc2sysServiceName }}"
+          - name: PHC2SYS_TOLERANCE_THRESHOLD
+            value: "{{ .Values.ptptrackingv2.phc2sysToleranceThreshold }}"
           - name: TS2PHC_SERVICE_NAME
             value: "{{ .Values.ptptrackingv2.ts2phcServiceName }}"
           - name: LOGGING_LEVEL
@@ -217,6 +223,8 @@ spec:
             value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
           - name: PTP4L_SERVICE_NAME
             value: "{{ .Values.ptptracking.ptp4lServiceName }}"
+          - name: PTP4L_CLOCK_CLASS_LOCKED_LIST
+            value: "{{ .Values.ptptracking.ptp4lClockClassLockedList }}"
           - name: PHC2SYS_SERVICE_NAME
             value: "{{ .Values.ptptracking.phc2sysServiceName }}"
           - name: PHC2SYS_COM_SOCKET

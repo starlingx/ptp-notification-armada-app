@@ -42,6 +42,15 @@ phc2sys_com_socket = os.environ.get('PHC2SYS_COM_SOCKET', "false")
 phc2sys_config_file_path = '%sphc2sys-%s.conf' % (constants.LINUXPTP_CONFIG_PATH,
                                                   phc2sys_service_name)
 
+ptp4l_clock_class_locked = constants.CLOCK_CLASS_LOCKED_LIST
+try:
+    tmp = os.environ.get('PTP4L_CLOCK_CLASS_LOCKED_LIST', ','.join(ptp4l_clock_class_locked))
+    ptp4l_clock_class_locked = sorted([str(int(e)) for e in tmp.split(',')])
+except:
+    LOG.error('Unable to convert PTP4L_CLOCK_CLASS_LOCKED_LIST to a list of integers,'
+              ' using the default.')
+
+
 # run subprocess and returns out, err, errcode
 def run_shell2(dir, ctx, args):
     cwd = os.getcwd()
@@ -129,11 +138,16 @@ def check_results(result, total_ptp_keywords, port_count):
             break
     else:
         sync_state = constants.FREERUN_PHC_STATE
-    if (result[constants.TIME_TRACEABLE] != constants.TIME_IS_TRACEABLE1
+
+    # We can only expect timeTraceable=1 to be set when the clockClass list is the default.
+    # If the user has elected to override the Locked clockClasses, then it is necessary
+    # to ignore the timeTraceable property and define the lock state based only on the
+    # configured clockClasses.
+    if (ptp4l_clock_class_locked == constants.CLOCK_CLASS_LOCKED_LIST
+            and result[constants.TIME_TRACEABLE] != constants.TIME_IS_TRACEABLE1
             and result[constants.TIME_TRACEABLE].lower != constants.TIME_IS_TRACEABLE2):
         sync_state = constants.FREERUN_PHC_STATE
-    if (result[constants.GM_CLOCK_CLASS] not in
-            [constants.CLOCK_CLASS_VALUE6]):
+    if (result[constants.GM_CLOCK_CLASS] not in ptp4l_clock_class_locked):
         sync_state = constants.FREERUN_PHC_STATE
     return sync_state
 

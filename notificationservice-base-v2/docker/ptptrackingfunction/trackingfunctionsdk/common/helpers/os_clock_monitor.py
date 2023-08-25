@@ -19,6 +19,8 @@ from trackingfunctionsdk.model.dto.osclockstate import OsClockState
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
 
+PLUGIN_STATUS_QUERY_EXEC = '/usr/sbin/pmc'
+
 
 class OsClockMonitor:
 
@@ -33,6 +35,16 @@ class OsClockMonitor:
         self.config = None
         self.phc2sys_ha_enabled = False
         self.phc2sys_com_socket = None
+
+        self.phc2sys_tolerance_low = constants.PHC2SYS_TOLERANCE_LOW
+        self.phc2sys_tolerance_high = constants.PHC2SYS_TOLERANCE_HIGH
+        self.phc2sys_tolerance_threshold = constants.PHC2SYS_TOLERANCE_THRESHOLD
+        try:
+            self.phc2sys_tolerance_threshold = int(os.environ.get('PHC2SYS_TOLERANCE_THRESHOLD',
+                                                                  self.phc2sys_tolerance_threshold))
+        except:
+            LOG.error('Unable to convert PHC2SYS_TOLERANCE_THRESHOLD to integer,'
+                    ' using the default.')
 
         self.set_phc2sys_instance()
 
@@ -52,6 +64,7 @@ class OsClockMonitor:
                 self.set_phc2sys_ha_interface_and_phc
             else:
                 self.get_os_clock_time_source()
+            self.set_utc_offset()
             self.get_os_clock_offset()
             self.set_os_clock_state()
 
@@ -111,10 +124,53 @@ class OsClockMonitor:
 
         LOG.debug("Phc2sys HA interface: %s ptp_device: %s" % (self.phc_interface, self.ptp_device))
 
+    def set_utc_offset(self, pidfile_path="/var/run/"):
+        # Check command line options for offset
+        utc_offset = self._get_phc2sys_command_line_option(pidfile_path, '-O')
+
+        # If not, check config file for uds_address and domainNumber
+        # If uds_address, get utc_offset from TIME_PROPERTIES_DATA_SET using the phc2sys config
+        if not utc_offset:
+            utc_offset = constants.UTC_OFFSET
+            utc_offset_valid = False
+
+            if self.config.has_section('global') \
+                and 'domainNumber' in self.config['global'].keys() \
+                and 'uds_address' in self.config['global'].keys():
+                #
+                # sudo /usr/sbin/pmc -u -b 0 'GET TIME_PROPERTIES_DATA_SET'
+                #
+                data = subprocess.check_output(
+                    [PLUGIN_STATUS_QUERY_EXEC, '-f', self.phc2sys_config, '-u', '-b', '0',
+                    'GET TIME_PROPERTIES_DATA_SET']).decode()
+
+                for line in data.split('\n'):
+                    if 'currentUtcOffset ' in line:
+                        utc_offset = line.split()[1]
+                    if 'currentUtcOffsetValid ' in line:
+                        utc_offset_valid = bool(int(line.split()[1]))
+
+                if not utc_offset_valid:
+                    utc_offset = constants.UTC_OFFSET
+                    LOG.warning('currentUtcOffsetValid is %s, using the default currentUtcOffset %s'
+                            % (utc_offset_valid, utc_offset))
+
+        utc_offset_nanoseconds = abs(int(utc_offset)) * 1000000000
+        self.phc2sys_tolerance_low = utc_offset_nanoseconds - self.phc2sys_tolerance_threshold
+        self.phc2sys_tolerance_high = utc_offset_nanoseconds + self.phc2sys_tolerance_threshold
+        LOG.debug('utc_offset_nanoseconds is %s, phc2sys_tolerance_threshold is %s'
+                  % (utc_offset_nanoseconds, self.phc2sys_tolerance_threshold))
+        LOG.info('phc2sys_tolerance_low is %s, phc2sys_tolerance_high is %s'
+                 % (self.phc2sys_tolerance_low, self.phc2sys_tolerance_high))
+
     def get_os_clock_time_source(self, pidfile_path="/var/run/"):
         """Determine which PHC is disciplining the OS clock"""
         self.phc_interface = None
-        self.phc_interface = self._check_command_line_interface(pidfile_path)
+        self.phc_interface = self._get_phc2sys_command_line_option(pidfile_path, '-s')
+        if self.phc_interface == constants.CLOCK_REALTIME:
+            LOG.info("PHC2SYS is using CLOCK_REALTIME, OS Clock is not being "
+                     "disciplined by a PHC")
+            self.phc_interface = None
         if self.phc_interface is None:
             self.phc_interface = self._check_config_file_interface()
         if self.phc_interface is None:
@@ -123,30 +179,30 @@ class OsClockMonitor:
         else:
             self.ptp_device = self._get_interface_phc_device()
 
-    def _check_command_line_interface(self, pidfile_path):
+    def _get_phc2sys_command_line_option(self, pidfile_path, flag):
         pidfile = pidfile_path + "phc2sys-" + self.phc2sys_instance + ".pid"
-        with open(pidfile, 'r') as f:
-            pid = f.readline().strip()
-        # Get command line params
-        cmdline_file = "/host/proc/" + pid + "/cmdline"
-        with open(cmdline_file, 'r') as f:
-            cmdline_args = f.readline().strip()
-        cmdline_args = cmdline_args.split("\x00")
-
-        # The interface will be at the index after "-s"
         try:
-            interface_index = cmdline_args.index('-s')
-        except ValueError as ex:
-            LOG.error("No interface found in cmdline args. %s" % ex)
+            with open(pidfile, 'r') as f:
+                pid = f.readline().strip()
+            # Get command line params
+            cmdline_file = "/host/proc/" + pid + "/cmdline"
+            with open(cmdline_file, 'r') as f:
+                cmdline_args = f.readline().strip()
+            cmdline_args = cmdline_args.split("\x00")
+        except OSError as ex:
+            LOG.warning("Cannot open file. %s" % ex)
             return None
 
-        phc_interface = cmdline_args[interface_index + 1]
-        if phc_interface == constants.CLOCK_REALTIME:
-            LOG.info("PHC2SYS is using CLOCK_REALTIME, OS Clock is not being "
-                     "disciplined by a PHC")
+        # The option value will be at the index after the flag
+        try:
+            index = cmdline_args.index(flag)
+        except ValueError as ex:
+            LOG.debug("Flag not found in cmdline args. %s" % ex)
             return None
-        LOG.debug("PHC interface is %s" % phc_interface)
-        return phc_interface
+
+        value = cmdline_args[index + 1]
+        LOG.debug("%s value is %s" % (flag, value))
+        return value
 
     def _check_config_file_interface(self):
         with open(self.phc2sys_config, 'r') as f:
@@ -220,8 +276,8 @@ class OsClockMonitor:
 
     def set_os_clock_state(self):
         offset_int = int(self.offset)
-        if offset_int > constants.PHC2SYS_TOLERANCE_HIGH or \
-                offset_int < constants.PHC2SYS_TOLERANCE_LOW:
+        if offset_int > self.phc2sys_tolerance_high or \
+                offset_int < self.phc2sys_tolerance_low:
             LOG.warning("PHC2SYS offset is outside of tolerance, "
                         "handling state change.")
             self._state = OsClockState.Freerun
@@ -241,6 +297,7 @@ class OsClockMonitor:
             time_in_holdover = round(current_time - event_time)
         max_holdover_time = (holdover_time - freq * 2)
 
+        self.set_utc_offset()
         self.get_os_clock_offset()
         self.set_os_clock_state()
 

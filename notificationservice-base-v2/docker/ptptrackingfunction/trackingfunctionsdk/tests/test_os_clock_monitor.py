@@ -49,14 +49,14 @@ class OsClockMonitorTests(unittest.TestCase):
                                         "/ptpinstance/phc2sys-phc "
                                         "-inst1.conf\x00-w\x00-s\x00ens1f0\x00").return_value)
         mo.side_effect = handlers
-        self.assertEqual(self.clockmon._check_command_line_interface("/var/run/"), "ens1f0")
+        self.assertEqual(self.clockmon._get_phc2sys_command_line_option("/var/run/", "-s"), "ens1f0")
 
         # Failure path - no interface in command line params
         handlers = (mo.return_value,
                     mock_open(read_data="/usr/sbin/phc2sys\x00-f\x00/etc/ptpinstance/phc2sys-phc"
                                         "-inst1.conf\x00-w\x00").return_value)
         mo.side_effect = handlers
-        self.assertEqual(self.clockmon._check_command_line_interface("/var/run/"), None)
+        self.assertEqual(self.clockmon._get_phc2sys_command_line_option("/var/run/", "-s"), None)
 
     @mock.patch('trackingfunctionsdk.common.helpers.os_clock_monitor.glob',
                 side_effect=[['/hostsys/class/net/ens1f0/device/ptp/ptp0'],
