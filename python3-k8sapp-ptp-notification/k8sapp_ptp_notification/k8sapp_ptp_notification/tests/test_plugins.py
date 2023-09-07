@@ -6,7 +6,6 @@
 
 from sysinv.common import constants
 from sysinv.tests.db import base as dbbase
-from sysinv.tests.helm.test_helm import HelmOperatorTestSuiteMixin
 
 
 class K8SAppPTPNotificationAppMixin(object):
@@ -25,7 +24,6 @@ class K8SAppPTPNotificationAppMixin(object):
 class K8sAppPTPNotificationControllerTestCase(K8SAppPTPNotificationAppMixin,
                                       dbbase.BaseIPv6Mixin,
                                       dbbase.BaseCephStorageBackendMixin,
-                                      HelmOperatorTestSuiteMixin,
                                       dbbase.ControllerHostTestCase):
     pass
 
@@ -37,6 +35,5 @@ class K8sAppPTPNotificationControllerTestCase(K8SAppPTPNotificationAppMixin,
 # - ptp-notification app
 class K8SAppPTPNotificationAIOTestCase(K8SAppPTPNotificationAppMixin,
                                dbbase.BaseCephStorageBackendMixin,
-                               HelmOperatorTestSuiteMixin,
                                dbbase.AIOSimplexHostTestCase):
     pass
