@@ -84,13 +84,12 @@ def check_results(result, total_ptp_keywords, port_count):
     elif result[constants.GRANDMASTER_IDENTITY] == result[constants.CLOCK_IDENTITY]:
         local_gm = True
         LOG.debug("Local node is a GM")
-    for port in range(1, port_count + 1):
-        if result[constants.PORT.format(port)].lower() == constants.SLAVE_MODE:
-            break
-        elif local_gm and result[constants.PORT.format(port)].lower() == constants.MASTER_MODE:
-            break
-    else:
-        sync_state = constants.FREERUN_PHC_STATE
+    if not local_gm:
+        for port in range(1, port_count + 1):
+            if result[constants.PORT.format(port)].lower() == constants.SLAVE_MODE:
+                break
+        else:
+            sync_state = constants.FREERUN_PHC_STATE
 
     # We can only expect timeTraceable=1 to be set when the clockClass list is the default.
     # If the user has elected to override the Locked clockClasses, then it is necessary
