@@ -70,7 +70,7 @@ ptptracking:
   imagePullSecrets: default-registry-key
   ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
   ptp4lServiceName: ptp4l-legacy
-  ptp4lClockClassLockedList: "6,7"
+  ptp4lClockClassLockedList: "6,7,135"
   phc2sysServiceName: phc2sys-legacy
   phc2sysComSocket: False
   logging_level: INFO
@@ -88,7 +88,7 @@ ptptrackingv2:
   imagePullSecrets: default-registry-key
   ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
   ptp4lServiceName: True
-  ptp4lClockClassLockedList: "6,7"
+  ptp4lClockClassLockedList: "6,7,135"
   phc2sysServiceName: True
   phc2sysToleranceThreshold: 1000
   ts2phcServiceName: True
