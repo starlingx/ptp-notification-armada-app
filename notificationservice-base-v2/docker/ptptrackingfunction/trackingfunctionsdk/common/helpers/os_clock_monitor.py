@@ -88,7 +88,7 @@ class OsClockMonitor:
                 client_socket.connect(unix_socket)
                 client_socket.send(query.encode())
                 response = client_socket.recv(1024)
-                response = response.decode()
+                response = response.decode().strip()
                 if response == "None":
                     response = None
                 return response
@@ -104,11 +104,11 @@ class OsClockMonitor:
                 if hasattr(client_socket, 'close'):
                     client_socket.close()
         else:
-            LOG.warning("No socket path supplied for instance %s" % self.instance_name)
+            LOG.warning("No socket path supplied for instance %s" % self.phc2sys_instance)
             return None
 
     def set_phc2sys_ha_interface_and_phc(self):
-        update_phc_interface = self.query_phc2sys_socket('clock source', self.phc2sys_com_socket)
+        update_phc_interface = self.query_phc2sys_socket('valid sources', self.phc2sys_com_socket)
         if update_phc_interface is None:
             LOG.info("No PHC device found for HA phc2sys, status is FREERUN.")
             self._state = OsClockState.Freerun
@@ -127,6 +127,8 @@ class OsClockMonitor:
     def set_utc_offset(self, pidfile_path="/var/run/"):
         # Check command line options for offset
         utc_offset = self._get_phc2sys_command_line_option(pidfile_path, '-O')
+        domain_number = None
+        uds_addr = None
 
         # If not, check config file for uds_address and domainNumber
         # If uds_address, get utc_offset from TIME_PROPERTIES_DATA_SET using the phc2sys config
@@ -134,15 +136,26 @@ class OsClockMonitor:
             utc_offset = constants.UTC_OFFSET
             utc_offset_valid = False
 
+            if self.config.has_section(self.phc_interface) \
+                and 'ha_domainNumber' in self.config[self.phc_interface].keys():
+                domain_number = self.config[self.phc_interface].get('ha_domainNumber')
+                LOG.debug("set_utc_offset: ha_domainNumber is %s" % domain_number)
+
             if self.config.has_section('global') \
-                and 'domainNumber' in self.config['global'].keys() \
                 and 'uds_address' in self.config['global'].keys():
+                uds_addr = self.config['global']['uds_address']
+                LOG.debug("set_utc_offset: uds_addr is %s" % uds_addr)
+
+                if domain_number is None:
+                    domain_number = self.config['global'].get('domainNumber', '0')
+                    LOG.debug("set_utc_offset: domainNumber is %s" % domain_number)
+
                 #
                 # sudo /usr/sbin/pmc -u -b 0 'GET TIME_PROPERTIES_DATA_SET'
                 #
                 data = subprocess.check_output(
-                    [PLUGIN_STATUS_QUERY_EXEC, '-f', self.phc2sys_config, '-u', '-b', '0',
-                    'GET TIME_PROPERTIES_DATA_SET']).decode()
+                    [PLUGIN_STATUS_QUERY_EXEC, '-f', self.phc2sys_config, '-u', '-b', '0', '-d',
+                     domain_number, 'GET TIME_PROPERTIES_DATA_SET']).decode()
 
                 for line in data.split('\n'):
                     if 'currentUtcOffset ' in line:

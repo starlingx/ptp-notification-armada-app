@@ -21,9 +21,12 @@ import subprocess
 import datetime
 import logging
 from trackingfunctionsdk.common.helpers import constants
+from trackingfunctionsdk.common.helpers import log_helper
 
 
 LOG = logging.getLogger(__name__)
+log_helper.config_logger(LOG)
+
 
 
 # dictionary includes PMC commands used and keywords of intrest
@@ -83,18 +86,20 @@ def check_critical_resources():
         # User enabled phc2sys HA source clock validation
         phc2sys_source_clock = check_phc2sys_ha_source()
         if phc2sys_source_clock is None:
-            phc2sys = False
-            LOG.warning("No Phc2sys HA source clock found")
+            # Log that phc2sys has no sources, but allow state checking to proceed
+            LOG.info("HA phc2sys has no valid sources to select")
+        else:
+            LOG.info("HA phc2sys has valid sources: %s" % phc2sys_source_clock)
     return pmc, ptp4l, phc2sys, ptp4lconf
 
 def check_phc2sys_ha_source():
-    query = 'clock source'
+    query = 'valid sources'
     try:
         client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         client_socket.connect(phc2sys_com_socket)
         client_socket.send(query.encode())
         response = client_socket.recv(1024)
-        response = response.decode()
+        response = response.decode().strip()
         if response == "None":
             response = None
         return response
@@ -222,6 +227,8 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
         result, total_ptp_keywords, port_count = ptpsync()
         sync_state = check_results(result, total_ptp_keywords, port_count)
     else:
+        LOG.warning("Critical resources not available: pmc %s ptp4l %s phc2sys %s ptp4lconf %s" %
+                    (pmc, ptp4l, phc2sys, ptp4lconf))
         sync_state = constants.FREERUN_PHC_STATE
     # determine if transition into holdover mode (cannot be in holdover if system clock is not in sync)
     if sync_state == constants.FREERUN_PHC_STATE and phc2sys:
