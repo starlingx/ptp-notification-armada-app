@@ -20,6 +20,10 @@ spec:
     metadata:
       labels:
         app: rabbitmq
+        app.starlingx.io/component: {{ ternary "application" "platform" .Values.labels.isApplication}}
+      annotations: {
+        configchecksum: {{ toYaml .Values.labels | sha256sum | trunc 63 }}
+      }
     spec:
       imagePullSecrets:
       - name: {{ .Values.registration.imagePullSecrets }}
