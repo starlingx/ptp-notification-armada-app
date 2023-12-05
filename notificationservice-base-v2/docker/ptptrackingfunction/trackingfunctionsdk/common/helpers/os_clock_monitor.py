@@ -35,6 +35,7 @@ class OsClockMonitor:
         self.config = None
         self.phc2sys_ha_enabled = False
         self.phc2sys_com_socket = None
+        self.valid_phc_interfaces = None
 
         self.phc2sys_tolerance_low = constants.PHC2SYS_TOLERANCE_LOW
         self.phc2sys_tolerance_high = constants.PHC2SYS_TOLERANCE_HIGH
@@ -44,7 +45,7 @@ class OsClockMonitor:
                                                                   self.phc2sys_tolerance_threshold))
         except:
             LOG.error('Unable to convert PHC2SYS_TOLERANCE_THRESHOLD to integer,'
-                    ' using the default.')
+                      ' using the default.')
 
         self.set_phc2sys_instance()
 
@@ -58,7 +59,8 @@ class OsClockMonitor:
             elif 'ha_enabled' in self.config['global'].keys() \
                     and self.config['global']['ha_enabled'] == '1':
                 self.phc2sys_ha_enabled = True
-                self.phc2sys_com_socket = self.config['global'].get('ha_phc2sys_com_socket', None)
+                self.phc2sys_com_socket = self.config['global'].get(
+                    'ha_phc2sys_com_socket', None)
 
             if self.phc2sys_ha_enabled is True:
                 self.set_phc2sys_ha_interface_and_phc
@@ -84,7 +86,8 @@ class OsClockMonitor:
     def query_phc2sys_socket(self, query, unix_socket=None):
         if unix_socket:
             try:
-                client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                client_socket = socket.socket(
+                    socket.AF_UNIX, socket.SOCK_STREAM)
                 client_socket.connect(unix_socket)
                 client_socket.send(query.encode())
                 response = client_socket.recv(1024)
@@ -104,25 +107,30 @@ class OsClockMonitor:
                 if hasattr(client_socket, 'close'):
                     client_socket.close()
         else:
-            LOG.warning("No socket path supplied for instance %s" % self.phc2sys_instance)
+            LOG.warning("No socket path supplied for instance %s" %
+                        self.phc2sys_instance)
             return None
 
     def set_phc2sys_ha_interface_and_phc(self):
-        update_phc_interface = self.query_phc2sys_socket('valid sources', self.phc2sys_com_socket)
-        if update_phc_interface is None:
-            LOG.info("No PHC device found for HA phc2sys, status is FREERUN.")
+        self.valid_phc_interfaces = self.query_phc2sys_socket(
+            'valid sources', self.phc2sys_com_socket)
+        selected_phc_interface = self.query_phc2sys_socket(
+            'clock source', self.phc2sys_com_socket)
+        if str(self.valid_phc_interfaces) == 'None':
+            LOG.info("No valid PHC device found for HA phc2sys selection.")
             self._state = OsClockState.Freerun
-            self.phc_interface = update_phc_interface
+            self.phc_interface = selected_phc_interface
             self.ptp_device = None
-        elif update_phc_interface != self.phc_interface:
-            LOG.info("Phc2sys source interface changed from %s to %s" 
-                     % (self.phc_interface, update_phc_interface))
-            self.phc_interface = update_phc_interface
+        elif selected_phc_interface != self.phc_interface:
+            LOG.info("Phc2sys source interface changed from %s to %s"
+                     % (self.phc_interface, self.valid_phc_interfaces))
+            self.phc_interface = selected_phc_interface
 
         if self.phc_interface is not None:
             self.ptp_device = self._get_interface_phc_device()
 
-        LOG.debug("Phc2sys HA interface: %s ptp_device: %s" % (self.phc_interface, self.ptp_device))
+        LOG.debug("Phc2sys HA interface: %s ptp_device: %s" %
+                  (self.phc_interface, self.ptp_device))
 
     def set_utc_offset(self, pidfile_path="/var/run/"):
         # Check command line options for offset
@@ -137,18 +145,22 @@ class OsClockMonitor:
             utc_offset_valid = False
 
             if self.config.has_section(self.phc_interface) \
-                and 'ha_domainNumber' in self.config[self.phc_interface].keys():
-                domain_number = self.config[self.phc_interface].get('ha_domainNumber')
-                LOG.debug("set_utc_offset: ha_domainNumber is %s" % domain_number)
+                    and 'ha_domainNumber' in self.config[self.phc_interface].keys():
+                domain_number = self.config[self.phc_interface].get(
+                    'ha_domainNumber')
+                LOG.debug("set_utc_offset: ha_domainNumber is %s" %
+                          domain_number)
 
             if self.config.has_section('global') \
-                and 'uds_address' in self.config['global'].keys():
+                    and 'uds_address' in self.config['global'].keys():
                 uds_addr = self.config['global']['uds_address']
                 LOG.debug("set_utc_offset: uds_addr is %s" % uds_addr)
 
                 if domain_number is None:
-                    domain_number = self.config['global'].get('domainNumber', '0')
-                    LOG.debug("set_utc_offset: domainNumber is %s" % domain_number)
+                    domain_number = self.config['global'].get(
+                        'domainNumber', '0')
+                    LOG.debug("set_utc_offset: domainNumber is %s" %
+                              domain_number)
 
                 #
                 # sudo /usr/sbin/pmc -u -b 0 'GET TIME_PROPERTIES_DATA_SET'
@@ -166,11 +178,13 @@ class OsClockMonitor:
                 if not utc_offset_valid:
                     utc_offset = constants.UTC_OFFSET
                     LOG.warning('currentUtcOffsetValid is %s, using the default currentUtcOffset %s'
-                            % (utc_offset_valid, utc_offset))
+                                % (utc_offset_valid, utc_offset))
 
         utc_offset_nanoseconds = abs(int(utc_offset)) * 1000000000
-        self.phc2sys_tolerance_low = utc_offset_nanoseconds - self.phc2sys_tolerance_threshold
-        self.phc2sys_tolerance_high = utc_offset_nanoseconds + self.phc2sys_tolerance_threshold
+        self.phc2sys_tolerance_low = utc_offset_nanoseconds - \
+            self.phc2sys_tolerance_threshold
+        self.phc2sys_tolerance_high = utc_offset_nanoseconds + \
+            self.phc2sys_tolerance_threshold
         LOG.debug('utc_offset_nanoseconds is %s, phc2sys_tolerance_threshold is %s'
                   % (utc_offset_nanoseconds, self.phc2sys_tolerance_threshold))
         LOG.info('phc2sys_tolerance_low is %s, phc2sys_tolerance_high is %s'
@@ -179,7 +193,8 @@ class OsClockMonitor:
     def get_os_clock_time_source(self, pidfile_path="/var/run/"):
         """Determine which PHC is disciplining the OS clock"""
         self.phc_interface = None
-        self.phc_interface = self._get_phc2sys_command_line_option(pidfile_path, '-s')
+        self.phc_interface = self._get_phc2sys_command_line_option(
+            pidfile_path, '-s')
         if self.phc_interface == constants.CLOCK_REALTIME:
             LOG.info("PHC2SYS is using CLOCK_REALTIME, OS Clock is not being "
                      "disciplined by a PHC")
@@ -187,7 +202,7 @@ class OsClockMonitor:
         if self.phc_interface is None:
             self.phc_interface = self._check_config_file_interface()
         if self.phc_interface is None:
-            LOG.info("No PHC device found for phc2sys, status is FREERUN.")
+            LOG.info("No PHC device found for phc2sys")
             self._state = OsClockState.Freerun
         else:
             self.ptp_device = self._get_interface_phc_device()
@@ -239,7 +254,7 @@ class OsClockMonitor:
             # Try the 0th interface instead, required for some NIC types
             phc_interface_base = self.phc_interface[:-1] + "0"
             LOG.info("No ptp device found at %s trying %s instead"
-                      % (pattern, phc_interface_base))
+                     % (pattern, phc_interface_base))
             pattern = "/hostsys/class/net/" + phc_interface_base + \
                       "/device/ptp/*"
             ptp_device = glob(pattern)
@@ -270,7 +285,7 @@ class OsClockMonitor:
             ptp_device_path = "/dev/" + self.ptp_device
             offset = subprocess.check_output(
                 [constants.PHC_CTL_PATH, ptp_device_path, 'cmp']
-                ).decode().split()[-1]
+            ).decode().split()[-1]
             offset = offset.strip("-ns")
             LOG.debug("PHC offset is %s" % offset)
             self.offset = offset
@@ -291,13 +306,17 @@ class OsClockMonitor:
         offset_int = int(self.offset)
         if offset_int > self.phc2sys_tolerance_high or \
                 offset_int < self.phc2sys_tolerance_low:
-            LOG.warning("PHC2SYS offset is outside of tolerance, "
-                        "handling state change.")
+            LOG.warning("PHC2SYS offset is outside of tolerance")
             self._state = OsClockState.Freerun
         else:
-            LOG.info("PHC2SYS offset is within tolerance, "
-                     "OS clock state is LOCKED")
+            LOG.info("PHC2SYS offset is within tolerance")
             self._state = OsClockState.Locked
+
+        # Perform an extra check for HA Phc2sys to ensure we have a source interface
+        if self.phc2sys_ha_enabled:
+            if str(self.valid_phc_interfaces) == 'None':
+                LOG.warning("No valid PHC device selected for HA phc2sys")
+                self._state = OsClockState.Freerun
 
     def get_os_clock_state(self):
         return self._state

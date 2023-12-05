@@ -89,7 +89,7 @@ def check_critical_resources():
             # Log that phc2sys has no sources, but allow state checking to proceed
             LOG.info("HA phc2sys has no valid sources to select")
         else:
-            LOG.info("HA phc2sys has valid sources: %s" % phc2sys_source_clock)
+            LOG.debug("HA phc2sys has valid sources: %s" % phc2sys_source_clock)
     return pmc, ptp4l, phc2sys, ptp4lconf
 
 def check_phc2sys_ha_source():
@@ -100,7 +100,7 @@ def check_phc2sys_ha_source():
         client_socket.send(query.encode())
         response = client_socket.recv(1024)
         response = response.decode().strip()
-        if response == "None":
+        if str(response) == "None":
             response = None
         return response
     except ConnectionRefusedError as err:
