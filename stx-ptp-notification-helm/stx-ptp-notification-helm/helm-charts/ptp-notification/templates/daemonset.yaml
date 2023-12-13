@@ -24,6 +24,10 @@ spec:
       labels:
         app: {{ include "notification.name" . }}
         release: {{ .Release.Name }}
+        app.starlingx.io/component: {{ ternary "application" "platform" .Values.labels.isApplication}}
+      annotations: {
+        configchecksum: {{ toYaml .Values.labels | sha256sum | trunc 63 }}
+      }
     spec:
       imagePullSecrets:
       - name: {{ .Values.ptptracking.imagePullSecrets}}

@@ -19,6 +19,9 @@ fullnameOverride: ""
 global:
   namespace: notification
 
+labels:
+  isApplication: false
+
 registration:
   imagePullSecrets: default-registry-key
   image:
