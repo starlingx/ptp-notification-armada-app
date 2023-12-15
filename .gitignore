@@ -1,3 +1,4 @@
 .tox
 api-ref/build
 doc/build
+venv/

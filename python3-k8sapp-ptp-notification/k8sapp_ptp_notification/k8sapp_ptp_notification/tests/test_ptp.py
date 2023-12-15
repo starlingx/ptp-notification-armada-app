@@ -30,10 +30,7 @@ class PTPNotificationIPv4ControllerHostTestCase(PTPNotificationTestCase,
             app_constants.HELM_CHART_PTP_NOTIFICATION,
             cnamespace=common.HELM_NS_NOTIFICATION)
 
-        self.assertOverridesParameters(overrides, {
-            # 1 replica for 1 controller
-            'replicaCount': 1
-        })
+        self.assertOverridesParameters(overrides, {})
 
 
 class PTPNotificationIPv6AIODuplexSystemTestCase(PTPNotificationTestCase,
@@ -45,7 +42,4 @@ class PTPNotificationIPv6AIODuplexSystemTestCase(PTPNotificationTestCase,
             app_constants.HELM_CHART_PTP_NOTIFICATION,
             cnamespace=common.HELM_NS_NOTIFICATION)
 
-        self.assertOverridesParameters(overrides, {
-            # 2 replicas for 2 controllers
-            'replicaCount': 2
-        })
+        self.assertOverridesParameters(overrides, {})

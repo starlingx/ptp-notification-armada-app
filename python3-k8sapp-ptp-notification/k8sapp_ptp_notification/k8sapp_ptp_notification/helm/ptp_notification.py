@@ -7,7 +7,6 @@
 from k8sapp_ptp_notification.common import constants as app_constants
 
 from sysinv.common import constants
-from sysinv.common import exception
 
 from sysinv.helm import base
 from sysinv.helm import common
@@ -29,4 +28,3 @@ class PTPNotificationHelm(base.BaseHelm):
 
     def get_namespaces(self):
         return self.SUPPORTED_NAMESPACES
-
