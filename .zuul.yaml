@@ -104,8 +104,6 @@
       - starlingx/update
       - starlingx/utilities
       - starlingx/root
-    files:
-      - python3-k8sapp-ptp-notification/*
     vars:
       tox_envlist: metadata
       tox_extra_args: -c python3-k8sapp-ptp-notification/k8sapp_ptp_notification/tox.ini
