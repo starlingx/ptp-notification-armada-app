@@ -3,9 +3,8 @@ Section: libs
 Priority: optional
 Maintainer: StarlingX Developers <starlingx-discuss@lists.starlingx.io>
 Build-Depends: debhelper-compat (= 13),
- chartmuseum,
  helm,
- procps,
+ ptp-notification-helm,
  python3-k8sapp-ptp-notification,
  python3-k8sapp-ptp-notification-wheels,
  build-info

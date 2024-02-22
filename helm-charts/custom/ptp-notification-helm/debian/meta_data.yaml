@@ -1,0 +1,10 @@
+---
+debname: ptp-notification-helm
+debver: 2.0-0
+src_path: ptp-notification-helm
+revision:
+  dist: $STX_DIST
+  stx_patch: 44
+  GITREVCOUNT:
+    SRC_DIR: ${MY_REPO}/stx/ptp-notification-armada-app/helm-charts/custom/ptp-notification-helm/ptp-notification-helm/ptp-notification
+    BASE_SRCREV: 4a001833e66fa73475f2d268970a56022d3dca96

@@ -1,6 +1,6 @@
 ---
 debname: stx-ptp-notification-helm
-debver: 1.0-1
+debver: 1.0-2
 src_path: stx-ptp-notification-helm
 revision:
   dist: $STX_DIST

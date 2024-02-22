@@ -1,2 +1,3 @@
+helm-charts/custom/ptp-notification-helm
 python3-k8sapp-ptp-notification
 stx-ptp-notification-helm

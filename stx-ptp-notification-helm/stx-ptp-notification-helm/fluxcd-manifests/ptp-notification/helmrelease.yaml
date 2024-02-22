@@ -14,7 +14,7 @@ spec:
   chart:
     spec:
       chart: ptp-notification
-      version: 2.0.0
+      version: REPLACE_HELM_CHART_VERSION
       sourceRef:
         kind: HelmRepository
         name: stx-platform
