@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -65,7 +65,7 @@ location:
   log_level: INFO
   image:
     repository: starlingx/locationservice-base
-    tag: stx.8.0-v2.0.0
+    tag: stx.9.0-v2.2.0
     pullPolicy: IfNotPresent
 
 ptptracking:
@@ -79,7 +79,7 @@ ptptracking:
   logging_level: INFO
   image:
     repository: starlingx/notificationservice-base
-    tag: stx.9.0-v2.1.3
+    tag: stx.9.0-v2.2.0
     pullPolicy: IfNotPresent
   device:
     simulated: false
@@ -98,7 +98,7 @@ ptptrackingv2:
   log_level: INFO
   image:
     repository: starlingx/notificationservice-base-v2
-    tag: stx.9.0-v2.1.3
+    tag: stx.9.0-v2.2.0
     pullPolicy: IfNotPresent
   control_timeout: 2
   device:
