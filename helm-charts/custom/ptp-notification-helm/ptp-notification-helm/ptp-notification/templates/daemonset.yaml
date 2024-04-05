@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -88,10 +88,27 @@ spec:
             value: "{{ .Values.notification.endpoint.pass }}"
           - name: NOTIFICATIONSERVICE_PORT
             value: "{{ .Values.notification.endpoint.port }}"
+          - name: LOCATION_SERVICE_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: LOCATION_SERVICE_PORT
+            value: "{{ .Values.location.endpoint.port }}"
           - name: LOGGING_LEVEL
             value: "{{ .Values.location.log_level }}"
-
-        command: ["/bin/bash", "/mnt/locationservice_start.sh"]
+        command: ["python3", "/opt/locationservice/locationservice_start.py"]
+{{- if .Values.location.endpoint.liveness }}
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: {{ .Values.location.endpoint.port }}
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 3
+          successThreshold: 1
+          timeoutSeconds: 3
+{{ end }}
         volumeMounts:
           - name: scripts
             mountPath: /mnt
@@ -136,6 +153,12 @@ spec:
             value: "5672"
           - name: REGISTRATION_HOST
             value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
+          - name: HEALTH_API_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: HEALTH_API_PORT
+            value: "{{ .Values.ptptrackingv2.endpoint.port }}"
           - name: PTP4L_SERVICE_NAME
             value: "{{ .Values.ptptrackingv2.ptp4lServiceName }}"
           - name: PTP4L_CLOCK_CLASS_LOCKED_LIST
@@ -153,6 +176,18 @@ spec:
           - name: CONTROL_TIMEOUT
             value: "{{ .Values.ptptrackingv2.control_timeout }}"
         command: ["python3", "/mnt/ptptracking_start_v2.py"]
+{{- if .Values.ptptrackingv2.endpoint.liveness }}
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: {{ .Values.ptptrackingv2.endpoint.port }}
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 3
+          successThreshold: 1
+          timeoutSeconds: 3
+{{ end }}
         securityContext:
           privileged: true
           capabilities:
@@ -225,6 +260,12 @@ spec:
             value: "5672"
           - name: REGISTRATION_HOST
             value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
+          - name: HEALTH_API_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: HEALTH_API_PORT
+            value: "{{ .Values.ptptracking.endpoint.port }}"
           - name: PTP4L_SERVICE_NAME
             value: "{{ .Values.ptptracking.ptp4lServiceName }}"
           - name: PTP4L_CLOCK_CLASS_LOCKED_LIST
@@ -238,6 +279,18 @@ spec:
           - name: LOGGING_LEVEL
             value: "{{ .Values.ptptracking.logging_level }}"
         command: ["python3", "/mnt/ptptracking_start.py"]
+{{- if .Values.ptptracking.endpoint.liveness }}
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: {{ .Values.ptptracking.endpoint.port }}
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 3
+          successThreshold: 1
+          timeoutSeconds: 3
+{{ end }}
         securityContext:
           privileged: true
           capabilities:

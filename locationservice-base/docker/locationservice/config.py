@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -11,12 +11,13 @@ server = {
 }
 
 # Pecan Application Configurations
+# Ensure debug = False as per Pecan documentation
 app = {
     'root': 'apiserver.controllers.root.RootController',
     'modules': ['apiserver'],
     'static_root': '%(confdir)s/public',
     'template_path': '%(confdir)s/apiserver/templates',
-    'debug': True,
+    'debug': False,
     'errors': {
         404: '/error/404',
         '__force_dict__': True

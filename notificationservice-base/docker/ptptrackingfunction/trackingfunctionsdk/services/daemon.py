@@ -1,31 +1,29 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
-import os
 import json
+import logging
+import multiprocessing as mp
+import os
+import threading
 import time
+
 import oslo_messaging
 from oslo_config import cfg
-import logging
-
-import multiprocessing as mp
-import threading
-
-from trackingfunctionsdk.common.helpers import rpc_helper
-from trackingfunctionsdk.model.dto.rpc_endpoint import RpcEndpointInfo
-from trackingfunctionsdk.model.dto.resourcetype import ResourceType
-from trackingfunctionsdk.model.dto.ptpstate import PtpState
-
 from trackingfunctionsdk.client.ptpeventproducer import PtpEventProducer
-
 from trackingfunctionsdk.common.helpers import ptpsync as ptpsync
+from trackingfunctionsdk.model.dto.ptpstate import PtpState
+from trackingfunctionsdk.model.dto.resourcetype import ResourceType
+from trackingfunctionsdk.model.dto.rpc_endpoint import RpcEndpointInfo
+from trackingfunctionsdk.services.health import HealthServer
 
 LOG = logging.getLogger(__name__)
 
 from trackingfunctionsdk.common.helpers import log_helper
+
 log_helper.config_logger(LOG)
 
 THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME",'controller-0')
@@ -115,6 +113,11 @@ class PtpWatcherDefault:
     def run(self):
         # start location listener
         self.__start_listener()
+
+        # Start the server for k8s httpGet health checks
+        notificationservice_health = HealthServer()
+        notificationservice_health.run()
+
         while True:
             # annouce the location
             forced = self.forced_publishing

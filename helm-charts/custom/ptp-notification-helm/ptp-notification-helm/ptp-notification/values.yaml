@@ -63,6 +63,9 @@ notification:
 
 location:
   log_level: INFO
+  endpoint:
+    port: 8080
+    liveness: False
   image:
     repository: starlingx/locationservice-base
     tag: stx.9.0-v2.2.0
@@ -77,6 +80,9 @@ ptptracking:
   phc2sysServiceName: phc2sys-legacy
   phc2sysComSocket: False
   logging_level: INFO
+  endpoint:
+    port: 8081
+    liveness: False
   image:
     repository: starlingx/notificationservice-base
     tag: stx.9.0-v2.2.0
@@ -96,6 +102,9 @@ ptptrackingv2:
   phc2sysToleranceThreshold: 1000
   ts2phcServiceName: True
   log_level: INFO
+  endpoint:
+    port: 8082
+    liveness: False
   image:
     repository: starlingx/notificationservice-base-v2
     tag: stx.9.0-v2.2.0

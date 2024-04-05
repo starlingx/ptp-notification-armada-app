@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,21 +10,21 @@ import multiprocessing as mp
 import os
 import threading
 import time
-from oslo_utils import uuidutils
 
+from oslo_utils import uuidutils
 from trackingfunctionsdk.client.ptpeventproducer import PtpEventProducer
-from trackingfunctionsdk.common.helpers import constants
+from trackingfunctionsdk.common.helpers import constants, log_helper
 from trackingfunctionsdk.common.helpers import ptpsync as utils
-from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers.gnss_monitor import GnssMonitor
 from trackingfunctionsdk.common.helpers.os_clock_monitor import OsClockMonitor
 from trackingfunctionsdk.common.helpers.ptp_monitor import PtpMonitor
-from trackingfunctionsdk.model.dto.ptpstate import PtpState
 from trackingfunctionsdk.model.dto.gnssstate import GnssState
 from trackingfunctionsdk.model.dto.osclockstate import OsClockState
 from trackingfunctionsdk.model.dto.overallclockstate import OverallClockState
+from trackingfunctionsdk.model.dto.ptpstate import PtpState
 from trackingfunctionsdk.model.dto.resourcetype import ResourceType
 from trackingfunctionsdk.model.dto.rpc_endpoint import RpcEndpointInfo
+from trackingfunctionsdk.services.health import HealthServer
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
@@ -378,6 +378,10 @@ class PtpWatcherDefault:
     def run(self):
         # start location listener
         self.__start_listener()
+
+        # Start the server for k8s httpGet health checks
+        notificationservice_health = HealthServer()
+        notificationservice_health.run()
 
         while True:
             # announce the location

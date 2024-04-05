@@ -1,27 +1,32 @@
+#
+# Copyright (c) 2024 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 
-import os
 import json
-import time
-import oslo_messaging
-from oslo_config import cfg
 import logging
-
 import multiprocessing as mp
+import os
+import time
 
-from locationservicesdk.common.helpers import rpc_helper
-from locationservicesdk.model.dto.rpc_endpoint import RpcEndpointInfo
-from locationservicesdk.model.dto.resourcetype import ResourceType
-
+import oslo_messaging
 from locationservicesdk.client.locationproducer import LocationProducer
+from locationservicesdk.common.helpers import log_helper, rpc_helper
+from locationservicesdk.model.dto.resourcetype import ResourceType
+from locationservicesdk.model.dto.rpc_endpoint import RpcEndpointInfo
+from oslo_config import cfg
 
 LOG = logging.getLogger(__name__)
 
-from locationservicesdk.common.helpers import log_helper
 log_helper.config_logger(LOG)
 
 '''Entry point of Default Process Worker'''
+
+
 def ProcessWorkerDefault(event, sqlalchemy_conf_json, registration_endpoint, location_info_json):
-    worker = LocationWatcherDefault(event, sqlalchemy_conf_json, registration_endpoint, location_info_json)
+    worker = LocationWatcherDefault(
+        event, sqlalchemy_conf_json, registration_endpoint, location_info_json)
     worker.run()
     return
 
@@ -42,7 +47,8 @@ class LocationWatcherDefault:
         self.location_info = json.loads(location_info_json)
         this_node_name = self.location_info['NodeName']
 
-        self.registration_endpoint = RpcEndpointInfo(registration_transport_endpoint)
+        self.registration_endpoint = RpcEndpointInfo(
+            registration_transport_endpoint)
         self.LocationProducer = LocationProducer(
             this_node_name,
             self.registration_endpoint.TransportEndpoint)
@@ -67,18 +73,20 @@ class LocationWatcherDefault:
                 # max timeout: 1 hour
                 if self.event_timeout < float(3600):
                     self.event_timeout = self.event_timeout + self.event_timeout
-                LOG.debug("daemon control event is timeout")
+                LOG.debug("daemon control event is timeout: %s" %
+                          self.event_timeout)
             continue
         self.__stop_listener()
 
     '''Start listener to answer querying from clients'''
+
     def __start_listener(self):
         LOG.debug("start listener to answer location querying")
 
         self.LocationProducer.start_location_listener(
             self.location_info,
             LocationWatcherDefault.LocationRequestHandlerDefault(self)
-            )
+        )
         return
 
     def __stop_listener(self):
@@ -88,21 +96,25 @@ class LocationWatcherDefault:
         return
 
     '''announce location'''
+
     def __announce_location(self):
         LOG.debug("announce location info to clients")
         self.LocationProducer.announce_location(self.location_info)
         return
 
+
 class DaemonControl(object):
 
     def __init__(
-        self, sqlalchemy_conf_json, registration_transport_endpoint,
-        location_info, process_worker = None, daemon_mode=True):
+            self, sqlalchemy_conf_json, registration_transport_endpoint,
+            location_info, process_worker=None, daemon_mode=True):
 
         self.daemon_mode = daemon_mode
         self.event = mp.Event()
-        self.registration_endpoint = RpcEndpointInfo(registration_transport_endpoint)
-        self.registration_transport = rpc_helper.get_transport(self.registration_endpoint)
+        self.registration_endpoint = RpcEndpointInfo(
+            registration_transport_endpoint)
+        self.registration_transport = rpc_helper.get_transport(
+            self.registration_endpoint)
         self.location_info = location_info
         self.sqlalchemy_conf_json = sqlalchemy_conf_json
 
@@ -116,8 +128,8 @@ class DaemonControl(object):
         self.mpinstance = mp.Process(
             target=process_worker,
             args=(self.event, self.sqlalchemy_conf_json,
-            self.registration_endpoint.TransportEndpoint,
-            self.location_info))
+                  self.registration_endpoint.TransportEndpoint,
+                  self.location_info))
         self.mpinstance.start()
 
         pass
