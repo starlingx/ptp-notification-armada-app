@@ -26,7 +26,8 @@ spec:
         release: {{ .Release.Name }}
         app.starlingx.io/component: {{ ternary "application" "platform" .Values.labels.isApplication}}
       annotations: {
-        configchecksum: {{ toYaml .Values.labels | sha256sum | trunc 63 }}
+        configchecksum: {{ toYaml .Values.labels | sha256sum | trunc 63 }},
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum | trunk 63}}
       }
     spec:
       imagePullSecrets:
