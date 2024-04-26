@@ -1,4 +1,0 @@
-notificationservice-base
-notificationservice-base-v2
-locationservice-base
-notificationclient-base
