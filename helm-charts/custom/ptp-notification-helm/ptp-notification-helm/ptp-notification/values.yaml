@@ -66,6 +66,10 @@ location:
   endpoint:
     port: 8080
     liveness: False
+    livenessDelaySeconds: 60
+    livenessPeriodSeconds: 3
+    livenessFailureThreshold: 3
+    livenessTimeoutSeconds: 3
   image:
     repository: starlingx/locationservice-base
     tag: stx.10.0-v2.2.1
@@ -83,6 +87,10 @@ ptptracking:
   endpoint:
     port: 8081
     liveness: False
+    livenessDelaySeconds: 60
+    livenessPeriodSeconds: 3
+    livenessFailureThreshold: 3
+    livenessTimeoutSeconds: 3
   image:
     repository: starlingx/notificationservice-base
     tag: stx.10.0-v2.2.1
@@ -105,6 +113,10 @@ ptptrackingv2:
   endpoint:
     port: 8082
     liveness: False
+    livenessDelaySeconds: 60
+    livenessPeriodSeconds: 3
+    livenessFailureThreshold: 3
+    livenessTimeoutSeconds: 3
   image:
     repository: starlingx/notificationservice-base-v2
     tag: stx.10.0-v2.2.1

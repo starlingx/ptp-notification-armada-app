@@ -100,15 +100,15 @@ spec:
         command: ["python3", "/opt/locationservice/locationservice_start.py"]
 {{- if .Values.location.endpoint.liveness }}
         livenessProbe:
-          failureThreshold: 3
+          failureThreshold: {{ .Values.location.endpoint.livenessFailureThreshold}}
           httpGet:
             path: /health
             port: {{ .Values.location.endpoint.port }}
             scheme: HTTP
-          initialDelaySeconds: 60
-          periodSeconds: 3
+          initialDelaySeconds: {{ .Values.location.endpoint.livenessDelaySeconds }}
+          periodSeconds: {{ .Values.location.endpoint.livenessPeriodSeconds }}
           successThreshold: 1
-          timeoutSeconds: 3
+          timeoutSeconds: {{ .Values.location.endpoint.livenessTimeoutSeconds }}
 {{ end }}
         volumeMounts:
           - name: scripts
@@ -179,15 +179,15 @@ spec:
         command: ["python3", "/mnt/ptptracking_start_v2.py"]
 {{- if .Values.ptptrackingv2.endpoint.liveness }}
         livenessProbe:
-          failureThreshold: 3
+          failureThreshold: {{ .Values.ptptrackingv2.endpoint.livenessFailureThreshold }}
           httpGet:
             path: /health
             port: {{ .Values.ptptrackingv2.endpoint.port }}
             scheme: HTTP
-          initialDelaySeconds: 60
-          periodSeconds: 3
+          initialDelaySeconds: {{ .Values.ptptrackingv2.endpoint.livenessDelaySeconds }}
+          periodSeconds: {{ .Values.ptptrackingv2.endpoint.livenessPeriodSeconds }}
           successThreshold: 1
-          timeoutSeconds: 3
+          timeoutSeconds: {{ .Values.ptptrackingv2.endpoint.livenessTimeoutSeconds }}
 {{ end }}
         securityContext:
           privileged: true
@@ -282,15 +282,15 @@ spec:
         command: ["python3", "/mnt/ptptracking_start.py"]
 {{- if .Values.ptptracking.endpoint.liveness }}
         livenessProbe:
-          failureThreshold: 3
+          failureThreshold: {{ .Values.ptptracking.endpoint.livenessFailureThreshold }}
           httpGet:
             path: /health
             port: {{ .Values.ptptracking.endpoint.port }}
             scheme: HTTP
-          initialDelaySeconds: 60
-          periodSeconds: 3
+          initialDelaySeconds: {{ .Values.ptptracking.endpoint.livenessDelaySeconds }}
+          periodSeconds: {{ .Values.ptptracking.endpoint.livenessPeriodSeconds }}
           successThreshold: 1
-          timeoutSeconds: 3
+          timeoutSeconds: {{ .Values.ptptracking.endpoint.livenessTimeoutSeconds }}
 {{ end }}
         securityContext:
           privileged: true
