@@ -329,13 +329,16 @@ spec:
         - name: varrun
           hostPath:
             path: {{ .Values.ptptracking.ptp4lSocket }}
+            type: Socket
       {{ end }}
         - name: pmc
           hostPath:
             path: /usr/sbin/pmc
+            type: File
         - name: phcctl
           hostPath:
             path: /usr/sbin/phc_ctl
+            type: File
         - name: conf
           hostPath:
             path: /etc/
