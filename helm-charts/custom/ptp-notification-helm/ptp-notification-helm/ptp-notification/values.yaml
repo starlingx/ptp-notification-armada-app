@@ -72,7 +72,7 @@ location:
     livenessTimeoutSeconds: 3
   image:
     repository: starlingx/locationservice-base
-    tag: stx.10.0-v2.2.1
+    tag: stx.10.0-v2.2.2
     pullPolicy: IfNotPresent
 
 ptptracking:
@@ -93,7 +93,7 @@ ptptracking:
     livenessTimeoutSeconds: 3
   image:
     repository: starlingx/notificationservice-base
-    tag: stx.10.0-v2.2.1
+    tag: stx.10.0-v2.2.2
     pullPolicy: IfNotPresent
   device:
     simulated: false
@@ -119,7 +119,7 @@ ptptrackingv2:
     livenessTimeoutSeconds: 3
   image:
     repository: starlingx/notificationservice-base-v2
-    tag: stx.10.0-v2.2.1
+    tag: stx.10.0-v2.2.2
     pullPolicy: IfNotPresent
   control_timeout: 2
   device:
