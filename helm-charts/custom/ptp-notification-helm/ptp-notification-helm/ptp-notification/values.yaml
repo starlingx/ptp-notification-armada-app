@@ -26,7 +26,7 @@ registration:
   imagePullSecrets: default-registry-key
   image:
     repository: rabbitmq
-    tag: 3.12.8-management
+    tag: 3.13.4-management
     pullPolicy: IfNotPresent
   endpoint:
     host: "registration.notification.svc.cluster.local"
@@ -46,7 +46,7 @@ registration:
 notification:
   image:
     repository: rabbitmq
-    tag: 3.12.8-management
+    tag: 3.13.4-management
   endpoint:
     port: 5672
     user: admin
