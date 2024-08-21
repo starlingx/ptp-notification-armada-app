@@ -39,24 +39,27 @@ class CguHandler:
             LOG.error(err)
             raise
 
-    def convert_nmea_serialport_to_pci_addr(self, log_file="/logs/kern.log"):
+    def convert_nmea_serialport_to_pci_addr(self):
         # Parse the nmea_serialport value into a PCI address so that we can
         # later find the cgu
         # Returns the address or None
         pci_addr = None
-        # Get only the ttyGNSS_1800_0 portion of the path
+        # Remove the /dev portion of the path
         nmea_serialport = self.nmea_serialport.split('/')[2]
         LOG.debug("Looking for nmea_serialport value: %s" % nmea_serialport)
+        # Buld uevent path
+        uevent_file = '/sys/class/gnss/' + nmea_serialport + '/device/uevent'
 
-        with open(log_file, 'r') as file:
-            for line in file:
-                if nmea_serialport in line:
-                    # Regex split to make any number of spaces the delimiter
-                    # Eg.: ... ice 0000:18:00.0: ttyGNSS_1800_0 registered
-                    # Becomes: 0000:18:00.0
-                    pci_addr = re.split(' +', line)[7].strip(':')
-                    LOG.debug("Found with PCI addr: %s" % pci_addr)
-                    break
+        try:
+            with open(uevent_file, 'r') as file:
+                for line in file:
+                    if 'PCI_SLOT_NAME' in line:
+                        # Get the portion after the '=' sign
+                        pci_addr = re.split('=', line)[1].strip('\n')
+                        LOG.debug("Found with PCI addr: %s" % pci_addr)
+                        break
+        except (FileNotFoundError, PermissionError) as err:
+            LOG.error(err)
 
         self.pci_addr = pci_addr
 

@@ -19,7 +19,7 @@ class CguHandlerTests(unittest.TestCase):
     def test_get_gnss_nmea_serialport(self):
         # Test success path
         self.testCguHandler.get_gnss_nmea_serialport_from_ts2phc_config()
-        self.assertEqual(self.testCguHandler.nmea_serialport, "/dev/ttyGNSS_1800_0")
+        self.assertEqual(self.testCguHandler.nmea_serialport, "/dev/gnss0")
 
         # Test missing / incorrect config file path
         with self.assertRaises(FileNotFoundError):
@@ -33,14 +33,16 @@ class CguHandlerTests(unittest.TestCase):
     def test_convert_nmea_serialport_to_pci_addr(self):
         # Test success path
         self.testCguHandler.get_gnss_nmea_serialport_from_ts2phc_config()
-        self.testCguHandler.convert_nmea_serialport_to_pci_addr(
-            testpath + "test_input_files/mock_kern.log")
+        with mock.patch('trackingfunctionsdk.common.helpers.cgu_handler.open',
+                new_callable=mock.mock_open,
+                read_data='PCI_SLOT_NAME=0000:18:00.0') as mock_open:
+            self.testCguHandler.convert_nmea_serialport_to_pci_addr()
+            mock_open.assert_called_with('/sys/class/gnss/gnss0/device/uevent', 'r')
         self.assertEqual(self.testCguHandler.pci_addr, "0000:18:00.0")
 
         # Test pci address not found
-        self.testCguHandler.nmea_serialport = "/dev/ttyGNSS_not_present"
-        self.testCguHandler.convert_nmea_serialport_to_pci_addr(
-            testpath + "test_input_files/mock_kern.log")
+        self.testCguHandler.nmea_serialport = "/dev/not_present"
+        self.testCguHandler.convert_nmea_serialport_to_pci_addr()
         self.assertEqual(self.testCguHandler.pci_addr, None)
 
     @mock.patch('trackingfunctionsdk.common.helpers.cgu_handler.os.path')
@@ -48,8 +50,10 @@ class CguHandlerTests(unittest.TestCase):
         # Setup mock
         mock_path.exists.return_value = True
         self.testCguHandler.get_gnss_nmea_serialport_from_ts2phc_config()
-        self.testCguHandler.convert_nmea_serialport_to_pci_addr(
-            testpath + "test_input_files/mock_kern.log")
+        with mock.patch('trackingfunctionsdk.common.helpers.cgu_handler.open',
+                new_callable=mock.mock_open,
+                read_data='PCI_SLOT_NAME=0000:18:00.0') as mock_open:
+            self.testCguHandler.convert_nmea_serialport_to_pci_addr()
         self.testCguHandler.get_cgu_path_from_pci_addr()
         self.assertEqual(self.testCguHandler.cgu_path, "/ice/0000:18:00.0/cgu")
 
