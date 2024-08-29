@@ -55,7 +55,7 @@ class CguHandlerTests(unittest.TestCase):
                 read_data='PCI_SLOT_NAME=0000:18:00.0') as mock_open:
             self.testCguHandler.convert_nmea_serialport_to_pci_addr()
         self.testCguHandler.get_cgu_path_from_pci_addr()
-        self.assertEqual(self.testCguHandler.cgu_path, "/ice/0000:18:00.0/cgu")
+        self.assertEqual(self.testCguHandler.cgu_path, "/ice/ice/0000:18:00.0/cgu")
 
         mock_path.exists.return_value = False
         with self.assertRaises(FileNotFoundError):

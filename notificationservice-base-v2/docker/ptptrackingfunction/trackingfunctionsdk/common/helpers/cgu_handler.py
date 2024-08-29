@@ -65,7 +65,7 @@ class CguHandler:
 
     def get_cgu_path_from_pci_addr(self):
         # Search for a cgu file using the given pci address
-        cgu_path = "/ice/" + self.pci_addr + "/cgu"
+        cgu_path = "/ice/ice/" + self.pci_addr + "/cgu"
         if os.path.exists(cgu_path):
             LOG.debug("PCI address %s has cgu path %s" %
                       (self.pci_addr, cgu_path))

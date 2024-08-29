@@ -349,7 +349,7 @@ spec:
             type: Directory
         - name: ice
           hostPath:
-            path: /sys/kernel/debug/ice/
+            path: /sys/kernel/debug/
             type: Directory
         - name: proc
           hostPath:

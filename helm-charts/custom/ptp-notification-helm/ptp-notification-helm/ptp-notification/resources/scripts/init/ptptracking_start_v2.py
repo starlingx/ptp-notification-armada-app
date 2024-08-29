@@ -11,6 +11,8 @@ import logging
 import os
 import re
 
+from pathlib import Path
+
 from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.services.daemon import DaemonControl
@@ -85,8 +87,12 @@ else:
 
 GNSS_CONFIGS = []
 GNSS_INSTANCES = []
+ice_debugfs = Path("/ice/ice/")
 if os.environ.get("TS2PHC_SERVICE_NAME").lower() == "false":
     LOG.info("GNSS instance tracking disabled.")
+elif not ice_debugfs.is_dir():
+    LOG.info("Ice driver debugfs is not present, GNSS instance tracking disabled.")
+    os.environ["TS2PHC_SERVICE_NAME"] = "false"
 else:
     GNSS_CONFIGS = glob.glob(constants.TS2PHC_CONFIG_PATH + "ts2phc-*")
     LOG.debug('Looked for ts2phc configuration file(s) in %s, found %d'
