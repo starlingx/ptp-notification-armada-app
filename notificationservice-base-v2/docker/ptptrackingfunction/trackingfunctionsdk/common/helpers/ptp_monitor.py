@@ -139,8 +139,12 @@ class PtpMonitor:
         if pmc and ptp4l and phc2sys and ptp4lconf:
             self.pmc_query_results, total_ptp_keywords, port_count = \
                 self.ptpsync()
-            sync_state = utils.check_results(self.pmc_query_results,
-                                             total_ptp_keywords, port_count)
+            try:
+                sync_state = utils.check_results(self.pmc_query_results,
+                                                 total_ptp_keywords, port_count)
+            except RuntimeError as err:
+                LOG.warning(err)
+                sync_state = previous_sync_state
         else:
             LOG.warning("Missing critical resource: "
                         "PMC %s PTP4L %s PHC2SYS %s PTP4LCONF %s"
