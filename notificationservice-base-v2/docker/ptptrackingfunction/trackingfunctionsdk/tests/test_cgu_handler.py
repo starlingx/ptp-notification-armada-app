@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023 Wind River Systems, Inc.
+# Copyright (c) 2022-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,6 +15,7 @@ class CguHandlerTests(unittest.TestCase):
     testCguHandler = CguHandler(testpath + "test_input_files/ts2phc_valid.conf")
     missingCguHandler = CguHandler("./no_such_file.conf")
     invalidCguHandler = CguHandler(testpath + "test_input_files/ts2phc_invalid.conf")
+    oldConfigCguHandler = CguHandler(testpath + "test_input_files/ts2phc_old.conf")
 
     def test_get_gnss_nmea_serialport(self):
         # Test success path
@@ -56,6 +57,11 @@ class CguHandlerTests(unittest.TestCase):
             self.testCguHandler.convert_nmea_serialport_to_pci_addr()
         self.testCguHandler.get_cgu_path_from_pci_addr()
         self.assertEqual(self.testCguHandler.cgu_path, "/ice/ice/0000:18:00.0/cgu")
+
+        self.oldConfigCguHandler.get_gnss_nmea_serialport_from_ts2phc_config()
+        self.oldConfigCguHandler.convert_nmea_serialport_to_pci_addr()
+        self.oldConfigCguHandler.get_cgu_path_from_pci_addr()
+        self.assertEqual(self.oldConfigCguHandler.cgu_path, None)
 
         mock_path.exists.return_value = False
         with self.assertRaises(FileNotFoundError):

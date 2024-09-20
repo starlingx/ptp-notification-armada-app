@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023 Wind River Systems, Inc.
+# Copyright (c) 2022-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -65,16 +65,17 @@ class CguHandler:
 
     def get_cgu_path_from_pci_addr(self):
         # Search for a cgu file using the given pci address
-        cgu_path = "/ice/ice/" + self.pci_addr + "/cgu"
-        if os.path.exists(cgu_path):
-            LOG.debug("PCI address %s has cgu path %s" %
-                      (self.pci_addr, cgu_path))
-            self.cgu_path = cgu_path
-            return
-        else:
-            LOG.error("Could not find cgu path for PCI address %s" %
-                      self.pci_addr)
-            raise FileNotFoundError
+        if self.pci_addr:
+            cgu_path = "/ice/ice/" + self.pci_addr + "/cgu"
+            if os.path.exists(cgu_path):
+                LOG.debug("PCI address %s has cgu path %s" %
+                        (self.pci_addr, cgu_path))
+                self.cgu_path = cgu_path
+                return
+            else:
+                LOG.error("Could not find cgu path for PCI address %s" %
+                        self.pci_addr)
+                raise FileNotFoundError
 
     def read_cgu(self):
         # Read a given cgu path and return the output in a parseable structure
