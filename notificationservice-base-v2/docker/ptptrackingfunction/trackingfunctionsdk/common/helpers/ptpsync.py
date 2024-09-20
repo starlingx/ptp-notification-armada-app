@@ -74,9 +74,9 @@ def check_results(result, total_ptp_keywords, port_count):
 
     # check for a healthy result
     if len(result) != total_ptp_keywords:
-        sync_state = constants.FREERUN_PHC_STATE
-        LOG.warning('results are not complete, returning FREERUN')
-        return sync_state
+        LOG.info("Results %s" % result)
+        LOG.info("Results len %s, total_ptp_keywords %s" % (len(result), total_ptp_keywords))
+        raise RuntimeError("PMC results are incomplete, retrying")
     # determine the current sync state
     if (result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT
             and result[constants.GRANDMASTER_IDENTITY] != result[constants.CLOCK_IDENTITY]):

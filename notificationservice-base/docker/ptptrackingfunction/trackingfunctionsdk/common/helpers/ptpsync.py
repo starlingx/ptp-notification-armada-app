@@ -124,9 +124,9 @@ def check_results(result, total_ptp_keywords, port_count):
 
     # check for a healthy result
     if len(result) != total_ptp_keywords:
-        sync_state = constants.FREERUN_PHC_STATE
-        LOG.warning('results are not complete, returning FREERUN')
-        return sync_state
+        LOG.info("Results %s" % result)
+        LOG.info("Results len %s, total_ptp_keywords %s" % (len(result), total_ptp_keywords))
+        raise RuntimeError("PMC results are incomplete, retrying")
     # determine the current sync state
     if (result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT
             and result[constants.GRANDMASTER_IDENTITY] != result[constants.CLOCK_IDENTITY]):
@@ -225,7 +225,11 @@ def ptp_status(holdover_time, freq, sync_state, event_time):
     # run pmc command if preconditions met
     if pmc and ptp4l and phc2sys and ptp4lconf:
         result, total_ptp_keywords, port_count = ptpsync()
-        sync_state = check_results(result, total_ptp_keywords, port_count)
+        try:
+            sync_state = check_results(result, total_ptp_keywords, port_count)
+        except RuntimeError as err:
+            LOG.warning(err)
+            sync_state = previous_sync_state
     else:
         LOG.warning("Critical resources not available: pmc %s ptp4l %s phc2sys %s ptp4lconf %s" %
                     (pmc, ptp4l, phc2sys, ptp4lconf))
