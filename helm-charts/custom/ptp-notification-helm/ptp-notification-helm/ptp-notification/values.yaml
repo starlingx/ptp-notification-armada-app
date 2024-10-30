@@ -103,6 +103,7 @@ ptptracking:
 ptptrackingv2:
   enabled: True
   imagePullSecrets: default-registry-key
+  notification_format: "standard"
   ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
   ptp4lServiceName: True
   ptp4lClockClassLockedList: "6,7,135"

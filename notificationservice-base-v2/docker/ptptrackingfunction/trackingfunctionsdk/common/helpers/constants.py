@@ -1,10 +1,11 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 from os import path
+import os
 
 # phc states constants
 FREERUN_PHC_STATE = "Freerun"
@@ -40,6 +41,9 @@ GNSS_DPLL_0 = "DPLL0"
 GNSS_DPLL_1 = "DPLL1"
 
 UTC_OFFSET = "37"
+
+# Notification formatting
+NOTIFICATION_FORMAT = os.environ.get("NOTIFICATION_FORMAT", 'standard')
 
 if path.exists('/ptp/linuxptp/ptpinstance'):
     LINUXPTP_CONFIG_PATH = '/ptp/linuxptp/ptpinstance/'

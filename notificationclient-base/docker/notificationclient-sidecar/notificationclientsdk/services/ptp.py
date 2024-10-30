@@ -1,30 +1,29 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
-import oslo_messaging
-import logging
 import json
-import kombu
-import requests
+import logging
 from datetime import datetime
 
-from notificationclientsdk.client.notificationservice \
-    import NotificationServiceClient
-from notificationclientsdk.common.helpers import subscription_helper
-from notificationclientsdk.common.helpers import log_helper
-from notificationclientsdk.common.helpers import constants
+import kombu
+import oslo_messaging
+import requests
+from notificationclientsdk.client.notificationservice import \
+    NotificationServiceClient
+from notificationclientsdk.common.helpers import (constants, log_helper,
+                                                  subscription_helper)
 from notificationclientsdk.common.helpers.nodeinfo_helper import NodeInfoHelper
+from notificationclientsdk.exception import client_exception
 from notificationclientsdk.model.dto.resourcetype import ResourceType
-from notificationclientsdk.model.dto.subscription import SubscriptionInfoV1
-from notificationclientsdk.model.dto.subscription import SubscriptionInfoV2
-from notificationclientsdk.model.orm.subscription \
-    import Subscription as SubscriptionOrm
+from notificationclientsdk.model.dto.subscription import (SubscriptionInfoV1,
+                                                          SubscriptionInfoV2)
+from notificationclientsdk.model.orm.subscription import \
+    Subscription as SubscriptionOrm
 from notificationclientsdk.repository.node_repo import NodeRepo
 from notificationclientsdk.repository.subscription_repo import SubscriptionRepo
-from notificationclientsdk.exception import client_exception
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
@@ -272,18 +271,33 @@ class PtpService(object):
                 timestamp = ptpstatus[constants.PTP_V1_KEY].get(
                     'EventTimestamp', None)
                 ptpstatus = ptpstatus[constants.PTP_V1_KEY]
-            else:
+            elif isinstance(ptpstatus, list):
+                LOG.debug("Format timestamps for standard subscription response")
                 for item in ptpstatus:
-                    timestamp = ptpstatus[item].get('time', None)
-                    # Change time from float to ascii format
-                    ptpstatus[item]['time'] = datetime.fromtimestamp(
-                        ptpstatus[item]['time']).strftime(
+                    timestamp = item.get('time', None)
+                    item['time'] = datetime.fromtimestamp(
+                        item['time']).strftime(
                             '%Y-%m-%dT%H:%M:%S%fZ')
-
+            elif isinstance(ptpstatus, dict):
+                LOG.debug("Format timestamps for response with instance tags")
+                try:
+                    for item in ptpstatus:
+                        timestamp = ptpstatus[item].get('time', None)
+                        # Change time from float to ascii format
+                        ptpstatus[item]['time'] = datetime.fromtimestamp(
+                            ptpstatus[item]['time']).strftime(
+                                '%Y-%m-%dT%H:%M:%S%fZ')
+                except (TypeError, AttributeError):
+                    LOG.debug("Format timestamp for single notification")
+                    timestamp = ptpstatus.get('time', None)
+                    ptpstatus['time'] = datetime.fromtimestamp(
+                        ptpstatus['time']).strftime(
+                            '%Y-%m-%dT%H:%M:%S%fZ')
             nodes[default_node_name] = ptpstatus
 
         subscription_orm = SubscriptionOrm(**subscription_dto.to_orm())
         subscription_orm.InitialDeliveryTimestamp = timestamp
+        LOG.debug("Setting initial delivery timestamp %s", timestamp)
         entry = self.subscription_repo.add(subscription_orm)
 
         # Delivery the initial notification of ptp status

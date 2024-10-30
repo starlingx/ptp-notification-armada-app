@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -83,7 +83,7 @@ class PtpMonitor:
 
     def set_ptp_clock_class(self):
         try:
-            clock_class = self.pmc_query_results['clockClass']
+            clock_class = self.pmc_query_results['gm.ClockClass']
             # Reset retry counter upon getting clock class
             self._clock_class_retry = 3
         except KeyError:
@@ -132,11 +132,12 @@ class PtpMonitor:
         # max holdover time is calculated to be in a 'safety' zone
         max_holdover_time = (self.holdover_time - self.freq * 2)
 
-        pmc, ptp4l, phc2sys, ptp4lconf = \
+        pmc, ptp4l, _, ptp4lconf = \
             utils.check_critical_resources(self.ptp4l_service_name,
                                            self.phc2sys_service_name)
         # run pmc command if preconditions met
-        if pmc and ptp4l and phc2sys and ptp4lconf:
+        # Removed check for phc2sys, ptp4l status should not depend on it
+        if pmc and ptp4l and ptp4lconf:
             self.pmc_query_results, total_ptp_keywords, port_count = \
                 self.ptpsync()
             try:
@@ -147,12 +148,11 @@ class PtpMonitor:
                 sync_state = previous_sync_state
         else:
             LOG.warning("Missing critical resource: "
-                        "PMC %s PTP4L %s PHC2SYS %s PTP4LCONF %s"
-                        % (pmc, ptp4l, phc2sys, ptp4lconf))
+                        "PMC %s PTP4L %s PTP4LCONF %s"
+                        % (pmc, ptp4l, ptp4lconf))
             sync_state = PtpState.Freerun
-        # determine if transition into holdover mode (cannot be in holdover if
-        # system clock is not in sync)
-        if sync_state == PtpState.Freerun and phc2sys:
+        # determine if transition into holdover mode
+        if sync_state == PtpState.Freerun:
             if previous_sync_state in [constants.UNKNOWN_PHC_STATE,
                                        PtpState.Freerun]:
                 sync_state = PtpState.Freerun

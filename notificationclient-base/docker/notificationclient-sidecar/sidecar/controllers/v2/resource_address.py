@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022 Wind River Systems, Inc.
+# Copyright (c) 2022-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -36,7 +36,7 @@ class ResourceAddressController(object):
                     self.resource_address)
             if nodename == constants.WILDCARD_CURRENT_NODE:
                 nodename = notification_control.get_residing_nodename()
-            LOG.debug('Nodename to query: %s' % nodename)
+            LOG.info('Nodename to query: %s' % nodename)
             if not notification_control.in_service_nodenames(nodename):
                 LOG.warning("Node {} is not available".format(nodename))
                 raise client_exception.NodeNotAvailable(nodename)
@@ -46,11 +46,23 @@ class ResourceAddressController(object):
             ptpservice = PtpService(notification_control)
             ptpstatus = ptpservice.query(nodename,
                                          self.resource_address, optional)
-            LOG.debug('Got ptpstatus: %s' % ptpstatus)
-            for item in ptpstatus:
-                ptpstatus[item]['time'] = datetime.fromtimestamp(
-                    ptpstatus[item]['time']).strftime(
-                        '%Y-%m-%dT%H:%M:%S%fZ')
+            LOG.info('Received ptpstatus: %s', ptpstatus)
+            if isinstance(ptpstatus, dict):
+                try:
+                    for item in ptpstatus:
+                        ptpstatus[item]['time'] = datetime.fromtimestamp(
+                            ptpstatus[item]['time']).strftime(
+                                '%Y-%m-%dT%H:%M:%S%fZ')
+                except TypeError:
+                    # ptpstatus does not have instance tags
+                    ptpstatus['time'] = datetime.fromtimestamp(
+                            ptpstatus['time']).strftime(
+                                '%Y-%m-%dT%H:%M:%S%fZ')
+            elif isinstance(ptpstatus, list):
+                for item in ptpstatus:
+                    item['time'] = datetime.fromtimestamp(
+                        item['time']).strftime(
+                            '%Y-%m-%dT%H:%M:%S%fZ')
             return ptpstatus
         except client_exception.NodeNotAvailable as ex:
             LOG.warning("{0}".format(str(ex)))
@@ -66,7 +78,8 @@ class ResourceAddressController(object):
             # raise ex
             abort(400)
         except TypeError as ex:
-            LOG.error("Resource {0} not found on {1}".format(self.resource_address, nodename))
+            LOG.error("Resource {0} not found on {1}, error: {2}".format(
+                self.resource_address, nodename, ex))
             abort(404)
         except HTTPServerError as ex:
             LOG.error("Server side error:{0},{1}".format(type(ex), str(ex)))

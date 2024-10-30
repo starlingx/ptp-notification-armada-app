@@ -1,17 +1,16 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 import json
+import logging
 import re
+from datetime import datetime
 
 import requests
-import logging
-from datetime import datetime
-from notificationclientsdk.common.helpers import constants
-from notificationclientsdk.common.helpers import log_helper
+from notificationclientsdk.common.helpers import constants, log_helper
 from notificationclientsdk.exception import client_exception
 
 LOG = logging.getLogger(__name__)
@@ -33,13 +32,36 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
                                         timeout=timeout)
                 response.raise_for_status()
             else:
-                # version 2
-                for item in notification:
-                    data = format_notification_data(subscriptioninfo, {item: notification[item]})
-                    data = json.dumps(data)
-                    response = requests.post(url, data=data, headers=headers,
-                                            timeout=timeout)
-                    response.raise_for_status()
+                if isinstance(notification, list):
+                    # List-type notification response format
+                    LOG.debug("Formatting subscription response: list")
+                    # Post notification for each list item
+                    for item in notification:
+                        data = json.dumps(item)
+                        LOG.info("Notification to post %s", (data))
+                        response = requests.post(url, data=data, headers=headers,
+                                                timeout=timeout)
+                        response.raise_for_status()
+                else:
+                    # Dict type notification response format
+                    LOG.debug("Formatting subscription response: dict")
+                    if notification.get('id', None):
+                        # Not a nested dict, post the data
+                        data = json.dumps(notification)
+                        LOG.info("Notification to post %s", (data))
+                        response = requests.post(url, data=data, headers=headers,
+                                                timeout=timeout)
+                        response.raise_for_status()
+                    else:
+                        for item in notification:
+                            # Nested dict with instance tags, post each item
+                            data = format_notification_data(subscriptioninfo, {item: notification[item]})
+                            data = json.dumps(data)
+                            LOG.info("Notification to post %s", (data))
+                            response = requests.post(url, data=data, headers=headers,
+                                                    timeout=timeout)
+                            response.raise_for_status()
+
             if notification == {}:
                 if hasattr(subscriptioninfo, 'ResourceType'):
                     resource = "{'ResourceType':'" + \
@@ -64,6 +86,7 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
             raise errt
         except requests.exceptions.RequestException as ex:
             LOG.warning("Failed to notify due to: {0}".format(str(ex)))
+            LOG.warning(" %s", (notification))
             raise ex
         except requests.exceptions.HTTPError as ex:
             LOG.warning("Failed to notify due to: {0}".format(str(ex)))
@@ -74,8 +97,11 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
 
     return result
 
-
 def format_notification_data(subscriptioninfo, notification):
+    if isinstance(notification, list):
+        return notification
+
+    # Formatting for legacy notification
     if hasattr(subscriptioninfo, 'ResourceType'):
         LOG.debug("format_notification_data: Found v1 subscription, "
                   "no formatting required.")
@@ -112,7 +138,7 @@ def format_notification_data(subscriptioninfo, notification):
                     float(this_delivery_time)).strftime('%Y-%m-%dT%H:%M:%S%fZ')
                 instance['time'] = format_time
     else:
-        raise Exception("format_notification_data: No valid source "
+        LOG.warning("format_notification_data: No valid source "
                         "address found in notification")
     LOG.debug("format_notification_data: Added parent key for client "
               "consumption: %s" % formatted_notification)

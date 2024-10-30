@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -48,34 +48,47 @@ class NotificationHandler(NotificationHandlerBase):
         resource_address = None
         try:
             self.notification_lock.acquire()
+            LOG.info("Notification handler notification_info %s", notification_info)
             subscription_repo = SubscriptionRepo(autocommit=True)
-            resource_type = notification_info.get('ResourceType', None)
-            # Get nodename from resource address
-            if resource_type:
-                node_name = notification_info.get('ResourceQualifier', {}).get('NodeName', None)
-                if not resource_type:
-                    raise Exception("abnormal notification@{0}".format(node_name))
-                if not resource_type in self.__supported_resource_types:
-                    raise Exception(
-                        "notification with unsupported resource type:{0}".format(resource_type))
-                this_delivery_time = notification_info['EventTimestamp']
-                # Get subscriptions from DB to deliver notification to
-                entries = subscription_repo.get(Status=1, ResourceType=resource_type)
-            else:
-                parent_key = list(notification_info.keys())[0]
-                source = notification_info[parent_key].get('source', None)
-                values = notification_info[parent_key].get('data', {}).get('values', [])
-                resource_address = values[0].get('ResourceAddress', None)
-                this_delivery_time = notification_info[parent_key].get('time')
-                if not resource_address:
-                    raise Exception("No resource address in notification source".format(source))
-                _, node_name, _, _, _ = subscription_helper.parse_resource_address(resource_address)
-                # Get subscriptions from DB to deliver notification to.
-                # Unable to filter on resource_address here because resource_address may contain
-                # either an unknown node name (ie. controller-0) or a '/./' resulting in entries
-                # being missed. Instead, filter these v2 subscriptions in the for loop below once
-                # the resource path has been obtained.
-                entries = subscription_repo.get(Status=1)
+            if isinstance(notification_info, dict):
+                resource_type = notification_info.get('ResourceType', None)
+                # Get nodename from resource address
+                if resource_type:
+                    node_name = notification_info.get('ResourceQualifier', {}).get('NodeName', None)
+                    if not resource_type:
+                        raise Exception("abnormal notification@{0}".format(node_name))
+                    if not resource_type in self.__supported_resource_types:
+                        raise Exception(
+                            "notification with unsupported resource type:{0}".format(resource_type))
+                    this_delivery_time = notification_info['EventTimestamp']
+                    # Get subscriptions from DB to deliver notification to
+                    entries = subscription_repo.get(Status=1, ResourceType=resource_type)
+                else:
+                    parent_key = list(notification_info.keys())[0]
+                    source = notification_info[parent_key].get('source', None)
+                    values = notification_info[parent_key].get('data', {}).get('values', [])
+                    resource_address = values[0].get('ResourceAddress', None)
+                    this_delivery_time = notification_info[parent_key].get('time')
+                    if not resource_address:
+                        raise Exception("No resource address in notification source".format(source))
+                    _, node_name, _, _, _ = subscription_helper.parse_resource_address(resource_address)
+                    # Get subscriptions from DB to deliver notification to.
+                    # Unable to filter on resource_address here because resource_address may contain
+                    # either an unknown node name (ie. controller-0) or a '/./' resulting in entries
+                    # being missed. Instead, filter these v2 subscriptions in the for loop below once
+                    # the resource path has been obtained.
+                    entries = subscription_repo.get(Status=1)
+            elif isinstance(notification_info, list):
+                LOG.debug("Handle list")
+                for item in notification_info:
+                    source = item.get('source', None)
+                    values = item.get('data', {}).get('values', [])
+                    resource_address = values[0].get('ResourceAddress', None)
+                    this_delivery_time = item.get('time')
+                    if not resource_address:
+                        raise Exception("No resource address in notification source".format(source))
+                    _, node_name, _, _, _ = subscription_helper.parse_resource_address(resource_address)
+                    entries = subscription_repo.get(Status=1)
 
             for entry in entries:
                 subscriptionid = entry.SubscriptionId
@@ -106,10 +119,11 @@ class NotificationHandler(NotificationHandlerBase):
                             entry.SubscriptionId))
                         continue
 
-                    subscription_helper.notify(subscription_dto2, notification_info)
-                    LOG.debug("notification is delivered successfully to {0}".format(
+                    notification_to_send = self.__format_timestamps(notification_info)
+                    LOG.info("Sending notification to subscribers: %s", notification_to_send)
+                    subscription_helper.notify(subscription_dto2, notification_to_send)
+                    LOG.info("notification is delivered successfully to {0}".format(
                         entry.SubscriptionId))
-
                     self.update_delivery_timestamp(node_name, subscriptionid, this_delivery_time)
 
                 except Exception as ex:
@@ -128,6 +142,28 @@ class NotificationHandler(NotificationHandlerBase):
             self.notification_lock.release()
             if not subscription_repo:
                 del subscription_repo
+
+    def __format_timestamps(self, ptpstatus):
+        if isinstance(ptpstatus, list):
+            LOG.debug("Format timestamps for standard subscription response")
+            for item in ptpstatus:
+                item['time'] = datetime.fromtimestamp(
+                    item['time']).strftime(
+                        '%Y-%m-%dT%H:%M:%S%fZ')
+        elif isinstance(ptpstatus, dict):
+            LOG.debug("Format timestamps for response with instance tags")
+            try:
+                for item in ptpstatus:
+                    # Change time from float to ascii format
+                    ptpstatus[item]['time'] = datetime.fromtimestamp(
+                        ptpstatus[item]['time']).strftime(
+                            '%Y-%m-%dT%H:%M:%S%fZ')
+            except (TypeError, AttributeError):
+                LOG.debug("Format timestamp for single notification")
+                ptpstatus['time'] = datetime.fromtimestamp(
+                    ptpstatus['time']).strftime(
+                        '%Y-%m-%dT%H:%M:%S%fZ')
+        return ptpstatus
 
     def __get_latest_delivery_timestamp(self, node_name, subscriptionid):
         last_delivery_stat = self.notification_stat.get(node_name, {}).get(subscriptionid, {})
@@ -152,6 +188,7 @@ class NotificationHandler(NotificationHandlerBase):
         else:
             last_delivery_stat = self.notification_stat.get(node_name, {}).get(subscriptionid, {})
             last_delivery_time = last_delivery_stat.get('EventTimestamp', None)
+            LOG.debug("last_delivery_time %s this_delivery_time %s" % (last_delivery_time, this_delivery_time))
             if (last_delivery_time and last_delivery_time >= this_delivery_time):
                 return
             last_delivery_stat['EventTimestamp'] = this_delivery_time

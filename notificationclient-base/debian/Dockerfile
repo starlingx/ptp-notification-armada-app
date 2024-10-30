@@ -9,6 +9,7 @@ RUN apt-get -y update \
     gcc \
     python3-dev \
     python3 \
+    curl \
  && apt-get -y clean \
  && rm -rf /var/lib/apt/lists/*
 RUN pip3 install --user pecan \

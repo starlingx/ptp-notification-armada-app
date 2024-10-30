@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -16,7 +16,7 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
-from trackingfunctionsdk.common.helpers import log_helper
+from trackingfunctionsdk.common.helpers import log_helper, constants
 
 log_helper.config_logger(LOG)
 
@@ -32,7 +32,8 @@ class PtpEventProducer(object):
             pass
 
         def QueryStatus(self, ctx, **rpc_kwargs):
-            LOG.debug("PtpEventProducer QueryStatus called %s" % rpc_kwargs)
+            # This is where the "GET" commands run through
+            LOG.info("PtpEventProducer QueryStatus called %s" % rpc_kwargs)
             if self.handler:
                 return self.handler.query_status(**rpc_kwargs)
             else:
@@ -85,16 +86,16 @@ class PtpEventProducer(object):
             try:
                 self.local_broker_client.cast(
                     topic, 'NotifyStatus', notification=ptpstatus)
-                LOG.debug("Published ptp status:{0}@Topic:{1}".format(ptpstatus, topic))
+                LOG.debug("Published ptp status local:{0}@Topic:{1}".format(ptpstatus, topic))
                 break
             except Exception as ex:
-                LOG.warning("Failed to publish ptp status:{0}@Topic:{1} due to: {2}".format(
+                LOG.warning("Failed to publish ptp status local:{0}@Topic:{1} due to: {2}".format(
                     ptpstatus, topic, str(ex)))
                 retry = retry - 1
                 isretrystopped = False if retry > 0 else True
 
         if isretrystopped:
-            LOG.error("Failed to publish ptp status:{0}@Topic:{1}".format(
+            LOG.error("Failed to publish ptp status local:{0}@Topic:{1}".format(
                 ptpstatus, topic))
         return isretrystopped == False
 
@@ -108,16 +109,16 @@ class PtpEventProducer(object):
             try:
                 self.registration_broker_client.cast(
                     topic_all, 'NotifyStatus', notification=ptpstatus)
-                LOG.debug("Published ptp status:{0}@Topic:{1}".format(ptpstatus, topic_all))
+                LOG.debug("Published ptp status all:{0}@Topic:{1}".format(ptpstatus, topic_all))
                 break
             except Exception as ex:
-                LOG.warning("Failed to publish ptp status:{0}@Topic:{1} due to: {2}".format(
+                LOG.warning("Failed to publish ptp status all:{0}@Topic:{1} due to: {2}".format(
                     ptpstatus, topic_all, str(ex)))
                 retry = retry - 1
                 isretrystopped = False if retry > 0 else True
 
         if isretrystopped:
-            LOG.error("Failed to publish ptp status:{0}@Topic:{1}".format(
+            LOG.error("Failed to publish ptp status all:{0}@Topic:{1}".format(
                 ptpstatus, topic_all))
         return isretrystopped == False
 

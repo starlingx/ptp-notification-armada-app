@@ -15,6 +15,7 @@ from glob import glob
 from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.model.dto.osclockstate import OsClockState
+from trackingfunctionsdk.common.helpers import ptpsync as utils
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
@@ -304,12 +305,17 @@ class OsClockMonitor:
 
     def set_os_clock_state(self):
         offset_int = int(self.offset)
+        _, _, phc2sys, _ = \
+            utils.check_critical_resources('', self.phc2sys_instance)
         if offset_int > self.phc2sys_tolerance_high or \
                 offset_int < self.phc2sys_tolerance_low:
             LOG.warning("PHC2SYS offset is outside of tolerance")
             self._state = OsClockState.Freerun
+        elif not phc2sys:
+            LOG.warning("Phc2sys instance %s is not running", self.phc2sys_instance)
+            self._state = OsClockState.Freerun
         else:
-            LOG.info("PHC2SYS offset is within tolerance")
+            LOG.info("PHC2SYS offset is within tolerance: %s", offset_int)
             self._state = OsClockState.Locked
 
         # Perform an extra check for HA Phc2sys to ensure we have a source interface
@@ -341,7 +347,7 @@ class OsClockMonitor:
                 self._state = constants.HOLDOVER_PHC_STATE
             elif previous_sync_state == constants.HOLDOVER_PHC_STATE and \
                     time_in_holdover < max_holdover_time:
-                LOG.debug("OS Clock: Time in holdover is %s "
+                LOG.info("OS Clock: Time in holdover is %s "
                           "Max time in holdover is %s"
                           % (time_in_holdover, max_holdover_time))
                 self._state = constants.HOLDOVER_PHC_STATE

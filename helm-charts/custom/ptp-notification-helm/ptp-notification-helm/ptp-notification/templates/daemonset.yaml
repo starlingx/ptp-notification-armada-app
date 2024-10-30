@@ -176,6 +176,8 @@ spec:
             value: "{{ .Values.ptptrackingv2.log_level }}"
           - name: CONTROL_TIMEOUT
             value: "{{ .Values.ptptrackingv2.control_timeout }}"
+          - name: NOTIFICATION_FORMAT
+            value: "{{ .Values.ptptrackingv2.notification_format }}"
         command: ["python3", "/mnt/ptptracking_start_v2.py"]
 {{- if .Values.ptptrackingv2.endpoint.liveness }}
         livenessProbe:

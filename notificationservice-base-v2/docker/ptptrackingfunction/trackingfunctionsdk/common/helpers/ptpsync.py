@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2024 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -114,7 +114,12 @@ def parse_resource_address(resource_address):
     return clusterName, nodeName, resource_path
 
 
-def format_resource_address(node_name, resource):
+def format_resource_address(node_name, resource, instance=None):
     # Return a resource_address
-    resource_address = '/./' + node_name + resource
+    resource_address = '/./' + node_name
+    if instance:
+        resource_address = resource_address + '/' + instance + resource
+    else:
+        resource_address = resource_address + resource
+    LOG.debug("format_resource_address %s" % resource_address)
     return resource_address

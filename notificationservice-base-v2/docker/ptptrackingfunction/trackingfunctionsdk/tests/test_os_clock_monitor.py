@@ -85,7 +85,9 @@ class OsClockMonitorTests(unittest.TestCase):
         self.clockmon.get_os_clock_offset()
         assert self.clockmon.offset == '37000000015'
 
-    def test_set_os_closck_state(self):
+    @mock.patch('trackingfunctionsdk.common.helpers.ptpsync.check_critical_resources',
+                side_effect=[b'True'])
+    def test_set_os_clock_state(self, critical_patched):
         self.clockmon = OsClockMonitor(phc2sys_config=phc2sys_test_config, init=False)
         self.clockmon.offset = '37000000015'
         self.clockmon.set_os_clock_state()
