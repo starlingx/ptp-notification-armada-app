@@ -263,138 +263,151 @@ This operation does not accept a request body.
 ::
 
    {
-       "id": "d38af5a6-70bb-4b3d-892a-df50cf2fdb09",
-       "specversion": "1.0",
-       "source": "/sync/sync-status/sync-state",
-       "type": "event.sync.sync-status.synchronization-state-change",
-       "time": "2022-08-12T19:20:54896244Z",
-       "data": {
+      "id": "64b1c206-6e34-4825-aa1a-141027bb779a",
+      "specversion": "1.0",
+      "source": "/sync/sync-status/sync-state",
+      "type": "event.sync.sync-status.synchronization-state-change",
+      "time": "2024-11-15T15:22:33868726Z",
+      "data": {
          "version": "1.0",
          "values": [
-            {
-               "data_type": "notification",
-               "ResourceAddress": "/././sync/sync-status/sync-state",
-               "value_type": "enumeration",
-               "value": "LOCKED"
-            }
-         ]
-      }
-   }
-
-::
-
-   {
-      "ptp-inst1": {
-         "id": "0088ea9e-ba57-409c-bfcb-8163e5c39c70",
-         "specversion": "1.0",
-         "source": "/sync/ptp-status/clock-class",
-         "type": "event.sync.ptp-status.ptp-clock-class-change",
-         "time": "2022-09-09T15:57:40078935Z",
-         "data": {
-            "version": "1.0",
-            "values": [
-               {
-                  "data_type": "metric",
-                  "ResourceAddress": "/././sync/ptp-status/clock-class",
-                  "value_type": "metric",
-                  "value": "6"
-               }
-            ]
-         }
-      }
-   }
-
-::
-
-   {
-      "ptp-inst1": {
-         "id": "ee37956c-5fed-4414-abce-d8de44fa6718",
-         "specversion": "1.0",
-         "source": "/sync/ptp-status/lock-state",
-         "type": "event.sync.ptp-status.ptp-state-change",
-         "time": "2022-09-09T15:57:40078919Z",
-         "data": {
-            "version": "1.0",
-            "values": [
-               {
-                  "data_type": "notification",
-                  "ResourceAddress": "/././sync/ptp-status/lock-state",
-                  "value_type": "enumeration",
-                  "value": "LOCKED"
-               }
-            ]
-         }
-      }
-   }
-
-::
-
-   {
-      "os_clock_status": {
-         "id": "404631ea-8011-4dd1-bd46-cf97ddc1d6d0",
-         "specversion": "1.0",
-         "source": "/sync/sync-status/os-clock-sync-state",
-         "type": "event.sync.sync-status.os-clock-sync-state-change",
-         "time": "2022-09-09T15:57:46020908Z",
-         "data": {
-            "version": "1.0",
-            "values": [
-               {
-                  "data_type": "notification",
-                  "ResourceAddress": "/././sync/sync-status/os-clock-sync-state",
-                  "value_type": "enumeration",
-                  "value": "LOCKED"
-               }
-            ]
-         }
-      }
-   }
-
-::
-
-   {
-      "overall_sync_status": {
-         "id": "a7139f82-0a13-4c33-b7b5-b4773def1377",
-         "specversion": "1.0",
-         "source": "/sync/sync-status/sync-state",
-         "type": "event.sync.sync-status.synchronization-state-change",
-         "time": "2022-09-09T15:57:46034060Z",
-         "data": {
-            "version": "1.0",
-            "values": [
                {
                   "data_type": "notification",
                   "ResourceAddress": "/././sync/sync-status/sync-state",
                   "value_type": "enumeration",
                   "value": "LOCKED"
                }
-            ]
-         }
+         ]
       }
    }
 
 ::
 
-   {
-      "ts1": {
-         "id": "230f4f09-d5ba-4c82-966b-52f7f3c22e14",
+   [
+      {
+         "id": "ce5cf018-1f65-451a-94a0-93c99663c1b9",
+         "specversion": "1.0",
+         "source": "/sync/ptp-status/clock-class",
+         "type": "event.sync.ptp-status.ptp-clock-class-change",
+         "time": "2024-11-15T15:22:22689503Z",
+         "data": {
+               "version": "1.0",
+               "values": [
+                  {
+                     "data_type": "metric",
+                     "ResourceAddress": "/././ptp-inst1/sync/ptp-status/clock-class",
+                     "value_type": "metric",
+                     "value": "6"
+                  }
+               ]
+         }
+      },
+      {
+         "id": "549312e5-3065-4731-b098-e0582d1d8b7f",
+         "specversion": "1.0",
+         "source": "/sync/ptp-status/clock-class",
+         "type": "event.sync.ptp-status.ptp-clock-class-change",
+         "time": "2024-11-15T15:22:23228905Z",
+         "data": {
+               "version": "1.0",
+               "values": [
+                  {
+                     "data_type": "metric",
+                     "ResourceAddress": "/././ptp-inst2/sync/ptp-status/clock-class",
+                     "value_type": "metric",
+                     "value": "6"
+                  }
+               ]
+         }
+      }
+   ]
+
+::
+
+   [
+      {
+         "id": "db9308a5-f030-4a9c-b535-164f836cfd60",
+         "specversion": "1.0",
+         "source": "/sync/ptp-status/lock-state",
+         "type": "event.sync.ptp-status.ptp-state-change",
+         "time": "2024-11-15T15:22:22689480Z",
+         "data": {
+               "version": "1.0",
+               "values": [
+                  {
+                     "data_type": "notification",
+                     "ResourceAddress": "/././ptp-inst1/sync/ptp-status/lock-state",
+                     "value_type": "enumeration",
+                     "value": "LOCKED"
+                  }
+               ]
+         }
+      },
+      {
+         "id": "fbda383f-ee5d-4df4-82cb-f6f9c4447fe7",
+         "specversion": "1.0",
+         "source": "/sync/ptp-status/lock-state",
+         "type": "event.sync.ptp-status.ptp-state-change",
+         "time": "2024-11-15T15:22:23228893Z",
+         "data": {
+               "version": "1.0",
+               "values": [
+                  {
+                     "data_type": "notification",
+                     "ResourceAddress": "/././ptp-inst2/sync/ptp-status/lock-state",
+                     "value_type": "enumeration",
+                     "value": "LOCKED"
+                  }
+               ]
+         }
+      }
+   ]
+
+::
+
+   [
+      {
+         "id": "6348989f-4ae6-4a27-9381-189fdf5b1884",
+         "specversion": "1.0",
+         "source": "/sync/sync-status/os-clock-sync-state",
+         "type": "event.sync.sync-status.os-clock-sync-state-change",
+         "time": "2024-11-15T15:22:33864925Z",
+         "data": {
+               "version": "1.0",
+               "values": [
+                  {
+                     "data_type": "notification",
+                     "ResourceAddress": "/././sync/sync-status/os-clock-sync-state",
+                     "value_type": "enumeration",
+                     "value": "LOCKED"
+                  }
+               ]
+         }
+      }
+   ]
+
+::
+
+   [
+      {
+         "id": "0adfb163-20fa-43ac-94c1-bc9bbc06e5c8",
          "specversion": "1.0",
          "source": "/sync/gnss-status/gnss-sync-status",
          "type": "event.sync.gnss-status.gnss-state-change",
-         "time": "2022-09-12T14:31:45519571Z",
+         "time": "2024-11-15T15:22:33753153Z",
          "data": {
-            "version": "1.0",
-            "values": [
-               {
-                  "data_type": "notification",
-                  "ResourceAddress": "/././sync/gnss-status/gnss-sync-status",
-                  "value_type": "enumeration",
-                  "value": "LOCKED"
-               }
-            ]
+               "version": "1.0",
+               "values": [
+                  {
+                     "data_type": "notification",
+                     "ResourceAddress": "/././ts1/sync/gnss-status/gnss-sync-status",
+                     "value_type": "enumeration",
+                     "value": "SYNCHRONIZED"
+                  }
+               ]
          }
       }
-   }
+   ]
 
 
 This operation does not accept a request body.
