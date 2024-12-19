@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -54,11 +54,11 @@ spec:
           - name: THIS_NAMESPACE
             value: {{ .Values.global.namespace }}
           - name: RABBITMQ_DEFAULT_USER
-            value: "admin"
+            value: "{{ .Values.notification.endpoint.user }}"
           - name: RABBITMQ_DEFAULT_PASS
-            value: "admin"
-          - name: RABBITMQ_DEFAULT_PORT
-            value: "5672"
+            value: "{{ .Values.notification.endpoint.pass }}"
+          - name: RABBITMQ_NODE_PORT
+            value: "{{ .Values.notification.endpoint.port }}"
       - name: {{ .Chart.Name }}-location
         image: "{{ .Values.location.image.repository }}:{{ .Values.location.image.tag }}"
         imagePullPolicy: {{ .Values.location.image.pullPolicy }}
@@ -141,17 +141,17 @@ spec:
           - name: OVERALL_HOLDOVER_SECONDS
             value: "{{ .Values.ptptrackingv2.overall.holdover_seconds }}"
           - name: NOTIFICATIONSERVICE_USER
-            value: "admin"
+            value: "{{ .Values.notification.endpoint.user }}"
           - name: NOTIFICATIONSERVICE_PASS
-            value: "admin"
+            value: "{{ .Values.notification.endpoint.pass }}"
           - name: NOTIFICATIONSERVICE_PORT
-            value: "5672"
+            value: "{{ .Values.notification.endpoint.port }}"
           - name: REGISTRATION_USER
-            value: "admin"
+            value: "{{ .Values.registration.endpoint.user }}"
           - name: REGISTRATION_PASS
-            value: "admin"
+            value: "{{ .Values.registration.endpoint.pass }}"
           - name: REGISTRATION_PORT
-            value: "5672"
+            value: "{{ .Values.registration.endpoint.port }}"
           - name: REGISTRATION_HOST
             value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
           - name: HEALTH_API_HOST
@@ -250,17 +250,17 @@ spec:
           - name: PTP_POLL_FREQ_SECONDS
             value: "{{ .Values.ptptracking.device.poll_freq_seconds }}"
           - name: NOTIFICATIONSERVICE_USER
-            value: "admin"
+            value: "{{ .Values.notification.endpoint.user }}"
           - name: NOTIFICATIONSERVICE_PASS
-            value: "admin"
+            value: "{{ .Values.notification.endpoint.pass }}"
           - name: NOTIFICATIONSERVICE_PORT
-            value: "5672"
+            value: "{{ .Values.notification.endpoint.port }}"
           - name: REGISTRATION_USER
-            value: "admin"
+            value: "{{ .Values.registration.endpoint.user }}"
           - name: REGISTRATION_PASS
-            value: "admin"
+            value: "{{ .Values.registration.endpoint.pass }}"
           - name: REGISTRATION_PORT
-            value: "5672"
+            value: "{{ .Values.registration.endpoint.port }}"
           - name: REGISTRATION_HOST
             value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
           - name: HEALTH_API_HOST

@@ -224,7 +224,7 @@ class PtpService(object):
                 }
                 raise client_exception.SubscriptionAlreadyExists(
                     subscriptioninfo)
-            
+
             _, nodename, _, _, _ = subscription_helper.parse_resource_address(
                 resource_address)
 

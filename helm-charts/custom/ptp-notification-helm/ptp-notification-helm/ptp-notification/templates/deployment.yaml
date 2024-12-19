@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -43,9 +43,9 @@ spec:
         image: "{{ .Values.registration.image.repository }}:{{ .Values.registration.image.tag }}"
         env:
             - name: RABBITMQ_DEFAULT_USER
-              value: "admin"
+              value: "{{ .Values.registration.endpoint.user }}"
             - name: RABBITMQ_DEFAULT_PASS
-              value: "admin"
-            - name: RABBITMQ_DEFAULT_PORT
-              value: "5672"
+              value: "{{ .Values.registration.endpoint.pass }}"
+            - name: RABBITMQ_NODE_PORT
+              value: "{{ .Values.registration.endpoint.port }}"
 ---

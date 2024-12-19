@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021,2024-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -13,7 +13,7 @@ spec:
   #clusterIP: None
   ports:
   - name: rabbitmq
-    port: 5672
+    port: {{ .Values.registration.endpoint.port }}
     protocol: TCP
   selector:
     app: rabbitmq
