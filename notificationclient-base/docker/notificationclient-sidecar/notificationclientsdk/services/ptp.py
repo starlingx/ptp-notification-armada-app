@@ -1,9 +1,10 @@
 #
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
+import ipaddress
 import json
 import logging
 from datetime import datetime
@@ -99,7 +100,16 @@ class PtpService(object):
 
     def _query(self, broker_name, broker_pod_ip, resource_address=None,
                optional=None):
-        broker_host = "[{0}]".format(broker_pod_ip)
+        try:
+            check_pod_ip = ipaddress.ip_address(broker_pod_ip)
+            if check_pod_ip.version == 4:
+                broker_host = "{0}".format(broker_pod_ip)
+            else: #IPv6
+                broker_host = "[{0}]".format(broker_pod_ip)
+        except ValueError as err:
+            LOG.error("%s: broker_pod_ip %s is not a valid address" % (err, broker_pod_ip))
+            raise client_exception.InvalidEndpoint(broker_name)
+
         broker_transport_endpoint = "rabbit://{0}:{1}@{2}:{3}".format(
             self.daemon_control.daemon_context['NOTIFICATION_BROKER_USER'],
             self.daemon_control.daemon_context['NOTIFICATION_BROKER_PASS'],

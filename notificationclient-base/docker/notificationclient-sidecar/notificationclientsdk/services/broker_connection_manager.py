@@ -1,9 +1,10 @@
 #
-# Copyright (c) 2021 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
+import ipaddress
 import time
 import oslo_messaging
 import logging
@@ -13,6 +14,7 @@ from notificationclientsdk.common.helpers import log_helper
 from notificationclientsdk.client.locationservice import LocationServiceClient
 from notificationclientsdk.client.notificationservice \
     import NotificationServiceClient
+from notificationclientsdk.exception import client_exception
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
@@ -246,7 +248,16 @@ class BrokerConnectionManager:
             # special case: if monitor all node, then use the same broker as
             # locationservice
             return self.location_watcher
-        broker_host = "[{0}]".format(broker_pod_ip)
+        try:
+            check_pod_ip = ipaddress.ip_address(broker_pod_ip)
+            if check_pod_ip.version == 4:
+                broker_host = "{0}".format(broker_pod_ip)
+            else: #IPv6
+                broker_host = "[{0}]".format(broker_pod_ip)
+        except ValueError as err:
+            LOG.error("%s: broker_pod_ip %s is not a valid address" % (err, broker_pod_ip))
+            raise client_exception.InvalidEndpoint(broker_name)
+
         broker_transport_endpoint = "rabbit://{0}:{1}@{2}:{3}".format(
             self.shared_broker_context['NOTIFICATION_BROKER_USER'],
             self.shared_broker_context['NOTIFICATION_BROKER_PASS'],
