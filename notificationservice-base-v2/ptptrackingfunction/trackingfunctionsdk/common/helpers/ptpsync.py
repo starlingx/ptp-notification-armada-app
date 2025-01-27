@@ -133,23 +133,21 @@ def format_resource_address(node_name, resource, instance=None):
 
 def get_interface_phc_device(phc_interface):
     """Determine the phc device for the interface"""
-    pattern = "/hostsys/class/net/" + phc_interface + "/device/ptp/*"
-    ptp_device = glob(pattern)
-    if len(ptp_device) == 0:
-        # Try the 0th interface instead, required for some NIC types
-        phc_interface_base = phc_interface[:-1] + "0"
-        LOG.info("No ptp device found at %s trying %s instead"
-                    % (pattern, phc_interface_base))
-        pattern = "/hostsys/class/net/" + phc_interface_base + \
-                    "/device/ptp/*"
+    for i in [phc_interface,
+              phc_interface[:-1] + "0",
+              phc_interface[:-1] + "1"]:
+        pattern = constants.PHC_PATH.format(i)
         ptp_device = glob(pattern)
         if len(ptp_device) == 0:
-            LOG.warning("No ptp device found for base interface at %s"
-                        % pattern)
-            return None
-    if len(ptp_device) > 1:
-        LOG.error("More than one ptp device found at %s" % pattern)
-        return None
-    ptp_device = os.path.basename(ptp_device[0])
-    LOG.debug("Found ptp device %s at %s" % (ptp_device, pattern))
-    return ptp_device
+            LOG.info("No ptp device found at %s", pattern)
+            continue
+        if len(ptp_device) > 1:
+            LOG.error("More than one ptp device found at %s", pattern)
+            continue
+
+        ptp_device = os.path.basename(ptp_device[0])
+        LOG.debug("Found ptp device %s at %s", ptp_device, pattern)
+        return ptp_device
+
+    LOG.info("No ptp device found for %s", phc_interface)
+    return None

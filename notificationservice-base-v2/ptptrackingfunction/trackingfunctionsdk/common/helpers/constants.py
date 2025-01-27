@@ -5,6 +5,7 @@
 #
 
 from os import path
+from pynetlink import LockStatus
 import os
 
 # phc states constants
@@ -35,8 +36,7 @@ CLOCK_CLASS_LOCKED_LIST = [CLOCK_CLASS_VALUE6, CLOCK_CLASS_VALUE7, CLOCK_CLASS_V
 # ts2phc constants
 NMEA_SERIALPORT = "ts2phc.nmea_serialport"
 GNSS_PIN = "GNSS-1PPS"
-GNSS_LOCKED_HO_ACK = 'locked_ho_ack'
-GNSS_LOCKED_HO_ACQ = 'locked_ho_acq'
+GNSS_LOCKED_HO_ACQ = LockStatus.LOCKED_AND_HOLDOVER.value
 GNSS_DPLL_0 = "DPLL0"
 GNSS_DPLL_1 = "DPLL1"
 
@@ -81,6 +81,15 @@ SOURCE_SYNC_SYNC_STATE = '/sync/sync-status/sync-state'
 SOURCE_SYNCE_CLOCK_QUALITY = '/sync/synce-status/clock-quality'
 SOURCE_SYNCE_LOCK_STATE_EXTENDED = '/sync/synce-status/lock-state-extended'
 SOURCE_SYNCE_LOCK_STATE = '/sync/synce-status/lock-state'
+
+SYS_DEV_NET = "/hostsys/bus/pci/devices/{}/net/"
+SYS_DEV_NET_ADDR = "/hostsys/bus/pci/devices/{}/net/{}/phys_switch_id"
+UEVENT_FILE = "/hostsys/class/gnss/{}/device/uevent"
+PCI_SLOT_NAME = "PCI_SLOT_NAME"
+ZL_MODULE_PATH_CLKID = "/hostsys/module/zl3073x/parameters/clock_id"
+GNSS_TYPE = 'gnss'
+
+PHC_PATH = "/hostsys/class/net/{}/device/ptp/*"
 
 class ClockSourceType(object):
     TypePTP = "PTP"
