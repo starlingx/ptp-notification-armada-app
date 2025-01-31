@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import ipaddress
 
 from pathlib import Path
 
@@ -19,6 +20,23 @@ from trackingfunctionsdk.services.daemon import DaemonControl
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
+
+def build_rabbitmq_endpoint(user, password, host, port):
+    """Build RabitMQ endpoint URL"""
+
+    """Only IPv6 addresses are enclosed in square brackets."""
+    # 'rabbit://admin:admin@127.0.0.1:5672/'
+    # 'rabbit://admin:admin@registration.notification.svc.cluster.local:5672/'
+    # 'rabbit://admin:admin@[::1]:5672/'
+    endpoint_format = 'rabbit://{0}:{1}@{2}:{3}'
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.version == 6:
+            endpoint_format = 'rabbit://{0}:{1}@[{2}]:{3}'
+    except ValueError:
+        pass
+
+    return endpoint_format.format(user, password, host, port)
 
 THIS_NAMESPACE = os.environ.get("THIS_NAMESPACE", 'notification')
 THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME", 'controller-0')
@@ -33,14 +51,14 @@ REGISTRATION_HOST = os.environ.get("REGISTRATION_HOST", 'localhost')
 
 # 'rabbit://admin:admin@[127.0.0.1]:5672/'
 # 'rabbit://admin:admin@[::1]:5672/'
-REGISTRATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@[{2}]:{3}'.format(
+REGISTRATION_TRANSPORT_ENDPOINT = build_rabbitmq_endpoint(
     REGISTRATION_USER, REGISTRATION_PASS, REGISTRATION_HOST, REGISTRATION_PORT)
 
 NOTIFICATION_BROKER_USER = os.environ.get("NOTIFICATIONSERVICE_USER", "guest")
 NOTIFICATION_BROKER_PASS = os.environ.get("NOTIFICATIONSERVICE_PASS", "guest")
 NOTIFICATION_BROKER_PORT = os.environ.get("NOTIFICATIONSERVICE_PORT", "5672")
 
-NOTIFICATION_TRANSPORT_ENDPOINT = 'rabbit://{0}:{1}@[{2}]:{3}'.format(
+NOTIFICATION_TRANSPORT_ENDPOINT = build_rabbitmq_endpoint(
     NOTIFICATION_BROKER_USER, NOTIFICATION_BROKER_PASS, THIS_POD_IP,
     NOTIFICATION_BROKER_PORT)
 
