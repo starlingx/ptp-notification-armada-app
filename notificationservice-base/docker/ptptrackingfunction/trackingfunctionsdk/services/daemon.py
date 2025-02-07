@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -89,9 +89,11 @@ class PtpWatcherDefault:
         self.node_name = self.daemon_context['THIS_NODE_NAME']
         self.namespace = self.daemon_context.get('THIS_NAMESPACE', 'notification')
 
-        broker_transport_endpoint = self.daemon_context['NOTIFICATION_TRANSPORT_ENDPOINT']
+        broker_transport_endpoint = \
+            self.daemon_context['NOTIFICATION_TRANSPORT_ENDPOINT']
 
-        registration_transport_endpoint = self.daemon_context['REGISTRATION_TRANSPORT_ENDPOINT']
+        registration_transport_endpoint = \
+            self.daemon_context['REGISTRATION_TRANSPORT_ENDPOINT']
 
         self.broker_endpoint = RpcEndpointInfo(broker_transport_endpoint)
         self.registration_broker_endpoint = RpcEndpointInfo(registration_transport_endpoint)
