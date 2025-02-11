@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -93,7 +93,7 @@ ptptracking:
     livenessTimeoutSeconds: 3
   image:
     repository: starlingx/notificationservice-base
-    tag: stx.10.0-v2.2.4
+    tag: stx.11.0-v2.2.5
     pullPolicy: IfNotPresent
   device:
     simulated: false
@@ -120,7 +120,7 @@ ptptrackingv2:
     livenessTimeoutSeconds: 3
   image:
     repository: starlingx/notificationservice-base-v2
-    tag: stx.10.0-v2.3.0
+    tag: stx.11.0-v2.3.1
     pullPolicy: IfNotPresent
   control_timeout: 2
   device:
