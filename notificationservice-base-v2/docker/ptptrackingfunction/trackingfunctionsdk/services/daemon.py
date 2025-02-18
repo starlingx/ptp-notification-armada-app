@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -466,8 +466,51 @@ class PtpWatcherDefault:
         LOG.debug("Getting os clock status.")
         return new_event, sync_state, new_event_time
 
-    def __get_overall_sync_state(self, holdover_time, freq, sync_state,
-                                 last_event_time):
+    def __get_primary_ptp_state(self, ptp_device):
+        # The PTP device itself is being disciplined or not ?
+        # Check which ptp4l instance disciplining this PTP device
+        # disciplining source could be either GNSS or PTP
+        primary_ptp4l = None
+        ptp_state = PtpState.Freerun
+        for ptp4l in self.ptp_monitor_list:
+            # runtime loading of ptp4l config
+            ptp4l.set_ptp_devices()
+            if (
+                ptp_device in ptp4l.get_ptp_devices()
+                and ptp4l.get_ptp_sync_source() != constants.ClockSourceType.TypeNA
+            ):
+                primary_ptp4l = ptp4l
+                break
+
+        if primary_ptp4l is not None:
+            _, read_state, _ = primary_ptp4l.get_ptp_sync_state()
+            if read_state == PtpState.Locked:
+                ptp_state = PtpState.Locked
+
+        return primary_ptp4l, ptp_state
+
+    def __get_primary_gnss_state(self, ptp_device):
+        # The PTP device itself is being disciplined or not ?
+        # Check which ts2phc instance disciplining this PTP device
+        primary_gnss = None
+        gnss_state = GnssState.Failure_Nofix
+        for gnss in self.observer_list:
+            # runtime loading of ts2phc config
+            gnss.set_ptp_devices()
+            if ptp_device in gnss.get_ptp_devices():
+                primary_gnss = gnss
+                break
+
+        if primary_gnss is not None:
+            read_state = primary_gnss._state
+            if read_state == GnssState.Synchronized:
+                gnss_state = GnssState.Synchronized
+
+        return primary_gnss, gnss_state
+
+    def __get_overall_sync_state(
+        self, holdover_time, freq, sync_state, last_event_time
+    ):
         new_event = False
         new_event_time = last_event_time
         previous_sync_state = sync_state
@@ -481,45 +524,91 @@ class PtpWatcherDefault:
         ptp_state = None
 
         LOG.debug("Getting overall sync state.")
-        for gnss in self.observer_list:
-            if gnss._state == constants.UNKNOWN_PHC_STATE or \
-                    gnss._state == GnssState.Failure_Nofix:
-                gnss_state = GnssState.Failure_Nofix
-            elif gnss._state == GnssState.Synchronized and \
-                    gnss_state != GnssState.Failure_Nofix:
-                gnss_state = GnssState.Synchronized
 
-        for ptp4l in self.ptp_monitor_list:
-            _, read_state, _ = ptp4l.get_ptp_sync_state()
-            if read_state == PtpState.Holdover or \
-                    read_state == PtpState.Freerun or \
-                    read_state == constants.UNKNOWN_PHC_STATE:
-                ptp_state = PtpState.Freerun
-            elif read_state == PtpState.Locked and \
-                    ptp_state != PtpState.Freerun:
-                ptp_state = PtpState.Locked
-
+        # overall state depends on os_clock_state and single chained gnss/ptp state
+        # Need to figure out which gnss/ptp is disciplining the PHC that syncs os_clock
         os_clock_state = self.os_clock_monitor.get_os_clock_state()
+        sync_state = OverallClockState.Freerun
+        if os_clock_state is not OsClockState.Freerun:
+            # PTP device that is disciplining the OS clock,
+            # valid even for HA source devices
+            ptp_device = self.os_clock_monitor.get_source_ptp_device()
+            if ptp_device is None:
+                # This may happen in virtualized environments
+                LOG.warning("No PTP device. Defaulting overall state Freerun")
+            else:
+                # What source (gnss or ptp) disciplining the PTP device at the
+                # moment (A PTP device could have both TS2PHC/gnss source and
+                # PTP4l/slave)
+                sync_source = constants.ClockSourceType.TypeNA
+                # any ts2phc instance disciplining the ptp device (source GNSS)
+                primary_gnss, gnss_state = self.__get_primary_gnss_state(ptp_device)
+                if primary_gnss is not None:
+                    sync_source = constants.ClockSourceType.TypeGNSS
 
-        if gnss_state is GnssState.Failure_Nofix or \
-                os_clock_state is OsClockState.Freerun or \
-                ptp_state is PtpState.Freerun:
-            sync_state = OverallClockState.Freerun
-        else:
-            sync_state = OverallClockState.Locked
+                # any ptp4l instance disciplining the ptp device (source PTP or GNSS)
+                primary_ptp4l, ptp_state = self.__get_primary_ptp_state(ptp_device)
+
+                # which source: PTP or GNSS
+                # In presence of ptp4l instance disciplining the ptp device, it truly
+                # dictates what source it is using.
+                if primary_ptp4l is not None:
+                    sync_source = primary_ptp4l.get_ptp_sync_source()
+
+                ptp4l_instance_and_state = (
+                    "NA"
+                    if primary_ptp4l is None
+                    else (primary_ptp4l.ptp4l_service_name, ptp_state)
+                )
+                ts2phc_instance_and_state = (
+                    "NA"
+                    if primary_gnss is None
+                    else (primary_gnss.ts2phc_service_name, gnss_state)
+                )
+                LOG.debug(
+                    f"Overall sync state chaining info:\n"
+                    f"os-clock's source ptp-device = {ptp_device}\n"
+                    f"ptp-device's sync-source = {sync_source}\n"
+                    f"ptp4l-instance-and-state = {ptp4l_instance_and_state}\n"
+                    f"ts2phc-instance-and-state = {ts2phc_instance_and_state}"
+                )
+
+                # Based on sync_source that is used to discipline the ptp device,
+                # dependent ts2phc or ptp4l instance's state is chosen.
+                if sync_source == constants.ClockSourceType.TypeNA:
+                    # The PTP device is not being disciplined by any PTP4l/TS2PHC instances
+                    LOG.warning(
+                        "PTP device used by PHC2SYS is not synced/configured on any PTP4l/TS2PHC instances."
+                    )
+
+                elif (
+                    sync_source == constants.ClockSourceType.TypeGNSS
+                    and gnss_state is GnssState.Synchronized
+                ):
+                    sync_state = OverallClockState.Locked
+
+                elif (
+                    sync_source == constants.ClockSourceType.TypePTP
+                    and ptp_state is PtpState.Locked
+                ):
+                    sync_state = OverallClockState.Locked
 
         if sync_state == OverallClockState.Freerun:
             if previous_sync_state in [
-                    constants.UNKNOWN_PHC_STATE,
-                    constants.FREERUN_PHC_STATE]:
+                constants.UNKNOWN_PHC_STATE,
+                constants.FREERUN_PHC_STATE,
+            ]:
                 sync_state = OverallClockState.Freerun
             elif previous_sync_state == constants.LOCKED_PHC_STATE:
                 sync_state = OverallClockState.Holdover
-            elif previous_sync_state == constants.HOLDOVER_PHC_STATE and \
-                    time_in_holdover < max_holdover_time:
-                LOG.debug("Overall sync: Time in holdover is %s "
-                          "Max time in holdover is %s"
-                          % (time_in_holdover, max_holdover_time))
+            elif (
+                previous_sync_state == constants.HOLDOVER_PHC_STATE
+                and time_in_holdover < max_holdover_time
+            ):
+                LOG.debug(
+                    "Overall sync: Time in holdover is %s "
+                    "Max time in holdover is %s" % (time_in_holdover, max_holdover_time)
+                )
                 sync_state = OverallClockState.Holdover
             else:
                 sync_state = OverallClockState.Freerun

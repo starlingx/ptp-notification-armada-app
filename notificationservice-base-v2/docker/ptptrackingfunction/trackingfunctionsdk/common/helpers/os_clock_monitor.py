@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023 Wind River Systems, Inc.
+# Copyright (c) 2022-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -249,26 +249,7 @@ class OsClockMonitor:
 
     def _get_interface_phc_device(self):
         """Determine the phc device for the interface"""
-        pattern = "/hostsys/class/net/" + self.phc_interface + "/device/ptp/*"
-        ptp_device = glob(pattern)
-        if len(ptp_device) == 0:
-            # Try the 0th interface instead, required for some NIC types
-            phc_interface_base = self.phc_interface[:-1] + "0"
-            LOG.info("No ptp device found at %s trying %s instead"
-                     % (pattern, phc_interface_base))
-            pattern = "/hostsys/class/net/" + phc_interface_base + \
-                      "/device/ptp/*"
-            ptp_device = glob(pattern)
-            if len(ptp_device) == 0:
-                LOG.warning("No ptp device found for base interface at %s"
-                            % pattern)
-                return None
-        if len(ptp_device) > 1:
-            LOG.error("More than one ptp device found at %s" % pattern)
-            return None
-        ptp_device = os.path.basename(ptp_device[0])
-        LOG.debug("Found ptp device %s at %s" % (ptp_device, pattern))
-        return ptp_device
+        return utils.get_interface_phc_device(self.phc_interface)
 
     def get_os_clock_offset(self):
         """Get the os CLOCK_REALTIME offset"""
@@ -326,6 +307,12 @@ class OsClockMonitor:
 
     def get_os_clock_state(self):
         return self._state
+
+    def get_source_ptp_device(self):
+        # PTP device that is disciplining the OS clock
+        # This is also valid in case of HA source devices as
+        # __publish_os_clock_status updates ptp_device.
+        return self.ptp_device
 
     def os_clock_status(self, holdover_time, freq, sync_state, event_time):
         current_time = datetime.datetime.utcnow().timestamp()

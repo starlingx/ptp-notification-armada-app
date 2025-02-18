@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023 Wind River Systems, Inc.
+# Copyright (c) 2022-2023,2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import log_helper
+from trackingfunctionsdk.common.helpers import ptpsync as utils
 from trackingfunctionsdk.common.helpers.cgu_handler import CguHandler
 from trackingfunctionsdk.model.dto.gnssstate import GnssState
 
@@ -48,6 +49,7 @@ class GnssMonitor(Observer):
                 "GnssMonitor: Unable to determine tsphc_service name from %s"
                 % self.config_file)
 
+        self.set_ptp_devices()
         # Setup GNSS data
         self.gnss_cgu_handler = CguHandler(config_file, nmea_serialport,
                                            pci_addr, cgu_path)
@@ -77,6 +79,34 @@ class GnssMonitor(Observer):
                 'PPS DPLL']['Current reference'] == 'GNSS-1PPS':
             self.gnss_pps_state = \
                 self.gnss_cgu_handler.cgu_output_parsed['PPS DPLL']['Status']
+
+    def set_ptp_devices(self):
+        ptp_devices = set()
+        phc_interfaces = self._check_config_file_interfaces()
+        for phc_interface in phc_interfaces:
+            ptp_device = utils.get_interface_phc_device(phc_interface)
+            if ptp_device is not None:
+                ptp_devices.add(ptp_device)
+        self.ptp_devices = list(ptp_devices)
+        LOG.debug("TS2PHC PTP devices are %s" % self.ptp_devices)
+
+    def get_ptp_devices(self):
+        return self.ptp_devices
+
+    def _check_config_file_interfaces(self):
+        phc_interfaces = []
+        with open(self.config_file, 'r') as f:
+            config_lines = f.readlines()
+            config_lines = [line.rstrip() for line in config_lines]
+
+        for line in config_lines:
+            # Find the interface value inside the square brackets
+            if re.match(r"^\[.*\]$", line) and line != "[global]":
+                phc_interface = line.strip("[]")
+                LOG.debug("TS2PHC interface is %s" % phc_interface)
+                phc_interfaces.append(phc_interface)
+
+        return phc_interfaces
 
     def update(self, subject, matched_line) -> None:
         LOG.info("Kernel event detected. %s" % matched_line)
