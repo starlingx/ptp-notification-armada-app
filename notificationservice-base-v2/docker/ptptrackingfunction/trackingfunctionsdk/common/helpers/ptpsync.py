@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 #
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -16,6 +16,7 @@ import os
 import re
 import subprocess
 import logging
+from glob import glob
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import log_helper
 
@@ -69,6 +70,9 @@ def check_results(result, total_ptp_keywords, port_count):
     # sync state is in 'Locked' state and will be overwritten if
     # it is not the case
     sync_state = constants.LOCKED_PHC_STATE
+    # sync source is in 'NA' and will be overwritten when source
+    # found to be GNSS or PTP.
+    sync_source = constants.ClockSourceType.TypeNA
 
     local_gm = False
 
@@ -77,16 +81,18 @@ def check_results(result, total_ptp_keywords, port_count):
         LOG.info("Results %s" % result)
         LOG.info("Results len %s, total_ptp_keywords %s" % (len(result), total_ptp_keywords))
         raise RuntimeError("PMC results are incomplete, retrying")
-    # determine the current sync state
+    # determine the current sync state and sync source
     if (result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT
             and result[constants.GRANDMASTER_IDENTITY] != result[constants.CLOCK_IDENTITY]):
         sync_state = constants.FREERUN_PHC_STATE
     elif result[constants.GRANDMASTER_IDENTITY] == result[constants.CLOCK_IDENTITY]:
         local_gm = True
+        sync_source = constants.ClockSourceType.TypeGNSS
         LOG.debug("Local node is a GM")
     if not local_gm:
         for port in range(1, port_count + 1):
             if result[constants.PORT.format(port)].lower() == constants.SLAVE_MODE:
+                sync_source = constants.ClockSourceType.TypePTP
                 break
         else:
             sync_state = constants.FREERUN_PHC_STATE
@@ -101,7 +107,7 @@ def check_results(result, total_ptp_keywords, port_count):
         sync_state = constants.FREERUN_PHC_STATE
     if (result[constants.GM_CLOCK_CLASS] not in ptp4l_clock_class_locked):
         sync_state = constants.FREERUN_PHC_STATE
-    return sync_state
+    return sync_state, sync_source
 
 
 def parse_resource_address(resource_address):
@@ -123,3 +129,27 @@ def format_resource_address(node_name, resource, instance=None):
         resource_address = resource_address + resource
     LOG.debug("format_resource_address %s" % resource_address)
     return resource_address
+
+
+def get_interface_phc_device(phc_interface):
+    """Determine the phc device for the interface"""
+    pattern = "/hostsys/class/net/" + phc_interface + "/device/ptp/*"
+    ptp_device = glob(pattern)
+    if len(ptp_device) == 0:
+        # Try the 0th interface instead, required for some NIC types
+        phc_interface_base = phc_interface[:-1] + "0"
+        LOG.info("No ptp device found at %s trying %s instead"
+                    % (pattern, phc_interface_base))
+        pattern = "/hostsys/class/net/" + phc_interface_base + \
+                    "/device/ptp/*"
+        ptp_device = glob(pattern)
+        if len(ptp_device) == 0:
+            LOG.warning("No ptp device found for base interface at %s"
+                        % pattern)
+            return None
+    if len(ptp_device) > 1:
+        LOG.error("More than one ptp device found at %s" % pattern)
+        return None
+    ptp_device = os.path.basename(ptp_device[0])
+    LOG.debug("Found ptp device %s at %s" % (ptp_device, pattern))
+    return ptp_device

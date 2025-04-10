@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -13,6 +13,7 @@
 #
 import datetime
 import logging
+import re
 import sys
 
 from trackingfunctionsdk.model.dto.ptpstate import PtpState
@@ -62,11 +63,47 @@ class PtpMonitor:
             self.phc2sys_service_name = phc2sys_service_name
             self.holdover_time = int(holdover_time)
             self.freq = int(freq)
+            self.set_ptp_devices()
+            self.sync_source = constants.ClockSourceType.TypeNA
             self._ptp_event_time = datetime.datetime.utcnow().timestamp()
             self._clock_class_event_time = \
                 datetime.datetime.utcnow().timestamp()
             self.set_ptp_sync_state()
             self.set_ptp_clock_class()
+
+    def set_ptp_devices(self):
+        ptp_devices = set()
+        phc_interfaces = self._check_config_file_interfaces()
+        for phc_interface in phc_interfaces:
+            ptp_device = utils.get_interface_phc_device(phc_interface)
+            if ptp_device is not None:
+                ptp_devices.add(ptp_device)
+        self.ptp_devices = list(ptp_devices)
+        LOG.debug("PTP4l PTP devices are %s" % self.ptp_devices)
+
+    def get_ptp_devices(self):
+        return self.ptp_devices
+
+    def get_ptp_sync_source(self):
+        return self.sync_source
+
+    def _check_config_file_interfaces(self):
+        phc_interfaces = []
+        with open(self.ptp4l_config, 'r') as f:
+            config_lines = f.readlines()
+            config_lines = [line.rstrip() for line in config_lines]
+
+        for line in config_lines:
+            # Find the interface value inside the square brackets
+            if re.match(r"^\[.*\]$", line) and line not in [
+                "[global]",
+                "[unicast_master_table]",
+            ]:
+                phc_interface = line.strip("[]")
+                LOG.debug("PTP4l interface is %s" % phc_interface)
+                phc_interfaces.append(phc_interface)
+
+        return phc_interfaces
 
     def set_ptp_sync_state(self):
         new_ptp_sync_event, ptp_sync_state, ptp_event_time = self.ptp_status()
@@ -132,6 +169,9 @@ class PtpMonitor:
         # max holdover time is calculated to be in a 'safety' zone
         max_holdover_time = (self.holdover_time - self.freq * 2)
 
+        previous_sync_source = self.sync_source
+        sync_source = constants.ClockSourceType.TypeNA
+
         pmc, ptp4l, _, ptp4lconf = \
             utils.check_critical_resources(self.ptp4l_service_name,
                                            self.phc2sys_service_name)
@@ -141,11 +181,13 @@ class PtpMonitor:
             self.pmc_query_results, total_ptp_keywords, port_count = \
                 self.ptpsync()
             try:
-                sync_state = utils.check_results(self.pmc_query_results,
-                                                 total_ptp_keywords, port_count)
+                sync_state, sync_source = utils.check_results(
+                    self.pmc_query_results,total_ptp_keywords, port_count
+                )
             except RuntimeError as err:
                 LOG.warning(err)
                 sync_state = previous_sync_state
+                sync_source = previous_sync_source
         else:
             LOG.warning("Missing critical resource: "
                         "PMC %s PTP4L %s PTP4LCONF %s"
@@ -169,7 +211,16 @@ class PtpMonitor:
 
         # determine if ptp sync state has changed since the last one
         LOG.debug("ptp_monitor: sync_state %s, "
-                  "previous_sync_state %s" % (sync_state, previous_sync_state))
+                  "previous_sync_state %s, "
+                  "sync_source %s, "
+                  "previous sync_source %s" % (
+                    sync_state, previous_sync_state, sync_source, previous_sync_source
+                  )
+                )
+
+        # record sync_source of this poll.
+        self.sync_source = sync_source
+
         if sync_state != previous_sync_state:
             new_event = True
             self._ptp_event_time = datetime.datetime.utcnow().timestamp()

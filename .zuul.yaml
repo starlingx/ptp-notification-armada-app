@@ -9,7 +9,7 @@
     check:
       jobs:
         - openstack-tox-linters
-        - ptp-notification-tox-py36
+        - ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-pylint
         - k8sapp-ptp-notification-tox-flake8
@@ -17,7 +17,7 @@
     gate:
       jobs:
         - openstack-tox-linters
-        - ptp-notification-tox-py36
+        - ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-pylint
         - k8sapp-ptp-notification-tox-flake8
@@ -27,13 +27,13 @@
         - stx-ptp-notification-armada-app-upload-git-mirror
 
 - job:
-    name: ptp-notification-tox-py36
-    parent: tox-py36
+    name: ptp-notification-tox-py39
+    parent: tox-py39
     description: |
-      Run py36 test for ptp-notification
-    nodeset: ubuntu-bionic
+      Run py39 test for ptp-notification
+    nodeset: debian-bullseye
     vars:
-      tox_envlist: py36
+      tox_envlist: py39
 
 - job:
     name: k8sapp-ptp-notification-tox-py39

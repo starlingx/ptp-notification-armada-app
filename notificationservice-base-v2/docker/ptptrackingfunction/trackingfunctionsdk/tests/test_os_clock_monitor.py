@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2023 Wind River Systems, Inc.
+# Copyright (c) 2022-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -58,7 +58,7 @@ class OsClockMonitorTests(unittest.TestCase):
         mo.side_effect = handlers
         self.assertEqual(self.clockmon._get_phc2sys_command_line_option("/var/run/", "-s"), None)
 
-    @mock.patch('trackingfunctionsdk.common.helpers.os_clock_monitor.glob',
+    @mock.patch('trackingfunctionsdk.common.helpers.ptpsync.glob',
                 side_effect=[['/hostsys/class/net/ens1f0/device/ptp/ptp0'],
                              ['/hostsys/class/net/ens1f0/device/ptp/ptp0',
                               '/hostsys/class/net/ens1f0/device/ptp/ptp1'],

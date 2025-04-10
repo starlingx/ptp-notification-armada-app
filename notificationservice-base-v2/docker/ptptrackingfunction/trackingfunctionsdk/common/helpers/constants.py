@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2024 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -81,3 +81,8 @@ SOURCE_SYNC_SYNC_STATE = '/sync/sync-status/sync-state'
 SOURCE_SYNCE_CLOCK_QUALITY = '/sync/synce-status/clock-quality'
 SOURCE_SYNCE_LOCK_STATE_EXTENDED = '/sync/synce-status/lock-state-extended'
 SOURCE_SYNCE_LOCK_STATE = '/sync/synce-status/lock-state'
+
+class ClockSourceType(object):
+    TypePTP = "PTP"
+    TypeGNSS = "GNSS"
+    TypeNA = "NA"
