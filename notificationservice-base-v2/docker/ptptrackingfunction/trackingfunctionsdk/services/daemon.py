@@ -529,6 +529,10 @@ class PtpWatcherDefault:
         # Need to figure out which gnss/ptp is disciplining the PHC that syncs os_clock
         os_clock_state = self.os_clock_monitor.get_os_clock_state()
         sync_state = OverallClockState.Freerun
+        chaining_info = (
+            f"Overall sync state chaining info:\n"
+            f"os-clock-state = {os_clock_state}"
+        )
         if os_clock_state is not OsClockState.Freerun:
             # PTP device that is disciplining the OS clock,
             # valid even for HA source devices
@@ -536,6 +540,9 @@ class PtpWatcherDefault:
             if ptp_device is None:
                 # This may happen in virtualized environments
                 LOG.warning("No PTP device. Defaulting overall state Freerun")
+                chaining_info += (
+                    f"\nos-clock's source ptp-device = None"
+                )
             else:
                 # What source (gnss or ptp) disciplining the PTP device at the
                 # moment (A PTP device could have both TS2PHC/gnss source and
@@ -565,12 +572,11 @@ class PtpWatcherDefault:
                     if primary_gnss is None
                     else (primary_gnss.ts2phc_service_name, gnss_state)
                 )
-                LOG.debug(
-                    f"Overall sync state chaining info:\n"
-                    f"os-clock's source ptp-device = {ptp_device}\n"
+                chaining_info += (
+                    f"\nos-clock's source ptp-device = {ptp_device}\n"
                     f"ptp-device's sync-source = {sync_source}\n"
-                    f"ptp4l-instance-and-state = {ptp4l_instance_and_state}\n"
-                    f"ts2phc-instance-and-state = {ts2phc_instance_and_state}"
+                    f"(PTP source) ptp4l-instance-and-state = {ptp4l_instance_and_state}\n"
+                    f"(GNSS source) ts2phc-instance-and-state = {ts2phc_instance_and_state}"
                 )
 
                 # Based on sync_source that is used to discipline the ptp device,
@@ -613,9 +619,16 @@ class PtpWatcherDefault:
             else:
                 sync_state = OverallClockState.Freerun
 
+        chaining_info += (
+            f"\nOverall sync: previous-state = {previous_sync_state}, new-state = {sync_state}"
+        )
+
         if sync_state != previous_sync_state:
             new_event = True
             new_event_time = datetime.datetime.utcnow().timestamp()
+            LOG.info(chaining_info)
+        else:
+            LOG.debug(chaining_info)
         return new_event, sync_state, new_event_time
 
     def __get_ptp_status(self, holdover_time, freq, sync_state,
