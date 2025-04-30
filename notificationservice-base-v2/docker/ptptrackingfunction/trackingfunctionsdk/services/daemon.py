@@ -533,7 +533,13 @@ class PtpWatcherDefault:
             f"Overall sync state chaining info:\n"
             f"os-clock-state = {os_clock_state}"
         )
-        if os_clock_state is not OsClockState.Freerun:
+
+        # When os_clock_state is not locked (i.e. holdover or freerun), the overall
+        # sync_state would still be freerun, which later converted to holdover
+        # based upon: previous locked state or until time-in-holdover less than
+        # max_holdover_time. This makes sure: overall sync_state follows
+        # os_clock_state's holdover right after, and don't wait until freerun.
+        if os_clock_state is OsClockState.Locked:
             # PTP device that is disciplining the OS clock,
             # valid even for HA source devices
             ptp_device = self.os_clock_monitor.get_source_ptp_device()
