@@ -1,4 +1,16 @@
-BUILDER=docker
+BUILDER=loci
+DIST_REPOS="OS"
 LABEL=notificationservice-base-v2
-DOCKER_CONTEXT=../docker
-DOCKER_FILE=./Dockerfile
+
+# Set non real information because we are not cloning a repo
+PROJECT=infra
+PROJECT_REPO=nil
+
+DIST_PACKAGES="python3 python3-dev gcc"
+PIP_PACKAGES="notificationservice-base-v2 \
+    pecan \
+    oslo.config \
+    oslo.messaging \
+    WSME \
+    jsonschema \
+    pynetlink"

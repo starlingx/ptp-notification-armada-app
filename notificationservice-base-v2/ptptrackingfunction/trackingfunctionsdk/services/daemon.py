@@ -451,10 +451,10 @@ class PtpWatcherDefault:
 
         self.ptpeventproducer.stop_status_listener(self.location_info)
 
-    def __get_gnss_status(self, holdover_time, freq, sync_state,
+    def __get_gnss_status(self, sync_state,
                           last_event_time, gnss_monitor):
         new_event, sync_state, new_event_time = gnss_monitor.get_gnss_status(
-            holdover_time, freq, sync_state, last_event_time)
+            sync_state, last_event_time)
         LOG.debug("Getting GNSS status.")
         return new_event, sync_state, new_event_time
 
@@ -791,7 +791,7 @@ class PtpWatcherDefault:
                     'last_event_time', time.time())
 
             new_event, sync_state, new_event_time = self.__get_gnss_status(
-                holdover_time, freq, sync_state, last_event_time, gnss)
+                sync_state, last_event_time, gnss)
             LOG.info("%s gnss_status: state is %s, new_event is %s"
                      % (gnss.ts2phc_service_name, sync_state, new_event))
 
