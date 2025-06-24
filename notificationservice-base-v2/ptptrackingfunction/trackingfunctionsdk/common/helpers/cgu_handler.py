@@ -42,7 +42,7 @@ class CguHandler:
 
     def _get_gnss_nmea_serialport_from_ts2phc_config(self):
         """Read a ts2phc config file and return the ts2phc.nmea_serialport"""
-
+        nmea_serialport = None
         try:
             with open(self._config_file, 'r', encoding='utf-8') as infile:
                 for line in infile:
@@ -203,10 +203,12 @@ class CguHandler:
     def read_cgu(self):
         """Read the CGU information using netlink interface."""
         if self._dpll is None:
-            raise NetlinkException("Netlink family not initialized.")
+            LOG.debug("Netlink family not initialized.")
+            return
         if self._clock_id is None:
-            raise NetlinkException("Isn't possible to obtain the status of "
+            LOG.debug("Isn't possible to obtain the status of "
                                    "the device. Clock ID is None.")
+            return
 
         # To avoid unnecessary reads and save time, pins used by the device
         # will be saved and read separately.
