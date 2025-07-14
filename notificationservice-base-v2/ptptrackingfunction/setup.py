@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2021-2023 Wind River Systems, Inc.
+# Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -13,16 +13,16 @@ except ImportError:
     from setuptools import setup, find_packages
 
 setup(
-    name='ptptrackingfunction',
-    version='0.1',
+    name='notificationservice-base-v2',
+    version='0.2',
     description='',
     author='',
     author_email='',
     install_requires=[
         "",
     ],
-    test_suite='ptptrackingfunction',
+    test_suite='notificationservice-base-v2',
     zip_safe=False,
     include_package_data=True,
-    packages=find_packages(exclude=['ez_setup'])
+    packages=find_packages()
 )

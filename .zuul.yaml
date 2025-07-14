@@ -1,15 +1,12 @@
 ---
 - project:
-    vars:
-      ensure_tox_version: '<4'
     templates:
       - publish-stx-docs
       - stx-api-ref-jobs
-    #  - stx-release-notes-jobs
     check:
       jobs:
         - openstack-tox-linters
-        - ptp-notification-tox-py36
+        #- ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-pylint
         - k8sapp-ptp-notification-tox-flake8
@@ -17,7 +14,7 @@
     gate:
       jobs:
         - openstack-tox-linters
-        - ptp-notification-tox-py36
+        #- ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-pylint
         - k8sapp-ptp-notification-tox-flake8
@@ -26,20 +23,26 @@
       jobs:
         - stx-ptp-notification-armada-app-upload-git-mirror
 
+# TODO: Enable ptp-notification-tox-py39 job when possible
+# Considering the incompatibility between python and the system with dpll 
+# capability in the current environment, the job is disabled for now.
+
 - job:
-    name: ptp-notification-tox-py36
-    parent: tox-py36
+    name: ptp-notification-tox-py39
+    parent: tox-py39
     description: |
-      Run py36 test for ptp-notification
-    nodeset: ubuntu-bionic
-    vars:
-      tox_envlist: py36
+      Run py39 test for ptp-notification
+    nodeset: debian-bullseye
+    required-projects:
+      - starlingx/integ
+    files: 
+      - notificationservice-base-v2/*
 
 - job:
     name: k8sapp-ptp-notification-tox-py39
     parent: openstack-tox-py39
     description: |
-            Run py39 test for k8sapp_dell_storage
+            Run py39 test for ptp_notification_app
     nodeset: debian-bullseye
     required-projects:
       - starlingx/config
