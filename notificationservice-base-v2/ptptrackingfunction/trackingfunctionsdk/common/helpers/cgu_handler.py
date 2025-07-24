@@ -69,7 +69,7 @@ class CguHandler:
         nmea_serialport = self._nmea_serialport.split('/')[2]
         LOG.debug('Looking for nmea_serialport value: %s', nmea_serialport)
         try:
-            with open(constants.UEVENT_FILE.format(self._nmea_serialport), 'r',
+            with open(constants.UEVENT_FILE.format(nmea_serialport), 'r',
                       encoding='utf-8') as file:
                 for line in file:
                     if constants.PCI_SLOT_NAME in line:
