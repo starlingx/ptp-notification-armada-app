@@ -21,7 +21,8 @@ class CguHandler:
     def __init__(self, config_file, nmea_serialport=None, pci_addr=None,
                  cgu_path=None, clock_id=None):
         self._config_file = config_file
-        self._nmea_serialport = nmea_serialport
+        self._nmea_serialport_mask = nmea_serialport
+        self._nmea_serialport = self._prune_reconfigured_suffix(nmea_serialport)
         self._pci_addr = pci_addr
         self._cgu_path = cgu_path
         self._clock_id = clock_id
@@ -40,6 +41,10 @@ class CguHandler:
         except Exception as err:
             LOG.error(err)
 
+    def _prune_reconfigured_suffix(self, nmea_serialport):
+        # truncate suffix .pty (gpspipe output device) if any, to get the actual device path
+        return nmea_serialport.removesuffix(".pty") if nmea_serialport else None
+
     def _get_gnss_nmea_serialport_from_ts2phc_config(self):
         """Read a ts2phc config file and return the ts2phc.nmea_serialport"""
         nmea_serialport = None
@@ -49,7 +54,8 @@ class CguHandler:
                     if constants.NMEA_SERIALPORT in line:
                         nmea_serialport = line.split(' ')[1].strip('\n')
                         break
-            self._nmea_serialport = nmea_serialport
+            self._nmea_serialport_mask = nmea_serialport
+            self._nmea_serialport = self._prune_reconfigured_suffix(nmea_serialport)
             self._is_serial_module = "tty" in nmea_serialport
             return
         except (FileNotFoundError, PermissionError) as err:
