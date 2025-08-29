@@ -151,6 +151,7 @@ class CguHandler:
         NetlinkException: error when Netlink wasn't initialized, or no info
             is read.
         """
+        LOG.debug("Reading all devices")
         try:
             get_pins = self._dpll.get_all_pins()\
                 .filter_by_device_clock_id(self._clock_id)\
@@ -174,11 +175,13 @@ class CguHandler:
             NetlinkException: error when Netlink wasn't initialized, or no info
             is read.
         """
+        LOG.debug("Reading only filtered pins")
         try:
             new_pins = DpllPins()
 
             # Create a set of pins to read
             pin_ids = {x.pin_id for x in self._pins}
+            LOG.debug("Filtered pin IDs: %s", pin_ids)
 
             for pin_id in pin_ids:
                 # Get pin (for each pin_id) and filter by device_id.
@@ -238,6 +241,7 @@ class CguHandler:
 
         pin = self._pins.filter_by_device_type(device_type)
         if len(pin) == 0:
+            self._pins = None
             return LockStatus.UNDEFINED.value
 
         return next(iter(pin)).lock_status.value
