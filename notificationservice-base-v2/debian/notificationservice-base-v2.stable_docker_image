@@ -14,3 +14,32 @@ PIP_PACKAGES="notificationservice-base-v2 \
     WSME \
     jsonschema \
     pynetlink"
+
+# FIXME: override python modules enforced by:
+# https://opendev.org/starlingx/root/src/branch/master/build-tools/build-wheels/debian/openstack-requirements/caracal/upper-constraints.txt
+# https://opendev.org/starlingx/root/src/branch/master/build-tools/build-wheels/debian/stable-wheels.cfg
+
+POSTBUILD_REMOVE_PYTHON_PACKAGES=""   # default is "pip"
+POSTBUILD_REMOVE_OS_PACKAGES=""       # default is "python3-pip python-pip-whl"
+POSTBUILD_COMMAND='                   # if you use single quotes you do not need to escape newlines
+                                      # but you have to use double quotes inside
+# fail on any error
+set -e
+
+# Override python/OS packages causing critical/high CVEs
+pip3 uninstall -y virtualenv waitress setuptools
+pip3 uninstall -y certifi && pip install "certifi==2025.8.3"
+pip3 uninstall -y mako && pip install "mako==1.3.10"
+export SUDO_FORCE_REMOVE=yes
+apt-get remove -y sudo
+
+# POSTBUILD removal of Python/OS packages
+pip3 uninstall -y pip
+apt-get remove -y python3-pip python-pip-whl python3-setuptools
+apt purge -y "~c"
+
+# cleanup loci side effects: pip, virtualenv packages installed by loci on PIPBOOTSTRAP=/var/lib/pipbootstrap
+rm -rf /var/lib/pipbootstrap
+rm -rf /root/.local
+rm -rf /opt/loci
+'
