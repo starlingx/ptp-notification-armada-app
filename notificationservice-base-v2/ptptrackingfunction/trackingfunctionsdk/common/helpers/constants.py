@@ -5,8 +5,17 @@
 #
 
 from os import path
-from pynetlink import LockStatus
 import os
+
+# Handle optional pynetlink import
+try:
+    from pynetlink import LockStatus
+except ImportError:
+    # Create mock LockStatus for testing environments
+    class MockLockStatus:
+        class LOCKED_AND_HOLDOVER:
+            value = "LOCKED_AND_HOLDOVER"
+    LockStatus = MockLockStatus()
 
 # phc states constants
 FREERUN_PHC_STATE = "Freerun"
@@ -62,6 +71,19 @@ CLOCK_REALTIME = "CLOCK_REALTIME"
 PHC2SYS_TOLERANCE_LOW = 36999999000
 PHC2SYS_TOLERANCE_HIGH = 37000001000
 PHC2SYS_TOLERANCE_THRESHOLD = 1000
+
+PTP4L_MASTER_OFFSET_THRESHOLD = 1000000  # 1ms in nanoseconds
+DEFAULT_HOLDOVER_SECONDS = 30  # Default holdover time in seconds
+
+# Instance config file constants
+INSTANCE_CONFIG_PATH = LINUXPTP_CONFIG_PATH + "instance-monitoring.conf"
+HOLDOVER_SECONDS_KEY = "holdover_seconds"
+OFFSET_THRESHOLD_MAJOR_KEY = "offset_threshold_major_nsec"
+OFFSET_THRESHOLD_MINOR_KEY = "offset_threshold_minor_nsec"
+
+# Threshold type constants
+THRESHOLD_TYPE_MAJOR = "major"
+THRESHOLD_TYPE_MINOR = "minor"
 
 PTP_V1_KEY = "ptp_notification_v1"
 

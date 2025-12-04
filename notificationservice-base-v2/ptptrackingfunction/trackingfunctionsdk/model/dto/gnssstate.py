@@ -13,4 +13,5 @@ class GnssState(object):
     Failure_Nofix = "FAILURE-NOFIX"
     Failure_Low_SNR = "FAILURE-LOW-SNR"
     Failure_PLL = "FAILURE-PLL"
+    Holdover = "HOLDOVER"
 

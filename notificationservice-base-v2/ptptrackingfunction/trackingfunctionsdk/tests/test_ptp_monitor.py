@@ -23,20 +23,18 @@ class PtpMonitorTests(unittest.TestCase):
         self.ptpmon = PtpMonitor(
             ptp4l_instance,
             holdover_seconds,
-            poll_freq_seconds,
             phc2sys_service_name,
             init=False,
         )
         self.ptpmon.ptp4l_config = testpath + "test_input_files/ptp4l-ptp-inst1.conf"
         self.assertEqual(
-            self.ptpmon._check_config_file_interfaces(), ["enp81s0f3", "enp81s0f4"]
-        )
+            self.ptpmon._check_config_file_interfaces(), [
+                "enp81s0f3", "enp81s0f4"])
 
     def test_set_ptp_devices(self):
         self.ptpmon = PtpMonitor(
             ptp4l_instance,
             holdover_seconds,
-            poll_freq_seconds,
             phc2sys_service_name,
             init=False,
         )
@@ -56,7 +54,8 @@ class PtpMonitorTests(unittest.TestCase):
             ],
         ):
             self.ptpmon.set_ptp_devices()
-        self.assertEqual(set(self.ptpmon.get_ptp_devices()), set(["ptp0", "ptp1"]))
+        self.assertEqual(set(self.ptpmon.get_ptp_devices()),
+                         set(["ptp0", "ptp1"]))
 
         with mock.patch(
             "trackingfunctionsdk.common.helpers.ptpsync.glob",
