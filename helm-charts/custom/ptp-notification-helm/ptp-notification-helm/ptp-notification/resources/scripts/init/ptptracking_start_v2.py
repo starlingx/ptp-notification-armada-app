@@ -1,164 +1,127 @@
+#!/usr/bin/env python3
 #
 # Copyright (c) 2021-2025 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-#!/usr/bin/python3
-# -*- coding: UTF-8 -*-
+
 import glob
 import json
 import logging
 import os
 import re
 import ipaddress
-
 from pathlib import Path
-
-from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.services.daemon import DaemonControl
 
+logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
-log_helper.config_logger(LOG)
 
-def build_rabbitmq_endpoint(user, password, host, port):
-    """Build RabitMQ endpoint URL"""
 
-    """Only IPv6 addresses are enclosed in square brackets."""
-    # 'rabbit://admin:admin@127.0.0.1:5672/'
-    # 'rabbit://admin:admin@registration.notification.svc.cluster.local:5672/'
-    # 'rabbit://admin:admin@[::1]:5672/'
-    endpoint_format = 'rabbit://{0}:{1}@{2}:{3}'
+def build_endpoint(user, password, host, port):
+    """Build RabbitMQ endpoint with IPv6 support"""
     try:
         ip = ipaddress.ip_address(host)
         if ip.version == 6:
-            endpoint_format = 'rabbit://{0}:{1}@[{2}]:{3}'
+            host = f"[{host}]"
     except ValueError:
-        pass
+        pass  # Not an IP address, use as-is
+    return f"rabbit://{user}:{password}@{host}:{port}"
 
-    return endpoint_format.format(user, password, host, port)
 
-THIS_NAMESPACE = os.environ.get("THIS_NAMESPACE", 'notification')
-THIS_NODE_NAME = os.environ.get("THIS_NODE_NAME", 'controller-0')
-THIS_POD_IP = os.environ.get("THIS_POD_IP", '127.0.0.1')
-REGISTRATION_USER = os.environ.get("REGISTRATION_USER", "guest")
-REGISTRATION_PASS = os.environ.get("REGISTRATION_PASS", "guest")
-REGISTRATION_PORT = os.environ.get("REGISTRATION_PORT", "5672")
-# REGISTRATION_HOST = \
-#   os.environ.get("REGISTRATION_HOST",
-#                  'registration.notification.svc.cluster.local')
-REGISTRATION_HOST = os.environ.get("REGISTRATION_HOST", 'localhost')
+def get_configs(pattern, service_env_var, service_prefix):
+    """Get configuration files if service is enabled"""
+    if os.environ.get(service_env_var, "").lower() == "false":
+        return [], []
 
-# 'rabbit://admin:admin@[127.0.0.1]:5672/'
-# 'rabbit://admin:admin@[::1]:5672/'
-REGISTRATION_TRANSPORT_ENDPOINT = build_rabbitmq_endpoint(
-    REGISTRATION_USER, REGISTRATION_PASS, REGISTRATION_HOST, REGISTRATION_PORT)
+    configs = glob.glob(pattern)
+    instances = [re.search(f'{service_prefix}-(.+)\.conf', c).group(1)
+                 for c in configs]
+    return configs, instances
 
-NOTIFICATION_BROKER_USER = os.environ.get("NOTIFICATIONSERVICE_USER", "guest")
-NOTIFICATION_BROKER_PASS = os.environ.get("NOTIFICATIONSERVICE_PASS", "guest")
-NOTIFICATION_BROKER_PORT = os.environ.get("NOTIFICATIONSERVICE_PORT", "5672")
 
-NOTIFICATION_TRANSPORT_ENDPOINT = build_rabbitmq_endpoint(
-    NOTIFICATION_BROKER_USER, NOTIFICATION_BROKER_PASS, THIS_POD_IP,
-    NOTIFICATION_BROKER_PORT)
+def build_context():
+    """Build daemon context from environment and config discovery"""
+    # Get configurations
+    ptp4l_configs, ptp4l_instances = get_configs(
+        f"{constants.PTP_CONFIG_PATH}ptp4l-*.conf", "PTP4L_SERVICE_NAME", "ptp4l")
 
-PTP_DEVICE_SIMULATED = os.environ.get("PTP_DEVICE_SIMULATED", True)
+    # GNSS only if ice driver present
+    gnss_configs, gnss_instances = [], []
+    if Path("/ice/ice/").is_dir():
+        gnss_configs, gnss_instances = get_configs(
+            f"{constants.TS2PHC_CONFIG_PATH}ts2phc-*.conf", "TS2PHC_SERVICE_NAME", "ts2phc")
 
-PTP_HOLDOVER_SECONDS = os.environ.get("PTP_HOLDOVER_SECONDS", 30)
-GNSS_HOLDOVER_SECONDS = os.environ.get("GNSS_HOLDOVER_SECONDS", 30)
-OS_CLOCK_HOLDOVER_SECONDS = os.environ.get("OS_CLOCK_HOLDOVER_SECONDS", 30)
-OVERALL_HOLDOVER_SECONDS = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
+    # PHC2SYS
+    phc2sys_configs = glob.glob(
+        f"{constants.PHC2SYS_CONFIG_PATH}phc2sys-*.conf")
+    phc2sys_config = phc2sys_configs[0] if phc2sys_configs else None
+    if len(phc2sys_configs) > 1:
+        LOG.warning("Multiple phc2sys configs found, using first one: %s",
+                    phc2sys_config)
+    phc2sys_service = (re.search(r'phc2sys-(.+)\.conf', phc2sys_config)
+                       .group(1) if phc2sys_config else None)
 
-PHC2SYS_CONFIG = None
-PHC2SYS_SERVICE_NAME = None
-if os.environ.get("PHC2SYS_SERVICE_NAME").lower() == "false":
-    LOG.info("OS Clock tracking disabled.")
-else:
-    PHC2SYS_CONFIGS = glob.glob(constants.PHC2SYS_CONFIG_PATH + "phc2sys-*")
-    LOG.debug('Looked for phc2sys configuration file(s) in %s, found %d'
-              % (constants.PHC2SYS_CONFIG_PATH, len(PHC2SYS_CONFIGS)))
-    if len(PHC2SYS_CONFIGS) == 0:
-        LOG.warning("No phc2sys config found.")
-    else:
-        PHC2SYS_CONFIG = PHC2SYS_CONFIGS[0]
-        if len(PHC2SYS_CONFIGS) > 1:
-            LOG.warning("Multiple phc2sys instances found, selecting %s" %
-                        PHC2SYS_CONFIG)
-        pattern = '(?<=' + constants.PHC2SYS_CONFIG_PATH + \
-                  'phc2sys-).*(?=.conf)'
-        match = re.search(pattern, PHC2SYS_CONFIG)
-        PHC2SYS_SERVICE_NAME = match.group()
+    reg_endpoint = build_endpoint(
+        os.environ.get('REGISTRATION_USER', 'guest'),
+        os.environ.get('REGISTRATION_PASS', 'guest'),
+        os.environ.get('REGISTRATION_HOST', 'localhost'),
+        os.environ.get('REGISTRATION_PORT', '5672')
+    )
 
-PTP4L_CONFIGS = []
-PTP4L_INSTANCES = []
-if os.environ.get("PTP4L_SERVICE_NAME").lower() == "false":
-    LOG.info("PTP4L instance tracking disabled.")
-else:
-    PTP4L_CONFIGS = glob.glob(constants.PTP_CONFIG_PATH + "ptp4l-*")
-    LOG.debug('Looked for ptp4l configuration file(s) in %s, found %d'
-              % (constants.PTP_CONFIG_PATH, len(PTP4L_CONFIGS)))
-    PTP4L_INSTANCES = []
-    pattern = '(?<=' + constants.PTP_CONFIG_PATH + 'ptp4l-).*(?=.conf)'
-    for conf in PTP4L_CONFIGS:
-        match = re.search(pattern, conf)
-        PTP4L_INSTANCES.append(match.group())
+    notif_endpoint = build_endpoint(
+        os.environ.get('NOTIFICATIONSERVICE_USER', 'guest'),
+        os.environ.get('NOTIFICATIONSERVICE_PASS', 'guest'),
+        os.environ.get('THIS_POD_IP', '127.0.0.1'),
+        os.environ.get('NOTIFICATIONSERVICE_PORT', '5672')
+    )
 
-GNSS_CONFIGS = []
-GNSS_INSTANCES = []
-ice_debugfs = Path("/ice/ice/")
-if os.environ.get("TS2PHC_SERVICE_NAME").lower() == "false":
-    LOG.info("GNSS instance tracking disabled.")
-elif not ice_debugfs.is_dir():
-    LOG.info("Ice driver debugfs is not present, GNSS instance tracking disabled.")
-    os.environ["TS2PHC_SERVICE_NAME"] = "false"
-else:
-    GNSS_CONFIGS = glob.glob(constants.TS2PHC_CONFIG_PATH + "ts2phc-*")
-    LOG.debug('Looked for ts2phc configuration file(s) in %s, found %d'
-              % (constants.TS2PHC_CONFIG_PATH, len(GNSS_CONFIGS)))
-    GNSS_INSTANCES = []
-    pattern = '(?<=' + constants.TS2PHC_CONFIG_PATH + 'ts2phc-).*(?=.conf)'
-    for conf in GNSS_CONFIGS:
-        match = re.search(pattern, conf)
-        GNSS_INSTANCES.append(match.group())
+    # Legacy holdover environment variables for backward compatibility
+    ptp_device_simulated = os.environ.get("PTP_DEVICE_SIMULATED", True)
+    ptp_holdover_seconds = os.environ.get("PTP_HOLDOVER_SECONDS", 30)
+    gnss_holdover_seconds = os.environ.get("GNSS_HOLDOVER_SECONDS", 30)
+    os_clock_holdover_seconds = os.environ.get("OS_CLOCK_HOLDOVER_SECONDS", 30)
+    overall_holdover_seconds = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
 
-context = {
-    'THIS_NAMESPACE': THIS_NAMESPACE,
-    'THIS_NODE_NAME': THIS_NODE_NAME,
-    'THIS_POD_IP': THIS_POD_IP,
-    'REGISTRATION_TRANSPORT_ENDPOINT': REGISTRATION_TRANSPORT_ENDPOINT,
-    'NOTIFICATION_TRANSPORT_ENDPOINT': NOTIFICATION_TRANSPORT_ENDPOINT,
-    'GNSS_CONFIGS': GNSS_CONFIGS,
-    'PHC2SYS_CONFIG': PHC2SYS_CONFIG,
-    'PHC2SYS_SERVICE_NAME': PHC2SYS_SERVICE_NAME,
-    'PTP4L_CONFIGS': PTP4L_CONFIGS,
-    'GNSS_INSTANCES': GNSS_INSTANCES,
-    'PTP4L_INSTANCES': PTP4L_INSTANCES,
-
-    'ptptracker_context': {
-        'device_simulated': PTP_DEVICE_SIMULATED,
-        'holdover_seconds': PTP_HOLDOVER_SECONDS
-    },
-    'gnsstracker_context': {
-        'holdover_seconds': GNSS_HOLDOVER_SECONDS
-    },
-    'osclocktracker_context': {
-        'holdover_seconds': OS_CLOCK_HOLDOVER_SECONDS
-    },
-    'overalltracker_context': {
-        'holdover_seconds': OVERALL_HOLDOVER_SECONDS
+    return {
+        'THIS_NAMESPACE': os.environ.get("THIS_NAMESPACE", 'notification'),
+        'THIS_NODE_NAME': os.environ.get("THIS_NODE_NAME", 'controller-0'),
+        'THIS_POD_IP': os.environ.get("THIS_POD_IP", '127.0.0.1'),
+        'REGISTRATION_TRANSPORT_ENDPOINT': reg_endpoint,
+        'NOTIFICATION_TRANSPORT_ENDPOINT': notif_endpoint,
+        'GNSS_CONFIGS': gnss_configs,
+        'GNSS_INSTANCES': gnss_instances,
+        'PHC2SYS_CONFIG': phc2sys_config,
+        'PHC2SYS_SERVICE_NAME': phc2sys_service,
+        'PTP4L_CONFIGS': ptp4l_configs,
+        'PTP4L_INSTANCES': ptp4l_instances,
+        # Legacy holdover context for backward compatibility
+        'ptptracker_context': {
+            'device_simulated': ptp_device_simulated,
+            'holdover_seconds': ptp_holdover_seconds
+        },
+        'gnsstracker_context': {
+            'holdover_seconds': gnss_holdover_seconds
+        },
+        'osclocktracker_context': {
+            'holdover_seconds': os_clock_holdover_seconds
+        },
+        'overalltracker_context': {
+            'holdover_seconds': overall_holdover_seconds
+        },
     }
-}
 
-sqlalchemy_conf = {
-    'url': 'sqlite:///apiserver.db',
-    'echo': False,
-    'echo_pool': False,
-    'pool_recycle': 3600,
-    'encoding': 'utf-8'
-}
-LOG.info("PTP tracking service startup context %s" % context)
-sqlalchemy_conf_json = json.dumps(sqlalchemy_conf)
-default_daemoncontrol = DaemonControl(sqlalchemy_conf_json,
-                                      json.dumps(context))
 
-default_daemoncontrol.refresh()
+if __name__ == "__main__":
+    context = build_context()
+    LOG.info(
+        f"Starting PTP tracking service with "
+        f"{len(context['PTP4L_INSTANCES'])} PTP4L, "
+        f"{len(context['GNSS_INSTANCES'])} GNSS instances, "
+        f"PHC2SYS: {context['PHC2SYS_SERVICE_NAME']}"
+    )
+
+    sqlalchemy_conf = {'url': 'sqlite:///apiserver.db', 'echo': False}
+    daemon = DaemonControl(json.dumps(sqlalchemy_conf), json.dumps(context))
+    daemon.refresh()
