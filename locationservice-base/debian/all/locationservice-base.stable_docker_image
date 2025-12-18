@@ -1,4 +1,4 @@
 BUILDER=docker
 LABEL=locationservice-base
-DOCKER_CONTEXT=../docker
+DOCKER_CONTEXT=../../docker
 DOCKER_FILE=./Dockerfile
