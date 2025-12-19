@@ -6,7 +6,7 @@
     check:
       jobs:
         - openstack-tox-linters
-        #- ptp-notification-tox-py39
+        - ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-pylint
         - k8sapp-ptp-notification-tox-flake8
@@ -14,7 +14,7 @@
     gate:
       jobs:
         - openstack-tox-linters
-        #- ptp-notification-tox-py39
+        - ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-pylint
         - k8sapp-ptp-notification-tox-flake8
