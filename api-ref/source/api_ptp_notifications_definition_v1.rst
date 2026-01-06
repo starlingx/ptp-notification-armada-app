@@ -25,6 +25,13 @@ showing the initial status of the PTP resource followed
 by PTP status notifications if there is a change to the
 PTP status.
 
+.. note::
+   Subscriptions will not persist across system reboots.
+   The consuming application must re-subscribe after a reboot.
+
+   As a best practice, it is recommended to create any required subscriptions
+   each time the application starts.
+
 ************************************************
 Subscribe to receiving PTP status notifications
 ************************************************

@@ -1,0 +1,17 @@
+notificationservice-base-v2 (1.0-1) unstable; urgency=medium
+
+  * Netlink DPLL implementation.
+
+ -- Eduardo Alberti <eduardo.alberti@windriver.com>  Thu, 04 Feb 2025 12:00:00 +0000
+
+notificationservice-base-v2 (1.0-0.stx.3) bullseye; urgency=medium
+
+  * master 6.0 distribution
+
+ -- STX Builder <stx.builder@opendev.org>  Tue, 18 Feb 2025 18:26:38 +0000
+
+notificationservice-base-v2 (1.0-0) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Luan Nunes Utimura <LuanNunes.Utimura@windriver.com>  Thu, 05 Jan 2023 18:07:44 +0000

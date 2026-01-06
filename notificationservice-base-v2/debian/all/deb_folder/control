@@ -1,0 +1,19 @@
+Source: notificationservice-base-v2
+Section: admin
+Priority: optional
+Maintainer: StarlingX Developers <starlingx-discuss@lists.starlingx.io>
+Build-Depends: debhelper-compat (= 13),
+ dh-python,
+ python3-dev,
+ python3-setuptools,
+ python3-wheel
+Standards-Version: 4.5.1
+Homepage: https://www.starlingx.io
+
+Package: notificationservice-base-v2-wheels
+Architecture: all
+Depends:
+ ${misc:Depends},
+ ${python3:Depends},
+ python3-wheel
+Description: StarlingX PTP Notification Service.
