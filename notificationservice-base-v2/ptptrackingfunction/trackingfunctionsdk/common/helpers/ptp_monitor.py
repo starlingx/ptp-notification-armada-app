@@ -20,6 +20,8 @@ from trackingfunctionsdk.model.dto.ptpstate import PtpState
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers import ptpsync as utils
+from trackingfunctionsdk.common.helpers.instance_config_parser import (
+    get_instance_holdover_time, get_instance_offset_threshold)
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
@@ -53,23 +55,34 @@ class PtpMonitor:
 
     pmc_query_results = {}
 
-    def __init__(self, ptp4l_instance, holdover_time, freq,
-                 phc2sys_service_name, init=True):
+    def __init__(self, ptp4l_instance, holdover_time,
+                 phc2sys_service_name, init=True, offset_threshold=None):
 
-        if init:
-            self.ptp4l_config = constants.PTP_CONFIG_PATH + ("ptp4l-%s.conf" %
-                                                             ptp4l_instance)
-            self.ptp4l_service_name = ptp4l_instance
-            self.phc2sys_service_name = phc2sys_service_name
-            self.holdover_time = int(holdover_time)
-            self.freq = int(freq)
-            self.set_ptp_devices()
-            self.sync_source = constants.ClockSourceType.TypeNA
-            self._ptp_event_time = datetime.datetime.utcnow().timestamp()
-            self._clock_class_event_time = \
-                datetime.datetime.utcnow().timestamp()
-            self.set_ptp_sync_state()
-            self.set_ptp_clock_class()
+        if not init:
+            return
+
+        self.ptp4l_config = constants.PTP_CONFIG_PATH + ("ptp4l-%s.conf" %
+                                                         ptp4l_instance)
+        self.ptp4l_service_name = ptp4l_instance
+        self.phc2sys_service_name = phc2sys_service_name
+        self.holdover_time = get_instance_holdover_time(
+            ptp4l_instance, int(holdover_time))
+
+        default_threshold = (
+            offset_threshold or constants.PTP4L_MASTER_OFFSET_THRESHOLD)
+        self.offset_threshold = get_instance_offset_threshold(
+            ptp4l_instance, constants.THRESHOLD_TYPE_MAJOR, default_threshold)
+        LOG.info("PTP Monitor initialized: instance=%s, holdover_time=%ds, "
+                 "offset_threshold=%d",
+                 ptp4l_instance, self.holdover_time,
+                 self.offset_threshold)
+        self.set_ptp_devices()
+        self.sync_source = constants.ClockSourceType.TypeNA
+        self._ptp_event_time = datetime.datetime.utcnow().timestamp()
+        self._clock_class_event_time = \
+            datetime.datetime.utcnow().timestamp()
+        self.set_ptp_sync_state()
+        self.set_ptp_clock_class()
 
     def set_ptp_devices(self):
         ptp_devices = set()
@@ -79,7 +92,7 @@ class PtpMonitor:
             if ptp_device is not None:
                 ptp_devices.add(ptp_device)
         self.ptp_devices = list(ptp_devices)
-        LOG.debug("PTP4l PTP devices are %s" % self.ptp_devices)
+        LOG.debug("PTP4l PTP devices are %s", self.ptp_devices)
 
     def get_ptp_devices(self):
         return self.ptp_devices
@@ -89,8 +102,8 @@ class PtpMonitor:
 
     def _check_config_file_interfaces(self):
         phc_interfaces = []
-        with open(self.ptp4l_config, 'r') as f:
-            config_lines = f.readlines()
+        with open(self.ptp4l_config, 'r', encoding='utf-8') as config_file:
+            config_lines = config_file.readlines()
             config_lines = [line.rstrip() for line in config_lines]
 
         for line in config_lines:
@@ -100,13 +113,14 @@ class PtpMonitor:
                 "[unicast_master_table]",
             ]:
                 phc_interface = line.strip("[]")
-                LOG.debug("PTP4l interface is %s" % phc_interface)
+                LOG.debug("PTP4l interface is %s", phc_interface)
                 phc_interfaces.append(phc_interface)
 
         return phc_interfaces
 
     def set_ptp_sync_state(self):
-        new_ptp_sync_event, ptp_sync_state, ptp_event_time = self.ptp_status()
+        (new_ptp_sync_event, ptp_sync_state,
+         ptp_event_time) = self.ptp_status()
         if ptp_sync_state != self._ptp_sync_state:
             self._new_ptp_sync_event = new_ptp_sync_event
             self._ptp_sync_state = ptp_sync_state
@@ -129,8 +143,8 @@ class PtpMonitor:
             if self._clock_class_retry > 0:
                 self._clock_class_retry -= 1
                 LOG.warning("Trying to get clockClass %s more time(s) before "
-                            "setting clockClass 248 (FREERUN)"
-                            % self._clock_class_retry)
+                            "setting clockClass 248 (FREERUN)",
+                            self._clock_class_retry)
                 clock_class = self._clock_class
             else:
                 clock_class = "248"
@@ -141,7 +155,7 @@ class PtpMonitor:
             self._clock_class_event_time = \
                 datetime.datetime.utcnow().timestamp()
             LOG.debug(self.pmc_query_results)
-            LOG.info("PTP clock class is %s" % self._clock_class)
+            LOG.info("PTP clock class is %s", self._clock_class)
         else:
             self._new_clock_class_event = False
 
@@ -166,8 +180,6 @@ class PtpMonitor:
         previous_sync_state = self._ptp_sync_state
         if previous_sync_state == PtpState.Holdover:
             time_in_holdover = round(current_time - self._ptp_event_time)
-        # max holdover time is calculated to be in a 'safety' zone
-        max_holdover_time = (self.holdover_time - self.freq * 2)
 
         previous_sync_source = self.sync_source
         sync_source = constants.ClockSourceType.TypeNA
@@ -182,41 +194,46 @@ class PtpMonitor:
                 self.ptpsync()
             try:
                 sync_state, sync_source = utils.check_results(
-                    self.pmc_query_results,total_ptp_keywords, port_count
-                )
+                    self.pmc_query_results, total_ptp_keywords,
+                    port_count, self.offset_threshold)
             except RuntimeError as err:
                 LOG.warning(err)
                 sync_state = previous_sync_state
                 sync_source = previous_sync_source
         else:
             LOG.warning("Missing critical resource: "
-                        "PMC %s PTP4L %s PTP4LCONF %s"
-                        % (pmc, ptp4l, ptp4lconf))
+                        "PMC %s PTP4L %s PTP4LCONF %s",
+                        pmc, ptp4l, ptp4lconf)
             sync_state = PtpState.Freerun
         # determine if transition into holdover mode
         if sync_state == PtpState.Freerun:
             if previous_sync_state in [constants.UNKNOWN_PHC_STATE,
                                        PtpState.Freerun]:
                 sync_state = PtpState.Freerun
+                LOG.info("PTP Holdover: Remaining in FREERUN state "
+                         "(previous: %s)", previous_sync_state)
             elif previous_sync_state == PtpState.Locked:
                 sync_state = PtpState.Holdover
-            elif previous_sync_state == PtpState.Holdover and \
-                    time_in_holdover < max_holdover_time:
-                LOG.debug("PTP Status: Time in holdover is %s "
-                          "Max time in holdover is %s"
-                          % (time_in_holdover, max_holdover_time))
+                LOG.info("PTP Holdover: Transitioning LOCKED -> HOLDOVER "
+                         "(holdover_time=%ds)", self.holdover_time)
+            elif (previous_sync_state == PtpState.Holdover and
+                    time_in_holdover < self.holdover_time):
+                LOG.info("PTP Holdover: Remaining in HOLDOVER "
+                         "(%ds/%ds elapsed, %ds remaining)",
+                         time_in_holdover, self.holdover_time,
+                         self.holdover_time - time_in_holdover)
                 sync_state = PtpState.Holdover
             else:
                 sync_state = PtpState.Freerun
+                LOG.warning("PTP Holdover: Transitioning HOLDOVER -> FREERUN "
+                            "(holdover expired: %ds >= %ds)",
+                            time_in_holdover, self.holdover_time)
 
         # determine if ptp sync state has changed since the last one
-        LOG.debug("ptp_monitor: sync_state %s, "
-                  "previous_sync_state %s, "
-                  "sync_source %s, "
-                  "previous sync_source %s" % (
-                    sync_state, previous_sync_state, sync_source, previous_sync_source
-                  )
-                )
+        LOG.debug("ptp_monitor: sync_state %s, previous_sync_state %s, "
+                  "sync_source %s, previous sync_source %s",
+                  sync_state, previous_sync_state, sync_source,
+                  previous_sync_source)
 
         # record sync_source of this poll.
         self.sync_source = sync_source
@@ -251,13 +268,13 @@ class PtpMonitor:
             out = str(out)
             try:
                 out = out.split("\\n\\t\\t")
-            except:
+            except (AttributeError, ValueError):
                 LOG.warning('cannot split "out" into a list')
                 sys.exit(0)
             for state in out:
                 try:
                     state = state.split()
-                except:
+                except (AttributeError, ValueError):
                     LOG.warning('cannot split "state" into a list')
                     sys.exit(0)
                 if len(state) <= 1:
@@ -283,7 +300,7 @@ class PtpMonitor:
 
 if __name__ == "__main__":
     test_ptp = PtpMonitor()
-    LOG.debug("PTP sync state for %s is %s"
-              % (test_ptp.ptp4l_service_name, test_ptp.get_ptp_sync_state()))
-    LOG.debug("PTP clock class for %s is %s"
-              % (test_ptp.ptp4l_service_name, test_ptp.get_ptp_clock_class()))
+    LOG.debug("PTP sync state for %s is %s",
+              test_ptp.ptp4l_service_name, test_ptp.get_ptp_sync_state())
+    LOG.debug("PTP clock class for %s is %s",
+              test_ptp.ptp4l_service_name, test_ptp.get_ptp_clock_class())

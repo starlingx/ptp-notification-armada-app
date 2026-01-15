@@ -26,9 +26,10 @@ log_helper.config_logger(LOG)
 
 ptp4l_clock_class_locked = constants.CLOCK_CLASS_LOCKED_LIST
 try:
-    tmp = os.environ.get('PTP4L_CLOCK_CLASS_LOCKED_LIST', ','.join(ptp4l_clock_class_locked))
+    tmp = os.environ.get('PTP4L_CLOCK_CLASS_LOCKED_LIST',
+                         ','.join(ptp4l_clock_class_locked))
     ptp4l_clock_class_locked = sorted([str(int(e)) for e in tmp.split(',')])
-except:
+except (ValueError, TypeError):
     LOG.error('Unable to convert PTP4L_CLOCK_CLASS_LOCKED_LIST to a list of integers,'
               ' using the default.')
 
@@ -56,17 +57,17 @@ def check_critical_resources(ptp4l_service_name, phc2sys_service_name):
 
     if os.path.isfile('/usr/sbin/pmc'):
         pmc = True
-    if os.path.isfile('/var/run/ptp4l-%s.pid' % ptp4l_service_name):
+    if os.path.isfile(f'/var/run/ptp4l-{ptp4l_service_name}.pid'):
         ptp4l = True
-    if os.path.isfile('/var/run/phc2sys-%s.pid' % phc2sys_service_name):
+    if os.path.isfile(f'/var/run/phc2sys-{phc2sys_service_name}.pid'):
         phc2sys = True
     if os.path.isfile(constants.PTP_CONFIG_PATH +
-                      ('ptp4l-%s.conf' % ptp4l_service_name)):
+                      f'ptp4l-{ptp4l_service_name}.conf'):
         ptp4lconf = True
     return pmc, ptp4l, phc2sys, ptp4lconf
 
 
-def check_results(result, total_ptp_keywords, port_count):
+def check_results(result, total_ptp_keywords, port_count, offset_threshold=None):
     # sync state is in 'Locked' state and will be overwritten if
     # it is not the case
     sync_state = constants.LOCKED_PHC_STATE
@@ -78,8 +79,9 @@ def check_results(result, total_ptp_keywords, port_count):
 
     # check for a healthy result
     if len(result) != total_ptp_keywords:
-        LOG.info("Results %s" % result)
-        LOG.info("Results len %s, total_ptp_keywords %s" % (len(result), total_ptp_keywords))
+        LOG.info("Results %s", result)
+        LOG.info("Results len %s, total_ptp_keywords %s",
+                 len(result), total_ptp_keywords)
         raise RuntimeError("PMC results are incomplete, retrying")
     # determine the current sync state and sync source
     if (result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT
@@ -107,6 +109,18 @@ def check_results(result, total_ptp_keywords, port_count):
         sync_state = constants.FREERUN_PHC_STATE
     if (result[constants.GM_CLOCK_CLASS] not in ptp4l_clock_class_locked):
         sync_state = constants.FREERUN_PHC_STATE
+
+    # Check master offset if threshold provided and offset available
+    if offset_threshold and constants.MASTER_OFFSET in result:
+        try:
+            master_offset = abs(int(result[constants.MASTER_OFFSET]))
+            if master_offset > offset_threshold:
+                LOG.warning(
+                    f"PTP master offset {master_offset}ns exceeds threshold {offset_threshold}ns")
+                sync_state = constants.FREERUN_PHC_STATE
+        except (ValueError, TypeError):
+            LOG.warning("Unable to parse master_offset value")
+
     return sync_state, sync_source
 
 
@@ -121,26 +135,26 @@ def parse_resource_address(resource_address):
 
 
 def format_resource_address(node_name, resource, instance=None):
-    # Return a resource_address
+    """Return a formatted resource address"""
     resource_address = '/./' + node_name
     if instance:
         resource_address = resource_address + '/' + instance + resource
     else:
         resource_address = resource_address + resource
-    LOG.debug("format_resource_address %s" % resource_address)
+    LOG.debug("format_resource_address %s", resource_address)
     return resource_address
 
 
 def get_interface_phc_device(phc_interface):
     """Determine the phc device for the interface"""
     pattern = constants.PHC_PATH.format(phc_interface[:-1]+'*')
-    ptp_device = glob(pattern)
-    if len(ptp_device) == 0:
+    ptp_devices = glob(pattern)
+    if len(ptp_devices) == 0:
         LOG.info("No ptp device found at %s", pattern)
-    elif len(ptp_device) > 1:
+    elif len(ptp_devices) > 1:
         LOG.error("More than one ptp device found at %s", pattern)
     else:
-        ptp_device = os.path.basename(ptp_device[0])
+        ptp_device = os.path.basename(ptp_devices[0])
         LOG.debug("Found ptp device %s at %s", ptp_device, pattern)
         return ptp_device
     return None

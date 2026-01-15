@@ -23,10 +23,6 @@
       jobs:
         - stx-ptp-notification-armada-app-upload-git-mirror
 
-# TODO: Enable ptp-notification-tox-py39 job when possible
-# Considering the incompatibility between python and the system with dpll 
-# capability in the current environment, the job is disabled for now.
-
 - job:
     name: ptp-notification-tox-py39
     parent: tox-py39

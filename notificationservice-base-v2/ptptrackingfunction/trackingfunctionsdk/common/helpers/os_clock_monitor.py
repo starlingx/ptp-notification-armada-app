@@ -16,6 +16,9 @@ from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.model.dto.osclockstate import OsClockState
 from trackingfunctionsdk.common.helpers import ptpsync as utils
+from trackingfunctionsdk.common.helpers.instance_config_parser import (
+    get_instance_holdover_time, get_instance_offset_threshold
+)
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
@@ -25,7 +28,8 @@ PLUGIN_STATUS_QUERY_EXEC = '/usr/sbin/pmc'
 
 class OsClockMonitor:
 
-    def __init__(self, phc2sys_config, init=True):
+    def __init__(self, phc2sys_config, init=True, tolerance_threshold=None,
+                 holdover_time=30):
         self._state = OsClockState()
         self.last_event_time = None
         self.phc2sys_instance = None
@@ -40,19 +44,32 @@ class OsClockMonitor:
 
         self.phc2sys_tolerance_low = constants.PHC2SYS_TOLERANCE_LOW
         self.phc2sys_tolerance_high = constants.PHC2SYS_TOLERANCE_HIGH
-        self.phc2sys_tolerance_threshold = constants.PHC2SYS_TOLERANCE_THRESHOLD
+        # Either take the tolerance threshold from the config file or use the
+        # default value if not provided.
+        self.phc2sys_tolerance_threshold = (
+            tolerance_threshold or constants.PHC2SYS_TOLERANCE_THRESHOLD)
         try:
-            self.phc2sys_tolerance_threshold = int(os.environ.get('PHC2SYS_TOLERANCE_THRESHOLD',
-                                                                  self.phc2sys_tolerance_threshold))
-        except:
+            self.phc2sys_tolerance_threshold = int(
+                os.environ.get('PHC2SYS_TOLERANCE_THRESHOLD',
+                               self.phc2sys_tolerance_threshold))
+        except ValueError:
             LOG.error('Unable to convert PHC2SYS_TOLERANCE_THRESHOLD to integer,'
                       ' using the default.')
 
         self.set_phc2sys_instance()
+        # Get instance-specific configuration values
+        self.holdover_time = get_instance_holdover_time(
+            self.phc2sys_instance, holdover_time)
+        self.phc2sys_tolerance_threshold = get_instance_offset_threshold(
+            self.phc2sys_instance, constants.THRESHOLD_TYPE_MINOR,
+            self.phc2sys_tolerance_threshold)
+        LOG.info("OS Clock Monitor initialized: config=%s, instance=%s, "
+                 "holdover_time=%ds, tolerance_threshold=%dns",
+                 phc2sys_config, self.phc2sys_instance, self.holdover_time,
+                 self.phc2sys_tolerance_threshold)
 
-        """Normally initialize all fields, but allow these to be skipped to
-        assist with unit testing or to short-circuit values if required.
-        """
+        # Normally initialize all fields, but allow these to be skipped to
+        # assist with unit testing or to short-circuit values if required.
         if init:
             self.parse_phc2sys_config()
             if 'global' not in self.config.keys():
@@ -75,11 +92,11 @@ class OsClockMonitor:
         self.phc2sys_instance = self.phc2sys_config.split(
             constants.PHC2SYS_CONFIG_PATH + "phc2sys-")[1]
         self.phc2sys_instance = self.phc2sys_instance.split(".")[0]
-        LOG.debug("phc2sys config file: %s" % self.phc2sys_config)
-        LOG.debug("phc2sys instance name: %s" % self.phc2sys_instance)
+        LOG.debug("phc2sys config file: %s", self.phc2sys_config)
+        LOG.debug("phc2sys instance name: %s", self.phc2sys_instance)
 
     def parse_phc2sys_config(self):
-        LOG.debug("Parsing %s" % self.phc2sys_config)
+        LOG.debug("Parsing %s", self.phc2sys_config)
         config = configparser.ConfigParser(delimiters=' ')
         config.read(self.phc2sys_config)
         self.config = config
@@ -97,18 +114,18 @@ class OsClockMonitor:
                     response = None
                 return response
             except ConnectionRefusedError as err:
-                LOG.error("Error connecting to phc2sys socket for instance %s: %s" % (
-                    self.phc2sys_instance, err))
+                LOG.error("Error connecting to phc2sys socket for instance %s: %s",
+                    self.phc2sys_instance, err)
                 return None
             except FileNotFoundError as err:
-                LOG.error("Error connecting to phc2sys socket for instance %s: %s" % (
-                    self.phc2sys_instance, err))
+                LOG.error("Error connecting to phc2sys socket for instance %s: %s",
+                    self.phc2sys_instance, err)
                 return None
             finally:
                 if hasattr(client_socket, 'close'):
                     client_socket.close()
         else:
-            LOG.warning("No socket path supplied for instance %s" %
+            LOG.warning("No socket path supplied for instance %s",
                         self.phc2sys_instance)
             return None
 
@@ -123,15 +140,15 @@ class OsClockMonitor:
             self.phc_interface = selected_phc_interface
             self.ptp_device = None
         elif selected_phc_interface != self.phc_interface:
-            LOG.info("Phc2sys source interface changed from %s to %s"
-                     % (self.phc_interface, self.valid_phc_interfaces))
+            LOG.info("Phc2sys source interface changed from %s to %s",
+                     self.phc_interface, self.valid_phc_interfaces)
             self.phc_interface = selected_phc_interface
 
         if self.phc_interface is not None:
             self.ptp_device = self._get_interface_phc_device()
 
-        LOG.debug("Phc2sys HA interface: %s ptp_device: %s" %
-                  (self.phc_interface, self.ptp_device))
+        LOG.debug("Phc2sys HA interface: %s ptp_device: %s",
+                  self.phc_interface, self.ptp_device)
 
     def set_utc_offset(self, pidfile_path="/var/run/"):
         # Check command line options for offset
@@ -149,26 +166,28 @@ class OsClockMonitor:
                     and 'ha_domainNumber' in self.config[self.phc_interface].keys():
                 domain_number = self.config[self.phc_interface].get(
                     'ha_domainNumber')
-                LOG.debug("set_utc_offset: ha_domainNumber is %s" %
+                LOG.debug("set_utc_offset: ha_domainNumber is %s",
                           domain_number)
 
             if self.config.has_section('global') \
                     and 'uds_address' in self.config['global'].keys():
                 uds_addr = self.config['global']['uds_address']
-                LOG.debug("set_utc_offset: uds_addr is %s" % uds_addr)
+                LOG.debug("set_utc_offset: uds_addr is %s", uds_addr)
 
                 if domain_number is None:
                     domain_number = self.config['global'].get(
                         'domainNumber', '0')
-                    LOG.debug("set_utc_offset: domainNumber is %s" %
+                    LOG.debug("set_utc_offset: domainNumber is %s",
                               domain_number)
 
                 #
                 # sudo /usr/sbin/pmc -u -b 0 'GET TIME_PROPERTIES_DATA_SET'
                 #
-                data = subprocess.check_output(
-                    [PLUGIN_STATUS_QUERY_EXEC, '-f', self.phc2sys_config, '-u', '-b', '0', '-d',
-                     domain_number, 'GET TIME_PROPERTIES_DATA_SET']).decode()
+                data = subprocess.check_output([
+                    PLUGIN_STATUS_QUERY_EXEC, '-f', self.phc2sys_config,
+                    '-u', '-b', '0', '-d', domain_number,
+                    'GET TIME_PROPERTIES_DATA_SET'
+                ]).decode()
 
                 for line in data.split('\n'):
                     if 'currentUtcOffset ' in line:
@@ -178,18 +197,20 @@ class OsClockMonitor:
 
                 if not utc_offset_valid:
                     utc_offset = constants.UTC_OFFSET
-                    LOG.warning('currentUtcOffsetValid is %s, using the default currentUtcOffset %s'
-                                % (utc_offset_valid, utc_offset))
+                    LOG.warning('currentUtcOffsetValid is %s, using the '
+                                'default currentUtcOffset %s',
+                                utc_offset_valid, utc_offset)
 
         utc_offset_nanoseconds = abs(int(utc_offset)) * 1000000000
         self.phc2sys_tolerance_low = utc_offset_nanoseconds - \
             self.phc2sys_tolerance_threshold
         self.phc2sys_tolerance_high = utc_offset_nanoseconds + \
             self.phc2sys_tolerance_threshold
-        LOG.debug('utc_offset_nanoseconds is %s, phc2sys_tolerance_threshold is %s'
-                  % (utc_offset_nanoseconds, self.phc2sys_tolerance_threshold))
-        LOG.info('phc2sys_tolerance_low is %s, phc2sys_tolerance_high is %s'
-                 % (self.phc2sys_tolerance_low, self.phc2sys_tolerance_high))
+        LOG.debug('utc_offset_nanoseconds is %s, '
+                  'phc2sys_tolerance_threshold is %s',
+                  utc_offset_nanoseconds, self.phc2sys_tolerance_threshold)
+        LOG.info('phc2sys_tolerance_low is %s, phc2sys_tolerance_high is %s',
+                 self.phc2sys_tolerance_low, self.phc2sys_tolerance_high)
 
     def get_os_clock_time_source(self, pidfile_path="/var/run/"):
         """Determine which PHC is disciplining the OS clock"""
@@ -211,38 +232,38 @@ class OsClockMonitor:
     def _get_phc2sys_command_line_option(self, pidfile_path, flag):
         pidfile = pidfile_path + "phc2sys-" + self.phc2sys_instance + ".pid"
         try:
-            with open(pidfile, 'r') as f:
-                pid = f.readline().strip()
+            with open(pidfile, 'r', encoding='utf-8') as pidfile_handle:
+                pid = pidfile_handle.readline().strip()
             # Get command line params
             cmdline_file = "/host/proc/" + pid + "/cmdline"
-            with open(cmdline_file, 'r') as f:
-                cmdline_args = f.readline().strip()
+            with open(cmdline_file, 'r', encoding='utf-8') as cmdline_handle:
+                cmdline_args = cmdline_handle.readline().strip()
             cmdline_args = cmdline_args.split("\x00")
         except OSError as ex:
-            LOG.warning("Cannot open file. %s" % ex)
+            LOG.warning("Cannot open file. %s", ex)
             return None
 
         # The option value will be at the index after the flag
         try:
             index = cmdline_args.index(flag)
         except ValueError as ex:
-            LOG.debug("Flag not found in cmdline args. %s" % ex)
+            LOG.debug("Flag not found in cmdline args. %s", ex)
             return None
 
         value = cmdline_args[index + 1]
-        LOG.debug("%s value is %s" % (flag, value))
+        LOG.debug("%s value is %s", flag, value)
         return value
 
     def _check_config_file_interface(self):
-        with open(self.phc2sys_config, 'r') as f:
-            config_lines = f.readlines()
+        with open(self.phc2sys_config, 'r', encoding='utf-8') as config_file:
+            config_lines = config_file.readlines()
             config_lines = [line.rstrip() for line in config_lines]
 
         for line in config_lines:
             # Find the interface value inside the square brackets
             if re.match(r"^\[.*\]$", line) and line != "[global]":
                 phc_interface = line.strip("[]")
-                LOG.debug("PHC interface is %s" % phc_interface)
+                LOG.debug("PHC interface is %s", phc_interface)
                 return phc_interface
 
         return None
@@ -269,19 +290,19 @@ class OsClockMonitor:
                 [constants.PHC_CTL_PATH, ptp_device_path, 'cmp']
             ).decode().split()[-1]
             offset = offset.strip("-ns")
-            LOG.debug("PHC offset is %s" % offset)
+            LOG.debug("PHC offset is %s", offset)
             self.offset = offset
-        except Exception as ex:
+        except (subprocess.CalledProcessError, OSError) as ex:
             # We have seen rare instances where the ptp device cannot be read
             # but then works fine on the next attempt. Setting the offset to 0
             # here will allow the OS clock to move to holdover. If there is a
             # real fault, it will stay in holdover and tranition to freerun but
             # if it was just a single miss, it will return to locked on the
             # next check.
-            LOG.warning("Unable to read device offset for %s due to %s"
-                        % (ptp_device_path, ex))
-            LOG.warning("Check operation of %s. Defaulting offset value to 0."
-                        % ptp_device_path)
+            LOG.warning("Unable to read device offset for %s due to %s",
+                        ptp_device_path, ex)
+            LOG.warning("Check operation of %s. Defaulting offset value to 0.",
+                        ptp_device_path)
             self.offset = "0"
 
     def set_os_clock_state(self):
@@ -293,7 +314,8 @@ class OsClockMonitor:
             LOG.warning("PHC2SYS offset is outside of tolerance")
             self._state = OsClockState.Freerun
         elif not phc2sys:
-            LOG.warning("Phc2sys instance %s is not running", self.phc2sys_instance)
+            LOG.warning("Phc2sys instance %s is not running",
+                        self.phc2sys_instance)
             self._state = OsClockState.Freerun
         else:
             LOG.info("PHC2SYS offset is within tolerance: %s", offset_int)
@@ -320,26 +342,33 @@ class OsClockMonitor:
         previous_sync_state = sync_state
         if previous_sync_state == constants.HOLDOVER_PHC_STATE:
             time_in_holdover = round(current_time - event_time)
-        max_holdover_time = (holdover_time - freq * 2)
 
         self.set_utc_offset()
         self.get_os_clock_offset()
         self.set_os_clock_state()
 
-        if self.get_os_clock_state() == constants.FREERUN_PHC_STATE:
+        if self.get_os_clock_state() == OsClockState.Freerun:
             if previous_sync_state in [constants.UNKNOWN_PHC_STATE,
                                        constants.FREERUN_PHC_STATE]:
-                self._state = constants.FREERUN_PHC_STATE
+                self._state = OsClockState.Freerun
+                LOG.info("OS Clock Holdover: Remaining in FREERUN state "
+                         "(previous: %s)", previous_sync_state)
             elif previous_sync_state == constants.LOCKED_PHC_STATE:
-                self._state = constants.HOLDOVER_PHC_STATE
-            elif previous_sync_state == constants.HOLDOVER_PHC_STATE and \
-                    time_in_holdover < max_holdover_time:
-                LOG.info("OS Clock: Time in holdover is %s "
-                          "Max time in holdover is %s"
-                          % (time_in_holdover, max_holdover_time))
-                self._state = constants.HOLDOVER_PHC_STATE
+                self._state = OsClockState.Holdover
+                LOG.info("OS Clock Holdover: Transitioning LOCKED -> HOLDOVER "
+                         "(holdover_time=%ds)", self.holdover_time)
+            elif (previous_sync_state == constants.HOLDOVER_PHC_STATE and
+                    time_in_holdover < self.holdover_time):
+                LOG.info("OS Clock Holdover: Remaining in HOLDOVER "
+                         "(%ds/%ds elapsed, %ds remaining)",
+                         time_in_holdover, self.holdover_time,
+                         self.holdover_time - time_in_holdover)
+                self._state = OsClockState.Holdover
             else:
-                self._state = constants.FREERUN_PHC_STATE
+                self._state = OsClockState.Freerun
+                LOG.warning("OS Clock Holdover: Transitioning HOLDOVER -> "
+                            "FREERUN (holdover expired: %ds >= %ds)",
+                            time_in_holdover, self.holdover_time)
 
         # determine if os clock sync state has changed since the last check
         if self._state != previous_sync_state:
@@ -347,10 +376,11 @@ class OsClockMonitor:
             event_time = datetime.datetime.utcnow().timestamp()
         else:
             new_event = False
-        return new_event, self.get_os_clock_state(), event_time
+        return new_event, self._state, event_time
 
 
 if __name__ == "__main__":
     # This file can be run in a ptp-notification pod to verify the
     # functionality of os_clock_monitor.
-    test_monitor = OsClockMonitor()
+    test_monitor = OsClockMonitor(
+        '/etc/ptp/phc2sys/phc2sys-default.conf')
