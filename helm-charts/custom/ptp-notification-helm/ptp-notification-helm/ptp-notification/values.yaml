@@ -75,31 +75,6 @@ location:
     tag: stx.11.0-v2.2.6
     pullPolicy: IfNotPresent
 
-ptptracking:
-  enabled: True
-  imagePullSecrets: default-registry-key
-  ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
-  ptp4lServiceName: ptp4l-legacy
-  ptp4lClockClassLockedList: "6,7,135"
-  phc2sysServiceName: phc2sys-legacy
-  phc2sysComSocket: False
-  logging_level: INFO
-  endpoint:
-    port: 8081
-    liveness: False
-    livenessDelaySeconds: 60
-    livenessPeriodSeconds: 3
-    livenessFailureThreshold: 3
-    livenessTimeoutSeconds: 3
-  image:
-    repository: starlingx/notificationservice-base
-    tag: stx.11.0-v2.2.8
-    pullPolicy: IfNotPresent
-  device:
-    simulated: false
-    holdover_seconds: 15
-    poll_freq_seconds: 2
-
 ptptrackingv2:
   enabled: True
   imagePullSecrets: default-registry-key

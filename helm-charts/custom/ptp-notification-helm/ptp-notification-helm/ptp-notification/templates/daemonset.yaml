@@ -31,8 +31,8 @@ spec:
       }
     spec:
       imagePullSecrets:
-      - name: {{ .Values.ptptracking.imagePullSecrets}}
-      {{ if .Values.ptptracking.device.simulated }}
+      - name: {{ .Values.ptptrackingv2.imagePullSecrets}}
+      {{ if .Values.ptptrackingv2.device.simulated }}
       {{ else }}
 {{- if .Values.notification.affinity }}
       affinity:
@@ -226,98 +226,6 @@ spec:
             mountPath: /hostsys/
             readOnly: true
 {{ end }}
-{{- if .Values.ptptracking.enabled }}
-      - name: {{ .Chart.Name }}-ptptracking
-        image: "{{ .Values.ptptracking.image.repository }}:{{ .Values.ptptracking.image.tag }}"
-        imagePullPolicy: {{ .Values.ptptracking.image.pullPolicy }}
-        tty: true
-        stdin: true
-        env:
-          - name: THIS_NODE_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: spec.nodeName
-          - name: THIS_POD_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
-          - name: THIS_NAMESPACE
-            value: {{ .Values.global.namespace }}
-          - name: PTP_DEVICE_SIMULATED
-            value: "{{ .Values.ptptracking.device.simulated }}"
-          - name: PTP_HOLDOVER_SECONDS
-            value: "{{ .Values.ptptracking.device.holdover_seconds }}"
-          - name: PTP_POLL_FREQ_SECONDS
-            value: "{{ .Values.ptptracking.device.poll_freq_seconds }}"
-          - name: NOTIFICATIONSERVICE_USER
-            value: "{{ .Values.notification.endpoint.user }}"
-          - name: NOTIFICATIONSERVICE_PASS
-            value: "{{ .Values.notification.endpoint.pass }}"
-          - name: NOTIFICATIONSERVICE_PORT
-            value: "{{ .Values.notification.endpoint.port }}"
-          - name: REGISTRATION_USER
-            value: "{{ .Values.registration.endpoint.user }}"
-          - name: REGISTRATION_PASS
-            value: "{{ .Values.registration.endpoint.pass }}"
-          - name: REGISTRATION_PORT
-            value: "{{ .Values.registration.endpoint.port }}"
-          - name: REGISTRATION_HOST
-            value: "registration.{{.Values.global.namespace}}.svc.cluster.local"
-          - name: HEALTH_API_HOST
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
-          - name: HEALTH_API_PORT
-            value: "{{ .Values.ptptracking.endpoint.port }}"
-          - name: PTP4L_SERVICE_NAME
-            value: "{{ .Values.ptptracking.ptp4lServiceName }}"
-          - name: PTP4L_CLOCK_CLASS_LOCKED_LIST
-            value: "{{ .Values.ptptracking.ptp4lClockClassLockedList }}"
-          - name: PHC2SYS_SERVICE_NAME
-            value: "{{ .Values.ptptracking.phc2sysServiceName }}"
-          - name: PHC2SYS_COM_SOCKET
-            value: "{{ .Values.ptptracking.phc2sysComSocket }}"
-          - name: PYTHONPATH
-            value: "/opt/ptptrackingfunction"
-          - name: LOGGING_LEVEL
-            value: "{{ .Values.ptptracking.logging_level }}"
-        command: ["python3", "/mnt/ptptracking_start.py"]
-{{- if .Values.ptptracking.endpoint.liveness }}
-        livenessProbe:
-          failureThreshold: {{ .Values.ptptracking.endpoint.livenessFailureThreshold }}
-          httpGet:
-            path: /health
-            port: {{ .Values.ptptracking.endpoint.port }}
-            scheme: HTTP
-          initialDelaySeconds: {{ .Values.ptptracking.endpoint.livenessDelaySeconds }}
-          periodSeconds: {{ .Values.ptptracking.endpoint.livenessPeriodSeconds }}
-          successThreshold: 1
-          timeoutSeconds: {{ .Values.ptptracking.endpoint.livenessTimeoutSeconds }}
-{{ end }}
-        securityContext:
-          privileged: true
-          capabilities:
-              add:
-              - CAP_SYS_ADMIN
-        volumeMounts:
-          - name: scripts
-            mountPath: /mnt
-      {{ if .Values.ptptracking.device.simulated }}
-      {{ else }}
-          - name: ptpdir
-            mountPath: /var/run/
-            readOnly: false
-          - name: varrun
-            mountPath: {{ .Values.ptptracking.ptp4lSocket }}
-            readOnly: false
-          - name: pmc
-            mountPath: /usr/sbin/pmc
-            readOnly: false
-      {{ end }}
-          - name: conf
-            mountPath: /ptp/
-            readOnly: true
-{{ end }}
       volumes:
         - name: scripts
           configMap:
@@ -326,13 +234,6 @@ spec:
           hostPath:
             path: /var/run/
             type: Directory
-      {{ if .Values.ptptracking.device.simulated }}
-      {{ else }}
-        - name: varrun
-          hostPath:
-            path: {{ .Values.ptptracking.ptp4lSocket }}
-            type: Socket
-      {{ end }}
         - name: pmc
           hostPath:
             path: /usr/sbin/pmc
