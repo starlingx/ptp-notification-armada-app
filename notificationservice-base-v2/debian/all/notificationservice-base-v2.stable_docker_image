@@ -35,6 +35,8 @@ pip3 uninstall -y urllib3 && pip install "urllib3==2.6.3"
 pip3 uninstall -y wheel && pip install "wheel==0.38.1"
 pip3 uninstall -y dnspython && pip install "dnspython==2.6.0"
 
+apt-get remove -y python3-ply
+
 export SUDO_FORCE_REMOVE=yes
 apt-get remove -y sudo
 
