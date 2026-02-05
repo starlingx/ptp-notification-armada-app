@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2021-2025 Wind River Systems, Inc.
+# Copyright (c) 2021-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -19,7 +19,11 @@ setup(
     author='',
     author_email='',
     install_requires=[
-        "",
+        "watchdog",
+    ],
+    tests_require=[
+        "mock",
+        "watchdog",
     ],
     test_suite='notificationservice-base-v2',
     zip_safe=False,

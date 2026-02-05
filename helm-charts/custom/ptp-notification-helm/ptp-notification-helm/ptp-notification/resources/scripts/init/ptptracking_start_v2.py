@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2021-2025 Wind River Systems, Inc.
+# Copyright (c) 2021-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 import glob
+import ipaddress
 import json
 import logging
 import os
 import re
-import ipaddress
 from pathlib import Path
+
 from trackingfunctionsdk.common.helpers import constants
+from trackingfunctionsdk.services.config_watcher import ConfigFileWatcher
 from trackingfunctionsdk.services.daemon import DaemonControl
+from trackingfunctionsdk.services.health import HealthServer
 
 logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger(__name__)
@@ -36,7 +39,7 @@ def get_configs(pattern, service_env_var, service_prefix):
         return [], []
 
     configs = glob.glob(pattern)
-    instances = [re.search(f'{service_prefix}-(.+)\.conf', c).group(1)
+    instances = [re.search(f'{service_prefix}-(.+)\\.conf', c).group(1)
                  for c in configs]
     return configs, instances
 
@@ -114,14 +117,53 @@ def build_context():
 
 
 if __name__ == "__main__":
-    context = build_context()
-    LOG.info(
-        f"Starting PTP tracking service with "
-        f"{len(context['PTP4L_INSTANCES'])} PTP4L, "
-        f"{len(context['GNSS_INSTANCES'])} GNSS instances, "
-        f"PHC2SYS: {context['PHC2SYS_SERVICE_NAME']}"
-    )
-
     sqlalchemy_conf = {'url': 'sqlite:///apiserver.db', 'echo': False}
-    daemon = DaemonControl(json.dumps(sqlalchemy_conf), json.dumps(context))
-    daemon.refresh()
+    daemon = None
+    watcher = None
+    health_server = None
+
+    def on_config_change():
+        """Callback when config files change"""
+        if daemon:
+            daemon.request_reload()
+
+    try:
+        # Start health server once for k8s httpGet health checks (shared across
+        # reloads)
+        health_server = HealthServer()
+        health_server.run()
+        LOG.info("Health server started")
+
+        # Start config file watcher
+        watcher = ConfigFileWatcher(
+            constants.LINUXPTP_CONFIG_PATH,
+            on_config_change,
+            debounce_seconds=2
+        )
+        watcher.start()
+        LOG.info("Config file watcher started")
+
+        # Main reload loop
+        while True:
+            context = build_context()
+            LOG.info(
+                f"Starting PTP tracking service with "
+                f"{len(context['PTP4L_INSTANCES'])} PTP4L, "
+                f"{len(context['GNSS_INSTANCES'])} GNSS instances, "
+                f"PHC2SYS: {context['PHC2SYS_SERVICE_NAME']}"
+            )
+
+            daemon = DaemonControl(
+                json.dumps(sqlalchemy_conf),
+                json.dumps(context))
+            daemon.reload_requested.clear()
+            daemon.refresh()
+
+            # If we reach here, daemon exited due to reload request
+            LOG.info("Daemon exited, reloading with new configuration...")
+
+    except KeyboardInterrupt:
+        LOG.info("Shutdown requested")
+    finally:
+        if watcher:
+            watcher.stop()

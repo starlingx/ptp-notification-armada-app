@@ -6,3 +6,4 @@ importlib-resources
 jsonschema
 mock
 PyYAML
+watchdog

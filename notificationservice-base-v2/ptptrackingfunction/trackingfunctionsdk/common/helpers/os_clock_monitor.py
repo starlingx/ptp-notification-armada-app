@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2025 Wind River Systems, Inc.
+# Copyright (c) 2022-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,7 +10,6 @@ import os
 import re
 import socket
 import subprocess
-from glob import glob
 
 from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers import constants
@@ -53,8 +52,9 @@ class OsClockMonitor:
                 os.environ.get('PHC2SYS_TOLERANCE_THRESHOLD',
                                self.phc2sys_tolerance_threshold))
         except ValueError:
-            LOG.error('Unable to convert PHC2SYS_TOLERANCE_THRESHOLD to integer,'
-                      ' using the default.')
+            LOG.error(
+                'Unable to convert PHC2SYS_TOLERANCE_THRESHOLD to integer,'
+                ' using the default.')
 
         self.set_phc2sys_instance()
         # Get instance-specific configuration values
@@ -98,7 +98,10 @@ class OsClockMonitor:
     def parse_phc2sys_config(self):
         LOG.debug("Parsing %s", self.phc2sys_config)
         config = configparser.ConfigParser(delimiters=' ')
-        config.read(self.phc2sys_config)
+        try:
+            config.read(self.phc2sys_config)
+        except FileNotFoundError:
+            LOG.warning("Config file not found: %s", self.phc2sys_config)
         self.config = config
 
     def query_phc2sys_socket(self, query, unix_socket=None):
@@ -114,12 +117,16 @@ class OsClockMonitor:
                     response = None
                 return response
             except ConnectionRefusedError as err:
-                LOG.error("Error connecting to phc2sys socket for instance %s: %s",
-                    self.phc2sys_instance, err)
+                LOG.error(
+                    "Error connecting to phc2sys socket for instance %s: %s",
+                    self.phc2sys_instance,
+                    err)
                 return None
             except FileNotFoundError as err:
-                LOG.error("Error connecting to phc2sys socket for instance %s: %s",
-                    self.phc2sys_instance, err)
+                LOG.error(
+                    "Error connecting to phc2sys socket for instance %s: %s",
+                    self.phc2sys_instance,
+                    err)
                 return None
             finally:
                 if hasattr(client_socket, 'close'):
@@ -157,7 +164,8 @@ class OsClockMonitor:
         uds_addr = None
 
         # If not, check config file for uds_address and domainNumber
-        # If uds_address, get utc_offset from TIME_PROPERTIES_DATA_SET using the phc2sys config
+        # If uds_address, get utc_offset from TIME_PROPERTIES_DATA_SET using
+        # the phc2sys config
         if not utc_offset:
             utc_offset = constants.UTC_OFFSET
             utc_offset_valid = False
@@ -255,9 +263,13 @@ class OsClockMonitor:
         return value
 
     def _check_config_file_interface(self):
-        with open(self.phc2sys_config, 'r', encoding='utf-8') as config_file:
-            config_lines = config_file.readlines()
-            config_lines = [line.rstrip() for line in config_lines]
+        try:
+            with open(self.phc2sys_config, 'r', encoding='utf-8') as config_file:
+                config_lines = config_file.readlines()
+                config_lines = [line.rstrip() for line in config_lines]
+        except FileNotFoundError:
+            LOG.warning("Config file not found: %s", self.phc2sys_config)
+            return None
 
         for line in config_lines:
             # Find the interface value inside the square brackets
@@ -321,7 +333,8 @@ class OsClockMonitor:
             LOG.info("PHC2SYS offset is within tolerance: %s", offset_int)
             self._state = OsClockState.Locked
 
-        # Perform an extra check for HA Phc2sys to ensure we have a source interface
+        # Perform an extra check for HA Phc2sys to ensure we have a source
+        # interface
         if self.phc2sys_ha_enabled:
             if str(self.valid_phc_interfaces) == 'None':
                 LOG.warning("No valid PHC device selected for HA phc2sys")

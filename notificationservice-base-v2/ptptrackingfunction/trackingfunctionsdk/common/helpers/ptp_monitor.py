@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2025 Wind River Systems, Inc.
+# Copyright (c) 2021-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -102,9 +102,13 @@ class PtpMonitor:
 
     def _check_config_file_interfaces(self):
         phc_interfaces = []
-        with open(self.ptp4l_config, 'r', encoding='utf-8') as config_file:
-            config_lines = config_file.readlines()
-            config_lines = [line.rstrip() for line in config_lines]
+        try:
+            with open(self.ptp4l_config, 'r', encoding='utf-8') as config_file:
+                config_lines = config_file.readlines()
+                config_lines = [line.rstrip() for line in config_lines]
+        except FileNotFoundError:
+            LOG.warning("Config file not found: %s", self.ptp4l_config)
+            return phc_interfaces
 
         for line in config_lines:
             # Find the interface value inside the square brackets

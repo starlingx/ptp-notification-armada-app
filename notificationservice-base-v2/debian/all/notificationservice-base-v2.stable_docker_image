@@ -13,7 +13,8 @@ PIP_PACKAGES="notificationservice-base-v2 \
     oslo.messaging \
     WSME \
     jsonschema \
-    pynetlink"
+    pynetlink \
+    watchdog"
 
 # FIXME: override python modules enforced by:
 # https://opendev.org/starlingx/root/src/branch/master/build-tools/build-wheels/debian/openstack-requirements/caracal/upper-constraints.txt

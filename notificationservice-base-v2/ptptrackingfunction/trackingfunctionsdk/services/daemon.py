@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2025 Wind River Systems, Inc.
+# Copyright (c) 2021-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -24,9 +24,7 @@ from trackingfunctionsdk.model.dto.osclockstate import OsClockState
 from trackingfunctionsdk.model.dto.overallclockstate import (
     OverallClockState)
 from trackingfunctionsdk.model.dto.ptpstate import PtpState
-from trackingfunctionsdk.model.dto.resourcetype import ResourceType
 from trackingfunctionsdk.model.dto.rpc_endpoint import RpcEndpointInfo
-from trackingfunctionsdk.services.health import HealthServer
 
 
 LOG = logging.getLogger(__name__)
@@ -58,9 +56,11 @@ source_type = {
 
 
 def ProcessWorkerDefault(event, sqlalchemy_conf_json,
-                         broker_transport_endpoint, holdover_config=None):
+                         broker_transport_endpoint, holdover_config=None,
+                         reload_requested=None):
     worker = PtpWatcherDefault(event, sqlalchemy_conf_json,
-                               broker_transport_endpoint, holdover_config)
+                               broker_transport_endpoint, holdover_config,
+                               reload_requested)
     worker.run()
 
 
@@ -226,8 +226,13 @@ class PtpWatcherDefault:
                             self.watcher.ptptracker_context[optional].get(
                                 'last_event_time', time.time())
                         lastStatus[optional] = self._build_event_response(
-                            constants.SOURCE_SYNC_PTP_LOCK_STATE, last_event_time, utils.format_resource_address(
-                                nodename, constants.SOURCE_SYNC_PTP_LOCK_STATE, optional), sync_state)
+                            constants.SOURCE_SYNC_PTP_LOCK_STATE,
+                            last_event_time,
+                            utils.format_resource_address(
+                                nodename,
+                                constants.SOURCE_SYNC_PTP_LOCK_STATE,
+                                optional),
+                            sync_state)
                         newStatus.append(lastStatus[optional])
                     elif not optional:
                         for config in self.daemon_context['PTP4L_INSTANCES']:
@@ -238,8 +243,13 @@ class PtpWatcherDefault:
                                 self.watcher.ptptracker_context[config].get(
                                     'last_event_time', time.time())
                             lastStatus[config] = self._build_event_response(
-                                constants.SOURCE_SYNC_PTP_LOCK_STATE, last_event_time, utils.format_resource_address(
-                                    nodename, constants.SOURCE_SYNC_PTP_LOCK_STATE, config), sync_state)
+                                constants.SOURCE_SYNC_PTP_LOCK_STATE,
+                                last_event_time,
+                                utils.format_resource_address(
+                                    nodename,
+                                    constants.SOURCE_SYNC_PTP_LOCK_STATE,
+                                    config),
+                                sync_state)
                             newStatus.append(lastStatus[config])
                     else:
                         lastStatus = None
@@ -255,9 +265,14 @@ class PtpWatcherDefault:
                         self.watcher.osclocktracker_context.get(
                             'last_event_time', time.time())
                     self.watcher.osclocktracker_context_lock.release()
-                    lastStatus['os_clock_status'] = self._build_event_response(
-                        constants.SOURCE_SYNC_OS_CLOCK, last_event_time, utils.format_resource_address(
-                            nodename, constants.SOURCE_SYNC_OS_CLOCK), sync_state)
+                    lastStatus['os_clock_status'] = (
+                        self._build_event_response(
+                            constants.SOURCE_SYNC_OS_CLOCK,
+                            last_event_time,
+                            utils.format_resource_address(
+                                nodename,
+                                constants.SOURCE_SYNC_OS_CLOCK),
+                            sync_state))
                     newStatus.append(lastStatus['os_clock_status'])
                 if resource_path == constants.SOURCE_SYNC_SYNC_STATE or \
                    resource_path == constants.SOURCE_SYNC_ALL:
@@ -267,9 +282,14 @@ class PtpWatcherDefault:
                     last_event_time = self.watcher.overalltracker_context.get(
                         'last_event_time', time.time())
                     self.watcher.overalltracker_context_lock.release()
-                    lastStatus['overall_sync_status'] = self._build_event_response(
-                        constants.SOURCE_SYNC_SYNC_STATE, last_event_time, utils.format_resource_address(
-                            nodename, constants.SOURCE_SYNC_SYNC_STATE), sync_state)
+                    lastStatus['overall_sync_status'] = (
+                        self._build_event_response(
+                            constants.SOURCE_SYNC_SYNC_STATE,
+                            last_event_time,
+                            utils.format_resource_address(
+                                nodename,
+                                constants.SOURCE_SYNC_SYNC_STATE),
+                            sync_state))
                     if resource_path == constants.SOURCE_SYNC_ALL:
                         newStatus.append(lastStatus['overall_sync_status'])
                     else:
@@ -291,9 +311,10 @@ class PtpWatcherDefault:
             self.watcher.signal_ptp_event()
 
     def __init__(self, event, sqlalchemy_conf_json, daemon_context_json,
-                 holdover_config=None):
+                 holdover_config=None, reload_requested=None):
         self.sqlalchemy_conf = json.loads(sqlalchemy_conf_json)
         self.event = event
+        self.reload_requested = reload_requested
         self.init_time = time.time()
         # Holdover config now comes from instance-monitoring.conf per instance
 
@@ -413,10 +434,6 @@ class PtpWatcherDefault:
         # start location listener
         self.__start_listener()
 
-        # Start the server for k8s httpGet health checks
-        notificationservice_health = HealthServer()
-        notificationservice_health.run()
-
         # Need to give the notificationclient sidecar pods
         # a few seconds to re-connect to the newly started
         # RabbitMQ. If we don't wait here, the initial
@@ -428,6 +445,11 @@ class PtpWatcherDefault:
         time.sleep(10)
 
         while True:
+            # Check for reload request
+            if self.reload_requested and self.reload_requested.is_set():
+                LOG.info("Reload requested, exiting daemon loop")
+                break
+
             # announce the location
             forced = self.forced_publishing
             self.forced_publishing = False
@@ -457,7 +479,7 @@ class PtpWatcherDefault:
     def __stop_listener(self):
         LOG.debug("stop listener to answer location querying")
 
-        self.ptpeventproducer.stop_status_listener(self.location_info)
+        self.ptpeventproducer.stop_status_listener()
 
     def __get_gnss_status(self, sync_state, last_event_time, gnss_monitor):
         new_event, sync_state, new_event_time = gnss_monitor.get_gnss_status(
@@ -558,7 +580,7 @@ class PtpWatcherDefault:
                 # This may happen in virtualized environments
                 LOG.warning("No PTP device. Defaulting overall state Freerun")
                 chaining_info += (
-                    f"\nos-clock's source ptp-device = None"
+                    "\nos-clock's source ptp-device = None"
                 )
             else:
                 # What source (gnss or ptp) disciplining the PTP device at the
@@ -664,7 +686,11 @@ class PtpWatcherDefault:
         return new_event, sync_state, new_event_time
 
     def __calculate_overall_holdover_time(self):
-        """Calculate overall holdover time based on active sync chain components"""
+        """Calculate overall holdover time based on active sync chain
+
+        Returns the minimum holdover time from the active synchronization
+        chain (source + OS clock) to ensure proper holdover behavior.
+        """
         # Get OS Clock holdover time (always in the chain)
         os_clock_holdover = self.os_clock_monitor.holdover_time
 
@@ -1065,6 +1091,7 @@ class DaemonControl(object):
     def __init__(self, sqlalchemy_conf_json, daemon_context_json,
                  process_worker=None):
         self.event = mp.Event()
+        self.reload_requested = mp.Event()
         self.daemon_context = json.loads(daemon_context_json)
         self.node_name = self.daemon_context['THIS_NODE_NAME']
         if not process_worker:
@@ -1076,5 +1103,18 @@ class DaemonControl(object):
 
     def refresh(self):
         self.process_worker(self.event, self.sqlalchemy_conf_json,
-                            self.daemon_context_json)
+                            self.daemon_context_json, None,
+                            self.reload_requested)
+        self.event.set()
+
+    def request_reload(self):
+        """Request daemon to reload configuration"""
+        LOG.info("Requesting daemon reload")
+        self.reload_requested.set()
+        self.event.set()
+
+    def stop(self):
+        """Stop daemon gracefully"""
+        LOG.debug("Stopping daemon control")
+        self.reload_requested.set()
         self.event.set()
