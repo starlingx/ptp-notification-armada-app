@@ -100,9 +100,15 @@ ptptrackingv2:
   control_timeout: 2
   device:
     simulated: false
-    holdover_seconds: 15
+    # holdover_seconds: Set to override config file (optional, comment out to disable)
+    # holdover_seconds: 15
+  gnss:
+    # holdover_seconds: Set to override config file (optional, comment out to disable)
+    # holdover_seconds: 15
   osclock:
-    holdover_seconds: 15
+    # holdover_seconds: Set to override config file (optional, comment out to disable)
+    # holdover_seconds: 15
   overall:
-    holdover_seconds: 15
+    # holdover_seconds: Set to override config file (optional, comment out to disable)
+    # holdover_seconds: 15
 

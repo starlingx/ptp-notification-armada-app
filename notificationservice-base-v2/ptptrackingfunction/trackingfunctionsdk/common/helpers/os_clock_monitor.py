@@ -16,7 +16,7 @@ from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.model.dto.osclockstate import OsClockState
 from trackingfunctionsdk.common.helpers import ptpsync as utils
 from trackingfunctionsdk.common.helpers.instance_config_parser import (
-    get_instance_holdover_time, get_instance_offset_threshold
+    get_instance_osclock_holdover_time, get_instance_offset_threshold
 )
 
 LOG = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class OsClockMonitor:
 
         self.set_phc2sys_instance()
         # Get instance-specific configuration values
-        self.holdover_time = get_instance_holdover_time(
+        self.holdover_time = get_instance_osclock_holdover_time(
             self.phc2sys_instance, holdover_time)
         self.phc2sys_tolerance_threshold = get_instance_offset_threshold(
             self.phc2sys_instance, constants.THRESHOLD_TYPE_MINOR,

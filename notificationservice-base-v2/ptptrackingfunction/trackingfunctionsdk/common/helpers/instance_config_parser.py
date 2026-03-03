@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025 Wind River Systems, Inc.
+# Copyright (c) 2025-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -27,7 +27,11 @@ Usage:
         'ts2phc-instance1', 'minor', 50)
 
 Functions:
-    get_instance_holdover_time: Get holdover time for specific PTP instance
+    get_instance_holdover_time: PTP holdover (PTP_HOLDOVER_SECONDS -> config -> default)
+    get_instance_gnss_holdover_time: GNSS holdover (GNSS_HOLDOVER_SECONDS -> config -> default)
+    get_instance_osclock_holdover_time: OS clock holdover
+        (OS_CLOCK_HOLDOVER_SECONDS -> config -> default)
+    get_overall_holdover_time: Overall holdover (OVERALL_HOLDOVER_SECONDS -> default)
     get_instance_offset_threshold: Get offset threshold for specific instance
 """
 
@@ -40,14 +44,93 @@ LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
 
 
-def get_instance_holdover_time(instance_name, default_holdover=constants.DEFAULT_HOLDOVER_SECONDS):
-    """Get holdover time for specific PTP instance from config file"""
+def _get_env_holdover(env_var_name, instance_name):
+    """Return int value of env var if set and valid, else None."""
+    val = os.environ.get(env_var_name)
+    if val is None:
+        return None
+    try:
+        result = int(val)
+        LOG.info(
+            "Instance %s: Using %s=%s (environment override)",
+            instance_name,
+            env_var_name,
+            result)
+        return result
+    except ValueError:
+        LOG.warning("Invalid %s=%s, using config/default", env_var_name, val)
+        return None
+
+
+def get_instance_holdover_time(
+        instance_name,
+        default_holdover=constants.DEFAULT_HOLDOVER_SECONDS):
+    """Get holdover time for specific PTP instance.
+
+    Priority: PTP_HOLDOVER_SECONDS env var -> config file -> default
+    """
+    override = _get_env_holdover('PTP_HOLDOVER_SECONDS', instance_name)
+    if override is not None:
+        return override
     return _get_instance_config_value(instance_name,
                                       constants.HOLDOVER_SECONDS_KEY,
                                       default_holdover)
 
 
-def get_instance_offset_threshold(instance_name, threshold_type, default_threshold):
+def get_instance_gnss_holdover_time(
+        instance_name,
+        default_holdover=constants.DEFAULT_HOLDOVER_SECONDS):
+    """Get GNSS holdover time for specific instance.
+
+    Priority: GNSS_HOLDOVER_SECONDS env var -> config file -> default
+    """
+    override = _get_env_holdover('GNSS_HOLDOVER_SECONDS', instance_name)
+    if override is not None:
+        return override
+    return _get_instance_config_value(instance_name,
+                                      constants.HOLDOVER_SECONDS_KEY,
+                                      default_holdover)
+
+
+def get_instance_osclock_holdover_time(
+        instance_name,
+        default_holdover=constants.DEFAULT_HOLDOVER_SECONDS):
+    """Get OS clock holdover time for specific instance.
+
+    Priority: OS_CLOCK_HOLDOVER_SECONDS env var -> config file -> default
+    """
+    override = _get_env_holdover('OS_CLOCK_HOLDOVER_SECONDS', instance_name)
+    if override is not None:
+        return override
+    return _get_instance_config_value(instance_name,
+                                      constants.HOLDOVER_SECONDS_KEY,
+                                      default_holdover)
+
+
+def get_overall_holdover_time(
+        default_holdover=constants.DEFAULT_HOLDOVER_SECONDS):
+    """Get overall holdover time.
+
+    Priority: OVERALL_HOLDOVER_SECONDS env var -> default
+    """
+    val = os.environ.get('OVERALL_HOLDOVER_SECONDS')
+    if val is not None:
+        try:
+            result = int(val)
+            LOG.info(
+                "Using OVERALL_HOLDOVER_SECONDS=%s (environment override)",
+                result)
+            return result
+        except ValueError:
+            LOG.warning("Invalid OVERALL_HOLDOVER_SECONDS=%s, using default",
+                        val)
+    return default_holdover
+
+
+def get_instance_offset_threshold(
+        instance_name,
+        threshold_type,
+        default_threshold):
     """Get offset threshold for specific instance from config file"""
     threshold_keys = {
         constants.THRESHOLD_TYPE_MAJOR: constants.OFFSET_THRESHOLD_MAJOR_KEY,
@@ -86,7 +169,8 @@ def _get_instance_config_value(instance_name, key, default_value):
                     continue
 
                 # Parse key-value pairs in the target section
-                if current_section == instance_name and line.startswith(key + ' '):
+                if current_section == instance_name and line.startswith(
+                        key + ' '):
                     parts = line.split()
                     if len(parts) >= 2:
                         value = int(parts[1])

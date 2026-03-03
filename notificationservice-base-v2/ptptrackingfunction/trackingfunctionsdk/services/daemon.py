@@ -8,24 +8,24 @@ import json
 import logging
 import multiprocessing as mp
 import os
+import re
 import threading
 import time
 
 from oslo_utils import uuidutils
 from trackingfunctionsdk.client.ptpeventproducer import PtpEventProducer
-from trackingfunctionsdk.common.helpers import constants, log_helper
-from trackingfunctionsdk.common.helpers import ptpsync as utils
+from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers.gnss_monitor import GnssMonitor
-from trackingfunctionsdk.common.helpers.os_clock_monitor import (
-    OsClockMonitor)
+from trackingfunctionsdk.common.helpers import instance_config_parser
+from trackingfunctionsdk.common.helpers import log_helper
+from trackingfunctionsdk.common.helpers.os_clock_monitor import OsClockMonitor
 from trackingfunctionsdk.common.helpers.ptp_monitor import PtpMonitor
+from trackingfunctionsdk.common.helpers import ptpsync as utils
 from trackingfunctionsdk.model.dto.gnssstate import GnssState
 from trackingfunctionsdk.model.dto.osclockstate import OsClockState
-from trackingfunctionsdk.model.dto.overallclockstate import (
-    OverallClockState)
+from trackingfunctionsdk.model.dto.overallclockstate import OverallClockState
 from trackingfunctionsdk.model.dto.ptpstate import PtpState
 from trackingfunctionsdk.model.dto.rpc_endpoint import RpcEndpointInfo
-
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
@@ -52,7 +52,77 @@ source_type = {
         'event.sync.synce-status.synce-state-change',
 }
 
-'''Entry point of Default Process Worker'''
+
+def _ts2phc_uses_generic_clock(ts2phc_instance):
+    """Return True if the ts2phc instance is running with '-s generic'."""
+    pidfile = '/var/run/ts2phc-%s.pid' % ts2phc_instance
+    try:
+        with open(pidfile, 'r', encoding='utf-8') as f:
+            pid = f.readline().strip()
+        with open('/host/proc/%s/cmdline' % pid, 'r', encoding='utf-8') as f:
+            args = f.readline().strip().split('\x00')
+        return '-s' in args and args[args.index('-s') + 1] == 'generic'
+    except (OSError, ValueError, IndexError):
+        return False
+
+
+def _get_ptp4l_effective_holdover(ptp4l_config, gnss_configs, gnss_instances,
+                                  ptp4l_holdover):
+    """Return min(ptp4l_holdover, gnss_holdover)
+
+    If a gnss instance shares a PTP device with this ptp4l instance,
+    return the min of the ptp4l holdover time and the gnss holdover time.
+    Otherwise return ptp4l_holdover. If the gnss instance uses '-s generic',
+    return ptp4l_holdover.
+
+    Mirrors the collectd-extensions behavior.
+    """
+    ptp4l_devices = _get_ptp_devices_for_config(ptp4l_config)
+    if not ptp4l_devices:
+        return ptp4l_holdover
+
+    for idx, gnss_config in enumerate(gnss_configs):
+        gnss_devices = _get_ptp_devices_for_config(gnss_config)
+        if ptp4l_devices & gnss_devices:
+            gnss_instance = gnss_instances[idx]
+            if _ts2phc_uses_generic_clock(gnss_instance):
+                # As per collectd implementation
+                effective = ptp4l_holdover
+                LOG.debug(
+                    "ptp4l %s shares PTP device with gnss %s (-s generic): "
+                    "using ptp4l_holdover=%s as holdover",
+                    ptp4l_config, gnss_instance, effective)
+                return effective
+            gnss_holdover = instance_config_parser.get_instance_gnss_holdover_time(
+                gnss_instance)
+            effective = min(ptp4l_holdover, gnss_holdover)
+            LOG.debug(
+                "ptp4l %s shares PTP device with gnss %s: "
+                "using min(%s, %s)=%s as holdover",
+                ptp4l_config, gnss_instance,
+                ptp4l_holdover, gnss_holdover, effective)
+            return effective
+
+    return ptp4l_holdover
+
+
+def _get_ptp_devices_for_config(config_file):
+    """Return set of PHC device paths for interfaces listed in a config file."""
+    devices = set()
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if (re.match(r'^\[.*\]$', line)
+                        and line not in ('[global]',
+                                         '[unicast_master_table]')):
+                    iface = line.strip('[]')
+                    dev = utils.get_interface_phc_device(iface)
+                    if dev is not None:
+                        devices.add(dev)
+    except FileNotFoundError:
+        LOG.warning("Config file not found: %s", config_file)
+    return devices
 
 
 def ProcessWorkerDefault(event, sqlalchemy_conf_json,
@@ -322,18 +392,25 @@ class PtpWatcherDefault:
 
         # PTP Context
         self.ptptracker_context = {}
+        gnss_configs = self.daemon_context.get('GNSS_CONFIGS', [])
+        gnss_instances = self.daemon_context.get('GNSS_INSTANCES', [])
+        os_clock_holdover = instance_config_parser.get_instance_osclock_holdover_time(
+            self.daemon_context.get('PHC2SYS_SERVICE_NAME', 'phc2sys'))
         for config in self.daemon_context['PTP4L_INSTANCES']:
             self.ptptracker_context[config] = \
                 PtpWatcherDefault.DEFAULT_PTPTRACKER_CONTEXT.copy()
             self.ptptracker_context[config]['sync_state'] = PtpState.Freerun
             self.ptptracker_context[config]['last_event_time'] = self.init_time
-            # Default, overridden by instance config
-            self.ptptracker_context[config]['holdover_seconds'] = 30
+            ptp4l_config = constants.PTP_CONFIG_PATH + 'ptp4l-%s.conf' % config
+            ptp4l_holdover = instance_config_parser.get_instance_holdover_time(
+                config)
+            self.ptptracker_context[config]['holdover_seconds'] = \
+                _get_ptp4l_effective_holdover(
+                    ptp4l_config, gnss_configs, gnss_instances, ptp4l_holdover)
             # Default poll frequency
             self.ptptracker_context[config]['poll_freq_seconds'] = 2
-            self.ptp_device_simulated = \
-                "true" == self.ptptracker_context[config].get(
-                    'device_simulated', "False")
+        self.ptp_device_simulated = \
+            os.environ.get('PTP_DEVICE_SIMULATED', 'false').lower() == 'true'
         self.ptptracker_context_lock = threading.Lock()
         LOG.debug("ptptracker_context: %s" % self.ptptracker_context)
 
@@ -346,8 +423,8 @@ class PtpWatcherDefault:
                 GnssState.Failure_Nofix
             self.gnsstracker_context[config]['last_event_time'] = \
                 self.init_time
-            # Default holdover
-            self.gnsstracker_context[config]['holdover_seconds'] = 30
+            self.gnsstracker_context[config]['holdover_seconds'] = \
+                instance_config_parser.get_instance_gnss_holdover_time(config)
             # Default poll frequency
             self.gnsstracker_context[config]['poll_freq_seconds'] = 2
         self.gnsstracker_context_lock = threading.Lock()
@@ -359,8 +436,7 @@ class PtpWatcherDefault:
             PtpWatcherDefault.DEFAULT_OS_CLOCK_TRACKER_CONTEXT.copy()
         self.osclocktracker_context['sync_state'] = OsClockState.Freerun
         self.osclocktracker_context['last_event_time'] = self.init_time
-        # Default, overridden by OS Clock Monitor
-        self.osclocktracker_context['holdover_seconds'] = 30
+        self.osclocktracker_context['holdover_seconds'] = os_clock_holdover
         # Default poll frequency
         self.osclocktracker_context['poll_freq_seconds'] = 2
         self.osclocktracker_context_lock = threading.Lock()
@@ -371,8 +447,8 @@ class PtpWatcherDefault:
             PtpWatcherDefault.DEFAULT_OVERALL_SYNC_TRACKER_CONTEXT.copy()
         self.overalltracker_context['sync_state'] = OverallClockState.Freerun
         self.overalltracker_context['last_event_time'] = self.init_time
-        # Default overall holdover
-        self.overalltracker_context['holdover_seconds'] = 30
+        self.overalltracker_context['holdover_seconds'] = \
+            instance_config_parser.get_overall_holdover_time()
         # Default poll frequency
         self.overalltracker_context['poll_freq_seconds'] = 2
         self.overalltracker_context_lock = threading.Lock()
@@ -407,21 +483,22 @@ class PtpWatcherDefault:
         self.forced_publishing = True
 
         self.observer_list = [
-            GnssMonitor(i, holdover_time=30)
-            for i in self.daemon_context['GNSS_CONFIGS']]
+            GnssMonitor(
+                i,
+                holdover_time=self.gnsstracker_context[
+                    self.daemon_context['GNSS_INSTANCES'][idx]]['holdover_seconds'])
+            for idx, i in enumerate(self.daemon_context['GNSS_CONFIGS'])]
 
-        # Setup OS Clock monitor with default holdover time
         self.os_clock_monitor = OsClockMonitor(
             phc2sys_config=self.daemon_context['PHC2SYS_CONFIG'],
-            tolerance_threshold=30,  # Default tolerance threshold
-            holdover_time=30)  # Default holdover time, overridden by config
+            tolerance_threshold=30,
+            holdover_time=self.osclocktracker_context['holdover_seconds'])
 
-        # Setup PTP Monitor(s)
         self.ptp_monitor_list = [
             PtpMonitor(config,
                        self.ptptracker_context[config]['holdover_seconds'],
                        self.daemon_context['PHC2SYS_SERVICE_NAME'],
-                       offset_threshold=1000000)  # Default offset threshold
+                       offset_threshold=1000000)
             for config in self.daemon_context['PTP4L_INSTANCES']]
 
     def signal_ptp_event(self):
@@ -686,10 +763,11 @@ class PtpWatcherDefault:
         return new_event, sync_state, new_event_time
 
     def __calculate_overall_holdover_time(self):
-        """Calculate overall holdover time based on active sync chain
+        """Calculate overall holdover time based on active sync chain.
 
-        Returns the minimum holdover time from the active synchronization
-        chain (source + OS clock) to ensure proper holdover behavior.
+        Returns the minimum holdover time across the active synchronization
+        chain (source + OS clock). Falls back to the configured overall
+        holdover time if no disciplining source is found.
         """
         # Get OS Clock holdover time (always in the chain)
         os_clock_holdover = self.os_clock_monitor.holdover_time
@@ -728,11 +806,11 @@ class PtpWatcherDefault:
                     break
 
         if source_holdover is None:
-            # No source found, use OS clock holdover
+            # No source found, fall back to overall configured holdover
             LOG.debug(
-                "Overall holdover: No source found, using OS clock holdover=%s" %
-                os_clock_holdover)
-            return os_clock_holdover
+                "Overall holdover: No source found, using overall holdover=%s" %
+                self.overalltracker_context['holdover_seconds'])
+            return float(self.overalltracker_context['holdover_seconds'])
 
         # Use minimum of source and OS clock holdover times
         # Handle Mock objects in tests

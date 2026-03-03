@@ -80,13 +80,6 @@ def build_context():
         os.environ.get('NOTIFICATIONSERVICE_PORT', '5672')
     )
 
-    # Legacy holdover environment variables for backward compatibility
-    ptp_device_simulated = os.environ.get("PTP_DEVICE_SIMULATED", True)
-    ptp_holdover_seconds = os.environ.get("PTP_HOLDOVER_SECONDS", 30)
-    gnss_holdover_seconds = os.environ.get("GNSS_HOLDOVER_SECONDS", 30)
-    os_clock_holdover_seconds = os.environ.get("OS_CLOCK_HOLDOVER_SECONDS", 30)
-    overall_holdover_seconds = os.environ.get("OVERALL_HOLDOVER_SECONDS", 30)
-
     return {
         'THIS_NAMESPACE': os.environ.get("THIS_NAMESPACE", 'notification'),
         'THIS_NODE_NAME': os.environ.get("THIS_NODE_NAME", 'controller-0'),
@@ -99,20 +92,6 @@ def build_context():
         'PHC2SYS_SERVICE_NAME': phc2sys_service,
         'PTP4L_CONFIGS': ptp4l_configs,
         'PTP4L_INSTANCES': ptp4l_instances,
-        # Legacy holdover context for backward compatibility
-        'ptptracker_context': {
-            'device_simulated': ptp_device_simulated,
-            'holdover_seconds': ptp_holdover_seconds
-        },
-        'gnsstracker_context': {
-            'holdover_seconds': gnss_holdover_seconds
-        },
-        'osclocktracker_context': {
-            'holdover_seconds': os_clock_holdover_seconds
-        },
-        'overalltracker_context': {
-            'holdover_seconds': overall_holdover_seconds
-        },
     }
 
 

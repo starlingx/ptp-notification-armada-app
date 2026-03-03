@@ -20,7 +20,8 @@ context = {
     "THIS_NAMESPACE": "notification",
     "THIS_NODE_NAME": "controller-0",
     "THIS_POD_IP": "172.16.192.71",
-    "REGISTRATION_TRANSPORT_ENDPOINT": "rabbit://admin:admin@registration.notification.svc.cluster.local:5672",
+    "REGISTRATION_TRANSPORT_ENDPOINT":
+    "rabbit://admin:admin@registration.notification.svc.cluster.local:5672",
     "NOTIFICATION_TRANSPORT_ENDPOINT": "rabbit://admin:admin@172.16.192.71:5672",
     "GNSS_CONFIGS": [
         "/ptp/linuxptp/ptpinstance/ts2phc-ts1.conf",
@@ -32,12 +33,12 @@ context = {
         "/ptp/linuxptp/ptpinstance/ptp4l-ptp-inst2.conf",
         "/ptp/linuxptp/ptpinstance/ptp4l-ptp-inst1.conf",
     ],
-    "GNSS_INSTANCES": ["ts1", "ts2"],
-    "PTP4L_INSTANCES": ["ptp-inst2", "ptp-inst1"],
-    "ptptracker_context": {"device_simulated": "false", "holdover_seconds": "15"},
-    "gnsstracker_context": {"holdover_seconds": 30},
-    "osclocktracker_context": {"holdover_seconds": "15"},
-    "overalltracker_context": {"holdover_seconds": "15"},
+    "GNSS_INSTANCES": [
+        "ts1",
+        "ts2"],
+    "PTP4L_INSTANCES": [
+        "ptp-inst2",
+        "ptp-inst1"],
 }
 
 
@@ -85,7 +86,8 @@ class DaemonTests(unittest.TestCase):
         sqlalchemy_conf_json = json.dumps(sqlalchemy_conf)
         daemon_context_json = json.dumps(context)
 
-        # distint mock class instances, to have distinct mock method on instance basis
+        # distint mock class instances, to have distinct mock method on
+        # instance basis
         gnssmonitor_mock.side_effect = [
             mock.Mock(name=item) for item in context["GNSS_CONFIGS"]
         ]
@@ -109,14 +111,14 @@ class DaemonTests(unittest.TestCase):
         )
 
     def _test__get_overall_sync_state(self, testdata, expected):
-        holdover_time = float(context["overalltracker_context"]["holdover_seconds"])
+        holdover_time = float(
+            self.worker.overalltracker_context['holdover_seconds'])
         freq = 2
         sync_state = OverallClockState.Freerun
         last_event_time = time.time()
 
         self.osclockmonitor_mock_instance.get_source_ptp_device.return_value = (
-            testdata.osclock.sync_source
-        )
+            testdata.osclock.sync_source)
         self.osclockmonitor_mock_instance.get_os_clock_state.return_value = (
             testdata.osclock.sync_state
         )
@@ -130,10 +132,10 @@ class DaemonTests(unittest.TestCase):
             testdata.osclock.sync_state,
         )
 
-        for i, gnssmonitor_mock_instance in enumerate(self.gnssmonitor_mock_instances):
+        for i, gnssmonitor_mock_instance in enumerate(
+                self.gnssmonitor_mock_instances):
             gnssmonitor_mock_instance.get_ptp_devices.return_value = testdata.ts2phc[
-                i
-            ].ptp_devices
+                i].ptp_devices
             gnssmonitor_mock_instance._state = testdata.ts2phc[i].sync_state
         # test mocking as expected or not.
         self.assertEqual(
@@ -141,28 +143,27 @@ class DaemonTests(unittest.TestCase):
             testdata.ts2phc[0].ptp_devices,
         )
         self.assertEqual(
-            self.gnssmonitor_mock_instances[0]._state, testdata.ts2phc[0].sync_state
-        )
+            self.gnssmonitor_mock_instances[0]._state,
+            testdata.ts2phc[0].sync_state)
         self.assertEqual(
             self.gnssmonitor_mock_instances[1].get_ptp_devices(),
             testdata.ts2phc[1].ptp_devices,
         )
         self.assertEqual(
-            self.gnssmonitor_mock_instances[1]._state, testdata.ts2phc[1].sync_state
-        )
+            self.gnssmonitor_mock_instances[1]._state,
+            testdata.ts2phc[1].sync_state)
 
-        for i, ptpmonitor_mock_instance in enumerate(self.ptpmonitor_mock_instances):
+        for i, ptpmonitor_mock_instance in enumerate(
+                self.ptpmonitor_mock_instances):
             ptpmonitor_mock_instance.get_ptp_devices.return_value = testdata.ptp4l[
-                i
-            ].ptp_devices
+                i].ptp_devices
             ptpmonitor_mock_instance.get_ptp_sync_state.return_value = (
                 None,
                 testdata.ptp4l[i].sync_state,
                 None,
             )
             ptpmonitor_mock_instance.get_ptp_sync_source.return_value = testdata.ptp4l[
-                i
-            ].sync_source
+                i].sync_source
         # test mocking as expected or not.
         self.assertEqual(
             self.ptpmonitor_mock_instances[0].get_ptp_devices(),
@@ -200,7 +201,9 @@ class DaemonTests(unittest.TestCase):
     def test__get_overall_sync_state__all_are_locked__overall_locked(self):
         # when all are locked state -- overall state would be locked
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Locked, sync_source="ptp0")
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
 
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptp0"],
@@ -232,7 +235,9 @@ class DaemonTests(unittest.TestCase):
         # when osclock is on freerun, and others are on locked state -- overall
         # state would be freerun
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Freerun, sync_source="ptp0")
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Freerun,
+            sync_source="ptp0")
 
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptp0"],
@@ -260,10 +265,14 @@ class DaemonTests(unittest.TestCase):
         expected = OverallClockState.Freerun
         self._test__get_overall_sync_state(testdata, expected)
 
-    def test__get_overall_sync_state__ptp4l_ptp0_freerun__overall_freerun(self):
-        # when chained ptp4l ptp0 sync_state is freerun -- overall state would be freerun
+    def test__get_overall_sync_state__ptp4l_ptp0_freerun__overall_freerun(
+            self):
+        # when chained ptp4l ptp0 sync_state is freerun -- overall state would
+        # be freerun
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Locked, sync_source="ptp0")
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
 
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptp0"],
@@ -292,9 +301,12 @@ class DaemonTests(unittest.TestCase):
         self._test__get_overall_sync_state(testdata, expected)
 
     def test__get_overall_sync_state__ptp4l_ptp0_locked__overall_locked(self):
-        # when chained ptp4l ptp0 sync_state is locked -- overall state would be locked
+        # when chained ptp4l ptp0 sync_state is locked -- overall state would
+        # be locked
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Locked, sync_source="ptp0")
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
 
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptp0"],
@@ -322,10 +334,14 @@ class DaemonTests(unittest.TestCase):
         expected = OverallClockState.Locked
         self._test__get_overall_sync_state(testdata, expected)
 
-    def test__get_overall_sync_state__ts2phc_ptp0_freerun__overall_freerun(self):
-        # when chained ts2phc ptp0 sync_state is freerun -- overall state would be freerun
+    def test__get_overall_sync_state__ts2phc_ptp0_freerun__overall_freerun(
+            self):
+        # when chained ts2phc ptp0 sync_state is freerun -- overall state would
+        # be freerun
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Locked, sync_source="ptp0")
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
 
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptp0"],
@@ -354,9 +370,12 @@ class DaemonTests(unittest.TestCase):
         self._test__get_overall_sync_state(testdata, expected)
 
     def test__get_overall_sync_state__ts2phc_ptp0_locked__overall_locked(self):
-        # when chained ts2phc ptp0 sync_state is locked -- overall state would be locked
+        # when chained ts2phc ptp0 sync_state is locked -- overall state would
+        # be locked
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Locked, sync_source="ptp0")
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
 
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptp0"],
@@ -390,7 +409,9 @@ class DaemonTests(unittest.TestCase):
         # when chained ts2phc ptp0 sync_state is locked -- overall state would be locked
         # In this case there are no ptp4l instances with ptp0
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Locked, sync_source="ptp0")
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
 
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptpx"],
@@ -418,15 +439,19 @@ class DaemonTests(unittest.TestCase):
         expected = OverallClockState.Locked
         self._test__get_overall_sync_state(testdata, expected)
 
-    def test__get_overall_sync_state__no_source_for_ptp0__overall_freerun(self):
+    def test__get_overall_sync_state__no_source_for_ptp0__overall_freerun(
+            self):
         # when chained ptp4l ptp0 sync_source NA (neither gnss nor ptp) -- overall
         # state would be freerun
         # In this case there are no ts2phc instances with ptp0
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Locked, sync_source="ptp0")
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
 
         # In this case, practically ptp0's ptp4l instance sync_state would be
-        # PtpState.Freerun, as there is no sync source. But still using locked state.
+        # PtpState.Freerun, as there is no sync source. But still using locked
+        # state.
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptp0"],
             sync_state=PtpState.Locked,
@@ -453,11 +478,14 @@ class DaemonTests(unittest.TestCase):
         expected = OverallClockState.Freerun
         self._test__get_overall_sync_state(testdata, expected)
 
-    def test__get_overall_sync_state__no_backtrack_for_ptp0__overall_freerun(self):
+    def test__get_overall_sync_state__no_backtrack_for_ptp0__overall_freerun(
+            self):
         # when chained ptp0 is not included neither on ptp4l nor ts2phc -- overall
         # state would be freerun
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Locked, sync_source="ptp0")
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
 
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptpx"],
@@ -485,10 +513,14 @@ class DaemonTests(unittest.TestCase):
         expected = OverallClockState.Freerun
         self._test__get_overall_sync_state(testdata, expected)
 
-    def test__get_overall_sync_state__os_clock_no_ptp_device__overall_freerun(self):
-        # when there is no sync_source e.g. ptp0 for os_clock -- overall state would be freerun
+    def test__get_overall_sync_state__os_clock_no_ptp_device__overall_freerun(
+            self):
+        # when there is no sync_source e.g. ptp0 for os_clock -- overall state
+        # would be freerun
         self._setup()
-        osclockdata = OsClockData(sync_state=OsClockState.Locked, sync_source=None)
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source=None)
 
         ptp4ldata0 = PTP4lData(
             ptp_devices=["ptp0"],
