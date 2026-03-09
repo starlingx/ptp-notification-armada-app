@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 #
-# Copyright (c) 2021-2025 Wind River Systems, Inc.
+# Copyright (c) 2021-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -12,6 +12,7 @@
 # Sync status provided as: 'Locked', 'Holdover', 'Freerun'
 #
 #
+import configparser
 import os
 import re
 import subprocess
@@ -145,9 +146,36 @@ def format_resource_address(node_name, resource, instance=None):
     return resource_address
 
 
+def get_phc_index(phc_interface):
+    """Determine the phc index"""
+    phc_index = ''
+    filepath = f"{constants.PTP_CONFIG_PATH}ptp-interfaces.conf"
+    config = configparser.ConfigParser(delimiters=' ')
+    try:
+        config.read(filepath)
+        if config.has_section(phc_interface):
+            phc_index = config[phc_interface].get('phc_index', '')
+    except(FileNotFoundError, PermissionError) as err:
+        LOG.error(f"Failed to get phc index, reason: {err}")
+    return phc_index
+
+
 def get_interface_phc_device(phc_interface):
     """Determine the phc device for the interface"""
-    pattern = constants.PHC_PATH.format(phc_interface[:-1]+'*')
+    phc_index = get_phc_index(phc_interface)
+    LOG.debug(f"Interface {phc_interface} has phc index {phc_index}")
+    if phc_index != '':
+        iface_pattern = '*'
+        ptp_device_pattern = f"ptp{phc_index}"
+    else:
+        # Use interface name as fallback solution
+        # if phc index is not found.
+        iface_pattern = phc_interface[:-1]+'*'
+        ptp_device_pattern = '*'
+    pattern = constants.PHC_PATH.format(
+        iface_pattern,
+        ptp_device_pattern
+    )
     ptp_devices = glob(pattern)
     if len(ptp_devices) == 0:
         LOG.info("No ptp device found at %s", pattern)
