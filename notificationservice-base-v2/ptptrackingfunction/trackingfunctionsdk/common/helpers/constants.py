@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2021-2025 Wind River Systems, Inc.
+# Copyright (c) 2021-2026 Wind River Systems, Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -111,7 +111,7 @@ PCI_SLOT_NAME = "PCI_SLOT_NAME"
 ZL_MODULE_PATH_CLKID = "/hostsys/module/zl3073x/parameters/clock_id"
 GNSS_TYPE = 'gnss'
 
-PHC_PATH = "/hostsys/class/net/{}/device/ptp/*"
+PHC_PATH = "/hostsys/class/net/{}/device/ptp/{}"
 
 class ClockSourceType(object):
     TypePTP = "PTP"
