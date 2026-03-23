@@ -16,7 +16,8 @@ RUN pip3 install --user pecan \
  && pip3 install oslo-config \
  && pip3 install oslo-messaging \
  && pip3 install WSME \
- && pip3 install sqlalchemy==1.4.12
+ && pip3 install sqlalchemy==1.4.12 \
+ && pip3 install waitress
 
 WORKDIR /opt/
 COPY ./notificationclient-sidecar /opt/notificationclient
