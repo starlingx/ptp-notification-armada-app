@@ -7,18 +7,38 @@
       jobs:
         - openstack-tox-linters
         - ptp-notification-tox-py39
+        - ptp-notification-tox-coverage
+        - ptp-notification-tox-security
         - k8sapp-ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-pylint
         - k8sapp-ptp-notification-tox-flake8
         - k8sapp-ptp-notification-tox-metadata
+        - ptp-notification-tox-py313
+        - ptp-notification-tox-coverage-trixie
+        - ptp-notification-tox-security-trixie
+        - k8sapp-ptp-notification-tox-py313
+        - k8sapp-ptp-notification-tox-coverage-trixie
+        - k8sapp-ptp-notification-tox-security-trixie
+        - k8sapp-ptp-notification-tox-flake8-trixie
+        - k8sapp-ptp-notification-tox-pylint-trixie
     gate:
       jobs:
         - openstack-tox-linters
         - ptp-notification-tox-py39
+        - ptp-notification-tox-coverage
+        - ptp-notification-tox-security
         - k8sapp-ptp-notification-tox-py39
         - k8sapp-ptp-notification-tox-pylint
         - k8sapp-ptp-notification-tox-flake8
         - k8sapp-ptp-notification-tox-metadata
+        - ptp-notification-tox-py313
+        - ptp-notification-tox-coverage-trixie
+        - ptp-notification-tox-security-trixie
+        - k8sapp-ptp-notification-tox-py313
+        - k8sapp-ptp-notification-tox-coverage-trixie
+        - k8sapp-ptp-notification-tox-security-trixie
+        - k8sapp-ptp-notification-tox-flake8-trixie
+        - k8sapp-ptp-notification-tox-pylint-trixie
     post:
       jobs:
         - stx-ptp-notification-armada-app-upload-git-mirror
@@ -116,6 +136,175 @@
       - name: git_mirror_credentials
         secret: stx-ptp-notification-armada-app-github-secret3
         pass-to-parent: true
+
+
+- job:
+    name: ptp-notification-tox-coverage
+    parent: tox
+    description: |
+      Run coverage analysis for ptp-notification
+    nodeset: debian-bullseye
+    required-projects:
+      - starlingx/integ
+    files:
+      - notificationservice-base-v2/*
+      - tests/*
+    vars:
+      tox_envlist: coverage
+    post-run: playbooks/upload-coverage-reports.yaml
+
+- job:
+    name: ptp-notification-tox-security
+    parent: tox
+    description: |
+      Run security analysis for ptp-notification
+    nodeset: debian-bullseye
+    files:
+      - notificationservice-base-v2/*
+      - python3-k8sapp-ptp-notification/*
+    vars:
+      tox_envlist: security
+    post-run: playbooks/upload-security-reports.yaml
+
+- job:
+    name: ptp-notification-tox-py313
+    parent: tox
+    description: |
+      Run py313 test for ptp-notification (Trixie)
+    nodeset: debian-trixie-8GB
+    required-projects:
+      - starlingx/integ
+      - starlingx/root
+    files:
+      - notificationservice-base-v2/*
+    vars:
+      tox_envlist: py313
+      tox_constraints_file: '{{ ansible_user_dir }}/src/opendev.org/starlingx/root/build-tools/requirements/debian/trixie/upper-constraints.txt'
+
+- job:
+    name: ptp-notification-tox-coverage-trixie
+    parent: tox
+    description: |
+      Run coverage analysis for ptp-notification (Trixie)
+    nodeset: debian-trixie-8GB
+    required-projects:
+      - starlingx/integ
+      - starlingx/root
+    files:
+      - notificationservice-base-v2/*
+      - tests/*
+    vars:
+      tox_envlist: coverage-trixie
+      tox_constraints_file: '{{ ansible_user_dir }}/src/opendev.org/starlingx/root/build-tools/requirements/debian/trixie/upper-constraints.txt'
+    post-run: playbooks/upload-coverage-reports.yaml
+
+- job:
+    name: ptp-notification-tox-security-trixie
+    parent: tox
+    description: |
+      Run security analysis for ptp-notification (Trixie)
+    nodeset: debian-trixie-8GB
+    required-projects:
+      - starlingx/root
+    files:
+      - notificationservice-base-v2/*
+      - python3-k8sapp-ptp-notification/*
+    vars:
+      tox_envlist: security-trixie
+      tox_constraints_file: '{{ ansible_user_dir }}/src/opendev.org/starlingx/root/build-tools/requirements/debian/trixie/upper-constraints.txt'
+    post-run: playbooks/upload-security-reports.yaml
+
+- job:
+    name: k8sapp-ptp-notification-tox-py313
+    parent: tox
+    description: |
+      Run py313 test for k8sapp-ptp-notification (Trixie)
+    nodeset: debian-trixie-8GB
+    required-projects:
+      - starlingx/config
+      - starlingx/fault
+      - starlingx/utilities
+      - starlingx/root
+    files:
+      - python3-k8sapp-ptp-notification/*
+    vars:
+      tox_envlist: py313
+      tox_extra_args: -c python3-k8sapp-ptp-notification/k8sapp_ptp_notification/tox.ini
+      tox_constraints_file: '{{ ansible_user_dir }}/src/opendev.org/starlingx/root/build-tools/requirements/debian/trixie/upper-constraints.txt'
+
+- job:
+    name: k8sapp-ptp-notification-tox-coverage-trixie
+    parent: tox
+    description: |
+      Run coverage analysis for k8sapp-ptp-notification (Trixie)
+    nodeset: debian-trixie-8GB
+    required-projects:
+      - starlingx/config
+      - starlingx/fault
+      - starlingx/utilities
+      - starlingx/root
+    files:
+      - python3-k8sapp-ptp-notification/*
+    vars:
+      tox_envlist: coverage-trixie
+      tox_extra_args: -c python3-k8sapp-ptp-notification/k8sapp_ptp_notification/tox.ini
+      tox_constraints_file: '{{ ansible_user_dir }}/src/opendev.org/starlingx/root/build-tools/requirements/debian/trixie/upper-constraints.txt'
+    post-run: playbooks/upload-coverage-reports.yaml
+
+- job:
+    name: k8sapp-ptp-notification-tox-security-trixie
+    parent: tox
+    description: |
+      Run security analysis for k8sapp-ptp-notification (Trixie)
+    nodeset: debian-trixie-8GB
+    required-projects:
+      - starlingx/config
+      - starlingx/fault
+      - starlingx/utilities
+      - starlingx/root
+    files:
+      - python3-k8sapp-ptp-notification/*
+    vars:
+      tox_envlist: security-trixie
+      tox_extra_args: -c python3-k8sapp-ptp-notification/k8sapp_ptp_notification/tox.ini
+      tox_constraints_file: '{{ ansible_user_dir }}/src/opendev.org/starlingx/root/build-tools/requirements/debian/trixie/upper-constraints.txt'
+    post-run: playbooks/upload-security-reports.yaml
+
+- job:
+    name: k8sapp-ptp-notification-tox-flake8-trixie
+    parent: tox
+    description: |
+      Run flake8 test for k8sapp-ptp-notification (Trixie)
+    nodeset: debian-trixie-8GB
+    required-projects:
+      - starlingx/config
+      - starlingx/fault
+      - starlingx/utilities
+      - starlingx/root
+    files:
+      - python3-k8sapp-ptp-notification/*
+    vars:
+      tox_envlist: flake8-trixie
+      tox_extra_args: -c python3-k8sapp-ptp-notification/k8sapp_ptp_notification/tox.ini
+      tox_constraints_file: '{{ ansible_user_dir }}/src/opendev.org/starlingx/root/build-tools/requirements/debian/trixie/upper-constraints.txt'
+
+- job:
+    name: k8sapp-ptp-notification-tox-pylint-trixie
+    parent: tox
+    description: |
+      Run pylint test for k8sapp-ptp-notification (Trixie)
+    nodeset: debian-trixie-8GB
+    required-projects:
+      - starlingx/config
+      - starlingx/fault
+      - starlingx/utilities
+      - starlingx/root
+    files:
+      - python3-k8sapp-ptp-notification/*
+    vars:
+      tox_envlist: pylint-trixie
+      tox_extra_args: -c python3-k8sapp-ptp-notification/k8sapp_ptp_notification/tox.ini
+      tox_constraints_file: '{{ ansible_user_dir }}/src/opendev.org/starlingx/root/build-tools/requirements/debian/trixie/upper-constraints.txt'
 
 - secret:
     name: stx-ptp-notification-armada-app-github-secret3

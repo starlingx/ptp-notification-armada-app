@@ -73,6 +73,7 @@ disable=
  R0911, # too-many-return-statements
  R0912, # too-many-branches
  R0913, # too-many-arguments
+ R0917, # too-many-positional-arguments
  R0914, # too-many-locals
  R0915, # too-many-statements
  R0916, # too-many-boolean-expressions
