@@ -6,7 +6,7 @@ LABEL=notificationservice-base-v2
 PROJECT=infra
 PROJECT_REPO=nil
 
-DIST_PACKAGES="python3 python3-dev gcc"
+DIST_PACKAGES="python3 python3-dev gcc linuxptp"
 PIP_PACKAGES="notificationservice-base-v2 \
     pecan \
     oslo.config \
