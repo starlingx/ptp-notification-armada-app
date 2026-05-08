@@ -81,6 +81,7 @@ class PtpMonitor:
         self._ptp_event_time = datetime.datetime.utcnow().timestamp()
         self._clock_class_event_time = \
             datetime.datetime.utcnow().timestamp()
+        self.read_ptp_config_file()
         self.set_ptp_sync_state()
         self.set_ptp_clock_class()
 
@@ -121,6 +122,31 @@ class PtpMonitor:
                 phc_interfaces.append(phc_interface)
 
         return phc_interfaces
+
+    def read_ptp_config_file(self):
+        """Read PTP instance config file"""
+        self.domain_number = 0
+        self.uds_address = f"{constants.VAR_RUN_PATH}/ptp4l-{self.ptp4l_service_name}"
+        try:
+            with open(self.ptp4l_config, 'r', encoding='utf-8') as config_file:
+                config_lines = config_file.readlines()
+                config_lines = [line.rstrip() for line in config_lines]
+        except FileNotFoundError:
+            LOG.warning("Config file not found: %s", self.ptp4l_config)
+            return
+
+        section = None
+        for line in config_lines:
+            if re.match(r"^\[.*\]$", line):
+                section = line.strip("[]")
+                continue
+            if section == 'global':
+                match = re.match(r"^domainNumber (.*)$", line)
+                if match:
+                    self.domain_number = match.group(1)
+                match = re.match(r"^uds_address (.*)$", line)
+                if match:
+                    self.uds_address = match.group(1)
 
     def set_ptp_sync_state(self):
         (new_ptp_sync_event, ptp_sync_state,
@@ -259,8 +285,13 @@ class PtpMonitor:
 
         for key in range(1, len_dic + 1):
             cmd = ptp_dict_to_use[key][0]
-            cmd = "pmc -b 0 -u -f " + constants.PTP_CONFIG_PATH + \
-                  "ptp4l-" + self.ptp4l_service_name + ".conf " + cmd
+            cmd = ' '.join([
+                f"{constants.PMC_PATH}",
+                "-b 0 -u",
+                f"-d {self.domain_number}",
+                f"-s {self.uds_address}",
+                cmd
+            ])
 
             ptp_keyword = ptp_dict_to_use[key][1:]
             total_ptp_keywords += len(ptp_keyword)

@@ -22,8 +22,6 @@ from trackingfunctionsdk.common.helpers.instance_config_parser import (
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
 
-PLUGIN_STATUS_QUERY_EXEC = '/usr/sbin/pmc'
-
 
 class OsClockMonitor:
 
@@ -160,8 +158,8 @@ class OsClockMonitor:
     def set_utc_offset(self, pidfile_path="/var/run/"):
         # Check command line options for offset
         utc_offset = self._get_phc2sys_command_line_option(pidfile_path, '-O')
-        domain_number = None
-        uds_addr = None
+        domain_number = self._get_phc2sys_command_line_option(pidfile_path, '-n')
+        uds_addr = self._get_phc2sys_command_line_option(pidfile_path, '-z')
 
         # If not, check config file for uds_address and domainNumber
         # If uds_address, get utc_offset from TIME_PROPERTIES_DATA_SET using
@@ -177,22 +175,28 @@ class OsClockMonitor:
                 LOG.debug("set_utc_offset: ha_domainNumber is %s",
                           domain_number)
 
-            if self.config.has_section('global') \
-                    and 'uds_address' in self.config['global'].keys():
-                uds_addr = self.config['global']['uds_address']
-                LOG.debug("set_utc_offset: uds_addr is %s", uds_addr)
+                if 'ha_uds_address' in self.config[self.phc_interface].keys():
+                    uds_addr = self.config[self.phc_interface]['ha_uds_address']
+                    LOG.debug("set_utc_offset: uds_addr is %s", uds_addr)
+
+            if self.config.has_section('global'):
+                if 'uds_address' in self.config['global'].keys():
+                    uds_addr = self.config['global']['uds_address']
+                    LOG.debug("set_utc_offset: uds_addr is %s", uds_addr)
 
                 if domain_number is None:
                     domain_number = self.config['global'].get(
-                        'domainNumber', '0')
+                        'domainNumber', '0'
+                    )
                     LOG.debug("set_utc_offset: domainNumber is %s",
                               domain_number)
 
+            if domain_number is not None and uds_addr:
                 #
                 # sudo /usr/sbin/pmc -u -b 0 'GET TIME_PROPERTIES_DATA_SET'
                 #
                 data = subprocess.check_output([
-                    PLUGIN_STATUS_QUERY_EXEC, '-f', self.phc2sys_config,
+                    constants.PMC_PATH, '-s', uds_addr,
                     '-u', '-b', '0', '-d', domain_number,
                     'GET TIME_PROPERTIES_DATA_SET'
                 ]).decode()

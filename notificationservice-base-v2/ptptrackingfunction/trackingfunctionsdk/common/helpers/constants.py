@@ -54,6 +54,7 @@ UTC_OFFSET = "37"
 # Notification formatting
 NOTIFICATION_FORMAT = os.environ.get("NOTIFICATION_FORMAT", 'standard')
 
+# Configuration paths
 if path.exists('/ptp/linuxptp/ptpinstance'):
     LINUXPTP_CONFIG_PATH = '/ptp/linuxptp/ptpinstance/'
 elif path.exists('/ptp/ptpinstance'):
@@ -63,8 +64,14 @@ else:
 PTP_CONFIG_PATH = LINUXPTP_CONFIG_PATH
 PHC2SYS_CONFIG_PATH = LINUXPTP_CONFIG_PATH
 TS2PHC_CONFIG_PATH = LINUXPTP_CONFIG_PATH
-PHC_CTL_PATH = "/usr/sbin/phc_ctl"
 PHC2SYS_DEFAULT_CONFIG = PHC2SYS_CONFIG_PATH + "phc2sys-phc2sys-legacy.conf"
+
+# External paths
+VAR_RUN_PATH = "/var/run"
+
+# Linux PTP tools
+PHC_CTL_PATH = "/usr/sbin/phc_ctl"
+PMC_PATH = "/usr/sbin/pmc"
 
 CLOCK_REALTIME = "CLOCK_REALTIME"
 
