@@ -56,6 +56,10 @@ def build_context():
         gnss_configs, gnss_instances = get_configs(
             f"{constants.TS2PHC_CONFIG_PATH}ts2phc-*.conf", "TS2PHC_SERVICE_NAME", "ts2phc")
 
+    # SyncE
+    synce_configs, synce_instances = get_configs(
+        f"{constants.PTP_CONFIG_PATH}synce4l-*.conf", "SYNCE4L_SERVICE_NAME", "synce4l")
+
     # PHC2SYS
     phc2sys_configs = glob.glob(
         f"{constants.PHC2SYS_CONFIG_PATH}phc2sys-*.conf")
@@ -92,6 +96,7 @@ def build_context():
         'PHC2SYS_SERVICE_NAME': phc2sys_service,
         'PTP4L_CONFIGS': ptp4l_configs,
         'PTP4L_INSTANCES': ptp4l_instances,
+        'SYNCE_INSTANCES': synce_instances,
     }
 
 

@@ -21,6 +21,7 @@ from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers.os_clock_monitor import OsClockMonitor
 from trackingfunctionsdk.common.helpers.ptp_monitor import PtpMonitor
 from trackingfunctionsdk.common.helpers import ptpsync as utils
+from trackingfunctionsdk.common.helpers.synce_monitor import SynceMonitor
 from trackingfunctionsdk.model.dto.gnssstate import GnssState
 from trackingfunctionsdk.model.dto.osclockstate import OsClockState
 from trackingfunctionsdk.model.dto.overallclockstate import OverallClockState
@@ -155,6 +156,11 @@ class PtpWatcherDefault:
         'poll_freq_seconds': 2
     }
 
+    DEFAULT_SYNCETRACKER_CONTEXT = {
+        'holdover_seconds': 30,
+        'poll_freq_seconds': 2
+    }
+
     class PtpRequestHandlerDefault(object):
         def __init__(self, watcher, daemon_context):
             self.watcher = watcher
@@ -241,6 +247,47 @@ class PtpWatcherDefault:
                     else:
                         lastStatus = None
                     self.watcher.gnsstracker_context_lock.release()
+                if (resource_path == constants.SOURCE_SYNCE_LOCK_STATE or
+                        resource_path == constants.SOURCE_SYNC_ALL):
+                    self.watcher.syncetracker_context_lock.acquire()
+                    if (optional and
+                            self.watcher.syncetracker_context.get(optional)):
+                        sync_state = (
+                            self.watcher.syncetracker_context[optional].get(
+                                'sync_state', 'Unknown'))
+                        last_event_time = (
+                            self.watcher.syncetracker_context[optional].get(
+                                'last_event_time', time.time()))
+                        lastStatus[optional] = self._build_event_response(
+                            constants.SOURCE_SYNCE_LOCK_STATE,
+                            last_event_time,
+                            utils.format_resource_address(
+                                nodename,
+                                constants.SOURCE_SYNCE_LOCK_STATE,
+                                optional),
+                            sync_state)
+                        newStatus.append(lastStatus[optional])
+                    elif not optional:
+                        for config in self.daemon_context.get(
+                                'SYNCE_INSTANCES', []):
+                            sync_state = (
+                                self.watcher.syncetracker_context[config].get(
+                                    'sync_state', 'Unknown'))
+                            last_event_time = (
+                                self.watcher.syncetracker_context[config].get(
+                                    'last_event_time', time.time()))
+                            lastStatus[config] = self._build_event_response(
+                                constants.SOURCE_SYNCE_LOCK_STATE,
+                                last_event_time,
+                                utils.format_resource_address(
+                                    nodename,
+                                    constants.SOURCE_SYNCE_LOCK_STATE,
+                                    config),
+                                sync_state)
+                            newStatus.append(lastStatus[config])
+                    else:
+                        lastStatus = None
+                    self.watcher.syncetracker_context_lock.release()
                 if (resource_path == constants.SOURCE_SYNC_PTP_CLOCK_CLASS or
                         resource_path == constants.SOURCE_SYNC_ALL):
                     self.watcher.ptptracker_context_lock.acquire()
@@ -430,6 +477,19 @@ class PtpWatcherDefault:
         self.gnsstracker_context_lock = threading.Lock()
         LOG.debug("gnsstracker_context: %s" % self.gnsstracker_context)
 
+        # SyncE Context
+        self.syncetracker_context = {}
+        for config in self.daemon_context.get('SYNCE_INSTANCES', []):
+            self.syncetracker_context[config] = \
+                PtpWatcherDefault.DEFAULT_SYNCETRACKER_CONTEXT.copy()
+            self.syncetracker_context[config]['sync_state'] = 'Unknown'
+            self.syncetracker_context[config]['last_event_time'] = \
+                self.init_time
+            self.syncetracker_context[config]['holdover_seconds'] = \
+                instance_config_parser.get_instance_holdover_time(config)
+            self.syncetracker_context[config]['poll_freq_seconds'] = 2
+        self.syncetracker_context_lock = threading.Lock()
+
         # OS Clock Context
         self.osclocktracker_context = {}
         self.osclocktracker_context = \
@@ -501,6 +561,12 @@ class PtpWatcherDefault:
                        offset_threshold=1000000)
             for config in self.daemon_context['PTP4L_INSTANCES']]
 
+        self.synce_monitor_list = [
+            SynceMonitor(config,
+                         holdover_time=self.syncetracker_context[config][
+                             'holdover_seconds'])
+            for config in self.daemon_context.get('SYNCE_INSTANCES', [])]
+
     def signal_ptp_event(self):
         if self.event:
             self.event.set()
@@ -534,6 +600,9 @@ class PtpWatcherDefault:
                 self.__publish_ptpstatus(forced)
             if self.gnsstracker_context:
                 self.__publish_gnss_status(forced)
+            if self.syncetracker_context:
+                self.__publish_synce_status(forced)
+                self.__publish_synce_clock_quality(forced)
             self.__publish_os_clock_status(forced)
             self.__publish_overall_sync_status(forced)
             if self.event.wait(self.event_timeout):
@@ -1032,6 +1101,99 @@ class PtpWatcherDefault:
                         newStatus, constants.SOURCE_SYNC_GNSS_SYNC_STATUS)
                     self.ptpeventproducer.publish_status(
                         newStatus, constants.SOURCE_SYNC_ALL)
+
+    def __publish_synce_status(self, forced=False):
+        for synce_monitor in self.synce_monitor_list:
+            instance = synce_monitor.synce4l_service_name
+            new_event, sync_state, event_time = synce_monitor.get_synce_status()
+            LOG.info("%s synce_status: state is %s, new_event is %s",
+                     instance, sync_state, new_event)
+
+            if new_event or forced:
+                self.syncetracker_context_lock.acquire()
+                self.syncetracker_context[instance]['sync_state'] = sync_state
+                self.syncetracker_context[instance][
+                    'last_event_time'] = event_time
+                self.syncetracker_context_lock.release()
+
+                resource_address = utils.format_resource_address(
+                    self.node_name,
+                    constants.SOURCE_SYNCE_LOCK_STATE,
+                    instance)
+                lastStatus = {
+                    instance: {
+                        'id': uuidutils.generate_uuid(),
+                        'specversion': constants.SPEC_VERSION,
+                        'source': constants.SOURCE_SYNCE_LOCK_STATE,
+                        'type': source_type[
+                            constants.SOURCE_SYNCE_LOCK_STATE],
+                        'time': event_time,
+                        'data': {
+                            'version': constants.DATA_VERSION,
+                            'values': [
+                                {
+                                    'data_type':
+                                        constants.DATA_TYPE_NOTIFICATION,
+                                    'ResourceAddress': resource_address,
+                                    'value_type':
+                                        constants.VALUE_TYPE_ENUMERATION,
+                                    'value': sync_state.upper()
+                                }
+                            ]
+                        }
+                    }
+                }
+                newStatus = [lastStatus[instance]]
+                if constants.NOTIFICATION_FORMAT == 'standard':
+                    self.ptpeventproducer.publish_status(
+                        newStatus, constants.SOURCE_SYNCE_LOCK_STATE)
+                    self.ptpeventproducer.publish_status(
+                        newStatus, constants.SOURCE_SYNC_ALL)
+                else:
+                    self.ptpeventproducer.publish_status(
+                        lastStatus, constants.SOURCE_SYNCE_LOCK_STATE)
+                    self.ptpeventproducer.publish_status(
+                        lastStatus, constants.SOURCE_SYNC_ALL)
+
+    def __publish_synce_clock_quality(self, forced=False):
+        for synce_monitor in self.synce_monitor_list:
+            instance = synce_monitor.synce4l_service_name
+            new_event, ql, event_time = synce_monitor.get_clock_quality()
+
+            if new_event or forced:
+                resource_address = utils.format_resource_address(
+                    self.node_name,
+                    constants.SOURCE_SYNCE_CLOCK_QUALITY,
+                    instance)
+                lastStatus = {
+                    instance: {
+                        'id': uuidutils.generate_uuid(),
+                        'specversion': constants.SPEC_VERSION,
+                        'source': constants.SOURCE_SYNCE_CLOCK_QUALITY,
+                        'type': source_type[
+                            constants.SOURCE_SYNCE_CLOCK_QUALITY],
+                        'time': event_time,
+                        'data': {
+                            'version': constants.DATA_VERSION,
+                            'values': [
+                                {
+                                    'data_type': constants.DATA_TYPE_METRIC,
+                                    'ResourceAddress': resource_address,
+                                    'value_type':
+                                        constants.VALUE_TYPE_METRIC,
+                                    'value': ql
+                                }
+                            ]
+                        }
+                    }
+                }
+                newStatus = [lastStatus[instance]]
+                if constants.NOTIFICATION_FORMAT == 'standard':
+                    self.ptpeventproducer.publish_status(
+                        newStatus, constants.SOURCE_SYNCE_CLOCK_QUALITY)
+                else:
+                    self.ptpeventproducer.publish_status(
+                        lastStatus, constants.SOURCE_SYNCE_CLOCK_QUALITY)
 
     def __publish_ptpstatus(self, forced=False):
 
