@@ -2,11 +2,10 @@ ARG BASE
 FROM ${BASE}
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV KUBE_LATEST_VERSION="v1.23.1"
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 RUN apt-get -y update \
  && apt-get -y install \
-    gcc \
     python3-dev \
     python3 \
  && apt-get -y clean \

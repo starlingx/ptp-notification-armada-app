@@ -214,12 +214,6 @@ spec:
           - name: ptpdir
             mountPath: /var/run/
             readOnly: false
-          - name: pmc
-            mountPath: /usr/sbin/pmc
-            readOnly: false
-          - name: phcctl
-            mountPath: /usr/sbin/phc_ctl
-            readOnly: false
       {{ end }}
           - name: conf
             mountPath: /ptp/
@@ -244,14 +238,6 @@ spec:
           hostPath:
             path: /var/run/
             type: Directory
-        - name: pmc
-          hostPath:
-            path: /usr/sbin/pmc
-            type: File
-        - name: phcctl
-          hostPath:
-            path: /usr/sbin/phc_ctl
-            type: File
         - name: conf
           hostPath:
             path: /etc/
