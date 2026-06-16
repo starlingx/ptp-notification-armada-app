@@ -547,3 +547,85 @@ class DaemonTests(unittest.TestCase):
         )
         expected = OverallClockState.Freerun
         self._test__get_overall_sync_state(testdata, expected)
+
+    def test__get_overall_sync_state__shared_ptp_device_prefers_slave_port__overall_locked(
+            self):
+        # When two ptp4l instances share the same ptp_device (same NIC/PHC,
+        # different domainNumbers), the derived instance (TypeGNSS, local GM)
+        # is listed first but the reference instance (TypePTP, has slave port)
+        # should be preferred as the primary disciplining source.
+        # All other instances are Freerun to prove Locked comes only from
+        # the reference ptp4l instance.
+        self._setup()
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
+
+        # Derived instance: same ptp_device, TypeGNSS (local GM, no slave port)
+        ptp4ldata0 = PTP4lData(
+            ptp_devices=["ptp0"],
+            sync_state=PtpState.Freerun,
+            sync_source=constants.ClockSourceType.TypeGNSS,
+        )
+        # Reference instance: same ptp_device, TypePTP (has slave port)
+        ptp4ldata1 = PTP4lData(
+            ptp_devices=["ptp0"],
+            sync_state=PtpState.Locked,
+            sync_source=constants.ClockSourceType.TypePTP,
+        )
+
+        ts2phcdata0 = ts2phcData(
+            ptp_devices=["ptp0"], sync_state=GnssState.Failure_Nofix
+        )
+        ts2phcdata1 = ts2phcData(
+            ptp_devices=["ptp1"], sync_state=GnssState.Failure_Nofix
+        )
+
+        testdata = TestData(
+            osclock=osclockdata,
+            ptp4l=[ptp4ldata0, ptp4ldata1],
+            ts2phc=[ts2phcdata0, ts2phcdata1],
+        )
+        expected = OverallClockState.Locked
+        self._test__get_overall_sync_state(testdata, expected)
+
+    def test__get_overall_sync_state__shared_ptp_device_derived_freerun__overall_locked(
+            self):
+        # When two ptp4l instances share the same ptp_device, the derived
+        # instance (TypeGNSS) is in Freerun (stale clockClass) but the
+        # reference (TypePTP) is Locked. Overall should be Locked because
+        # the fix picks the reference instance.
+        # All other instances are Freerun to prove Locked comes only from
+        # the reference ptp4l instance.
+        self._setup()
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked,
+            sync_source="ptp0")
+
+        # Derived instance: Freerun (stale/uninitialized)
+        ptp4ldata0 = PTP4lData(
+            ptp_devices=["ptp0"],
+            sync_state=PtpState.Freerun,
+            sync_source=constants.ClockSourceType.TypeGNSS,
+        )
+        # Reference instance: Locked with slave port
+        ptp4ldata1 = PTP4lData(
+            ptp_devices=["ptp0"],
+            sync_state=PtpState.Locked,
+            sync_source=constants.ClockSourceType.TypePTP,
+        )
+
+        ts2phcdata0 = ts2phcData(
+            ptp_devices=["ptp0"], sync_state=GnssState.Failure_Nofix
+        )
+        ts2phcdata1 = ts2phcData(
+            ptp_devices=["ptp1"], sync_state=GnssState.Failure_Nofix
+        )
+
+        testdata = TestData(
+            osclock=osclockdata,
+            ptp4l=[ptp4ldata0, ptp4ldata1],
+            ts2phc=[ts2phcdata0, ts2phcdata1],
+        )
+        expected = OverallClockState.Locked
+        self._test__get_overall_sync_state(testdata, expected)

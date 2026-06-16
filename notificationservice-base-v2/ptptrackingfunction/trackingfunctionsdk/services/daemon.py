@@ -575,18 +575,28 @@ class PtpWatcherDefault:
     def __get_primary_ptp_state(self, ptp_device):
         # The PTP device itself is being disciplined or not ?
         # Check which ptp4l instance disciplining this PTP device
-        # disciplining source could be either GNSS or PTP
+        # disciplining source could be either GNSS or PTP.
+        # When multiple ptp4l instances share the same PTP device (same
+        # NIC/PHC with different domainNumbers), prefer the instance with
+        # a slave port (TypePTP) as it is the actual reference instance
+        # disciplining the hardware clock.
         primary_ptp4l = None
         ptp_state = PtpState.Freerun
         for ptp4l in self.ptp_monitor_list:
             # runtime loading of ptp4l config
             ptp4l.set_ptp_devices()
-            if (
-                ptp_device in ptp4l.get_ptp_devices()
-                and ptp4l.get_ptp_sync_source() != constants.ClockSourceType.TypeNA
-            ):
+            if ptp_device not in ptp4l.get_ptp_devices():
+                continue
+            sync_source = ptp4l.get_ptp_sync_source()
+            if sync_source == constants.ClockSourceType.TypeNA:
+                continue
+            if sync_source == constants.ClockSourceType.TypePTP:
+                # Instance has a slave port — this is the reference
                 primary_ptp4l = ptp4l
                 break
+            if primary_ptp4l is None:
+                # First non-NA match (TypeGNSS), keep as fallback
+                primary_ptp4l = ptp4l
 
         if primary_ptp4l is not None:
             _, read_state, _ = primary_ptp4l.get_ptp_sync_state()
