@@ -155,6 +155,63 @@ class OsClockMonitor:
         LOG.debug("Phc2sys HA interface: %s ptp_device: %s",
                   self.phc_interface, self.ptp_device)
 
+    def _is_grandmaster(self, uds_addr, domain_number):
+        """Determine if this node is a grandmaster.
+
+        Queries PMC for PARENT_DATA_SET and DEFAULT_DATA_SET, then compares
+        the grandmasterIdentity to the local clockIdentity. If they match,
+        this host is acting as the GM.
+
+        Returns:
+            bool: True if this node is the grandmaster, False otherwise.
+        """
+        try:
+            parent_data = subprocess.check_output([
+                constants.PMC_PATH, '-s', uds_addr,
+                '-u', '-b', '0', '-d', domain_number,
+                'GET PARENT_DATA_SET'
+            ]).decode()
+        except subprocess.CalledProcessError as ex:
+            LOG.warning("Failed to query PMC for PARENT_DATA_SET: %s", ex)
+            return False
+
+        try:
+            default_data = subprocess.check_output([
+                constants.PMC_PATH, '-s', uds_addr,
+                '-u', '-b', '0', '-d', domain_number,
+                'GET DEFAULT_DATA_SET'
+            ]).decode()
+        except subprocess.CalledProcessError as ex:
+            LOG.warning("Failed to query PMC for DEFAULT_DATA_SET: %s", ex)
+            return False
+
+        gm_identity = None
+        clock_identity = None
+
+        for line in parent_data.split('\n'):
+            if 'grandmasterIdentity' in line:
+                gm_identity = line.split()[1].strip()
+                break
+
+        for line in default_data.split('\n'):
+            if 'clockIdentity' in line:
+                clock_identity = line.split()[1].strip()
+                break
+
+        if gm_identity and clock_identity:
+            is_gm = (gm_identity == clock_identity)
+            LOG.debug(
+                "GM identity: %s, local clock identity: %s, "
+                "is_grandmaster: %s",
+                gm_identity, clock_identity, is_gm)
+            return is_gm
+
+        LOG.warning(
+            "Unable to determine GM status: "
+            "gm_identity=%s, clock_identity=%s",
+            gm_identity, clock_identity)
+        return False
+
     def set_utc_offset(self, pidfile_path="/var/run/"):
         # Check command line options for offset
         utc_offset = self._get_phc2sys_command_line_option(pidfile_path, '-O')
@@ -192,26 +249,34 @@ class OsClockMonitor:
                               domain_number)
 
             if domain_number is not None and uds_addr:
-                #
-                # sudo /usr/sbin/pmc -u -b 0 'GET TIME_PROPERTIES_DATA_SET'
-                #
-                data = subprocess.check_output([
-                    constants.PMC_PATH, '-s', uds_addr,
-                    '-u', '-b', '0', '-d', domain_number,
-                    'GET TIME_PROPERTIES_DATA_SET'
-                ]).decode()
+                grand_master = self._is_grandmaster(uds_addr, domain_number)
+                # If not a grandmaster, we get UTC Offset from pmc if it's valid
+                if not grand_master:
+                    data = subprocess.check_output([
+                        constants.PMC_PATH, '-s', uds_addr,
+                        '-u', '-b', '0', '-d', domain_number,
+                        'GET TIME_PROPERTIES_DATA_SET'
+                    ]).decode()
 
-                for line in data.split('\n'):
-                    if 'currentUtcOffset ' in line:
-                        utc_offset = line.split()[1]
-                    if 'currentUtcOffsetValid ' in line:
-                        utc_offset_valid = bool(int(line.split()[1]))
+                    for line in data.split('\n'):
+                        if 'currentUtcOffset ' in line:
+                            utc_offset = line.split()[1]
+                        if 'currentUtcOffsetValid ' in line:
+                            utc_offset_valid = bool(int(line.split()[1]))
 
                 if not utc_offset_valid:
-                    utc_offset = constants.UTC_OFFSET
-                    LOG.warning('currentUtcOffsetValid is %s, using the '
-                                'default currentUtcOffset %s',
-                                utc_offset_valid, utc_offset)
+                    leapfile = utils.get_ts2phc_leapfile()
+                    utc_offset = utils.get_latest_offset_from_leapfile(leapfile)
+                    if utc_offset is not None:
+                        LOG.info('currentUtcOffsetValid is %s, using the '
+                                 'value %s from leapfile %s',
+                                 utc_offset_valid, utc_offset, leapfile)
+                    else:
+                        utc_offset = constants.UTC_OFFSET
+                        LOG.warning('currentUtcOffsetValid is %s, and could '
+                                    'not read value from leapfile, using the '
+                                    'default currentUtcOffset %s',
+                                    utc_offset_valid, utc_offset)
 
         utc_offset_nanoseconds = abs(int(utc_offset)) * 1000000000
         self.phc2sys_tolerance_low = utc_offset_nanoseconds - \

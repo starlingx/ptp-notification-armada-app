@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import logging
+import time
 from glob import glob
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import log_helper
@@ -186,3 +187,108 @@ def get_interface_phc_device(phc_interface):
         LOG.debug("Found ptp device %s at %s", ptp_device, pattern)
         return ptp_device
     return None
+
+
+def get_ts2phc_leapfile():
+    """Get the leapfile path from the ts2phc configuration file.
+
+    Searches TS2PHC_CONFIG_PATH for files matching 'ts2ph*.conf',
+    reads the first match line by line, and returns the value
+    associated with the 'leapfile' key.
+
+    Returns:
+        str : The leapfile path.
+    """
+    config_path = constants.TS2PHC_CONFIG_PATH
+    search_pattern = os.path.join(config_path, "ts2ph*.conf")
+    LOG.debug("Searching for ts2phc config files: %s", search_pattern)
+
+    config_files = glob(search_pattern)
+    default_file_path = os.path.normpath(constants.LEAP_FILE_PATH)
+
+    if not config_files:
+        LOG.warning("No ts2phc config files found matching pattern: %s",
+                    search_pattern)
+        return default_file_path
+
+    ts2phc_config_file = config_files[0]
+    LOG.debug("Using ts2phc config file: %s", ts2phc_config_file)
+
+    try:
+        with open(ts2phc_config_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                elements = line.split()
+                if len(elements) >= 2 and elements[0] == 'leapfile':
+                    leapfile = os.path.normpath(elements[1])
+                    LOG.debug("Found leapfile entry: %s", leapfile)
+                    return leapfile
+    except FileNotFoundError:
+        LOG.warning("ts2phc config file not found: %s",
+                    ts2phc_config_file)
+        return default_file_path
+    except OSError as ex:
+        LOG.warning("Unable to read ts2phc config file %s: %s",
+                    ts2phc_config_file, ex)
+        return default_file_path
+
+    LOG.warning("No 'leapfile' entry found in %s", ts2phc_config_file)
+    return default_file_path
+
+
+def get_latest_offset_from_leapfile(filepath):
+    """Parse a leap-seconds.list file and return the latest TAI-UTC offset.
+
+    The leap-seconds.list file contains data lines with the format:
+        <NTP_timestamp>  <TAI-UTC_offset>  # <date_comment>
+
+    The file is read once during initialization. If an operator deploys a
+    new leapfile before a scheduled leap second, the entry is correctly
+    ignored (future timestamp). Once the leap second occurs and the
+    timestamp becomes valid, the service must be restarted to pick up the
+    new value.
+
+    Args:
+        filepath: Path to the leap-seconds.list file.
+
+    Returns:
+        int or None: The TAI-UTC offset from the entry with the highest
+        valid NTP timestamp, or None if the file cannot be parsed.
+    """
+    latest_offset = None
+    now_ntp = int(time.time()) + constants.NTP_EPOCH_OFFSET
+    LOG.debug("Parsing leap seconds file: %s (current NTP time: %d)",
+              filepath, now_ntp)
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                # Skip blank lines, comment lines, and special markers
+                if not line or line.startswith('#'):
+                    continue
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        timestamp = int(parts[0])
+                        offset = int(parts[1])
+                        if timestamp <= now_ntp:
+                            latest_offset = offset
+                    except ValueError:
+                        continue
+    except FileNotFoundError:
+        LOG.warning("Leap seconds file not found: %s", filepath)
+        return None
+    except OSError as ex:
+        LOG.warning("Unable to read leap seconds file %s: %s",
+                    filepath, ex)
+        return None
+
+    if latest_offset is not None:
+        LOG.debug("Latest TAI-UTC offset from leapfile: %d",
+                  latest_offset)
+    else:
+        LOG.warning("No valid TAI-UTC offset found in %s", filepath)
+    return latest_offset

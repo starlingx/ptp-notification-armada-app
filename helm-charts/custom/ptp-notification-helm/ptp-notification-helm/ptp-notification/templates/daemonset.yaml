@@ -229,6 +229,9 @@ spec:
           - name: hostsys
             mountPath: /hostsys/
             readOnly: true
+          - name: leapseconds
+            mountPath: /usr/share/zoneinfo/
+            readOnly: true
 {{ end }}
       volumes:
         - name: scripts
@@ -257,6 +260,10 @@ spec:
         - name: hostsys
           hostPath:
             path: /sys/
+            type: Directory
+        - name: leapseconds
+          hostPath:
+            path: /usr/share/zoneinfo/
             type: Directory
       tolerations:
       - key: "node-role.kubernetes.io/master"

@@ -49,6 +49,10 @@ GNSS_LOCKED_HO_ACQ = LockStatus.LOCKED_AND_HOLDOVER.value
 GNSS_DPLL_0 = "DPLL0"
 GNSS_DPLL_1 = "DPLL1"
 
+# NTP epoch starts on 1900-01-01, Unix epoch on 1970-01-01
+# Difference in seconds: 70 years worth of seconds
+NTP_EPOCH_OFFSET = 2208988800
+LEAP_FILE_PATH = '/usr/share/zoneinfo/leap-seconds.list'
 UTC_OFFSET = "37"
 
 # Notification formatting
