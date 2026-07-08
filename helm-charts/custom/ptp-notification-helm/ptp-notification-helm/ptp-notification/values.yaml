@@ -26,7 +26,7 @@ registration:
   imagePullSecrets: default-registry-key
   image:
     repository: docker.io/library/rabbitmq
-    tag: 4.1.2
+    tag: 4.3.2
     pullPolicy: IfNotPresent
   endpoint:
     host: "registration.notification.svc.cluster.local"
@@ -46,7 +46,7 @@ registration:
 notification:
   image:
     repository: docker.io/library/rabbitmq
-    tag: 4.1.2
+    tag: 4.3.2
   endpoint:
     port: 5672
     user: admin
@@ -72,7 +72,7 @@ location:
     livenessTimeoutSeconds: 3
   image:
     repository: starlingx/locationservice-base
-    tag: stx.12.0-v2.2.7
+    tag: stx.13.0-v2.3.0
     pullPolicy: IfNotPresent
 
 ptptrackingv2:
@@ -95,7 +95,7 @@ ptptrackingv2:
     livenessTimeoutSeconds: 3
   image:
     repository: starlingx/notificationservice-base-v2
-    tag: stx.13.0-v2.5.0
+    tag: stx.13.0-v2.6.0
     pullPolicy: IfNotPresent
   control_timeout: 2
   device:
