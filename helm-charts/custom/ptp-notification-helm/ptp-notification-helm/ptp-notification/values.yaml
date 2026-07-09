@@ -25,7 +25,7 @@ labels:
 registration:
   imagePullSecrets: default-registry-key
   image:
-    repository: rabbitmq
+    repository: docker.io/library/rabbitmq
     tag: 4.1.2
     pullPolicy: IfNotPresent
   endpoint:
@@ -45,7 +45,7 @@ registration:
 
 notification:
   image:
-    repository: rabbitmq
+    repository: docker.io/library/rabbitmq
     tag: 4.1.2
   endpoint:
     port: 5672
