@@ -712,6 +712,16 @@ class PtpWatcherDefault:
 
         LOG.debug("Getting overall sync state.")
 
+        # IMPORTANT: SyncE is explicitly excluded from aggregate state calculation.
+        # SyncE provides frequency synchronization (EEC/DPLL) only. The overall
+        # timing state depends exclusively on phase/time sources (GNSS via ts2phc,
+        # PTP via ptp4l) and the OS clock (phc2sys). SyncE loss degrades frequency
+        # holdover but does NOT affect phase/time accuracy while PTP or GNSS
+        # remains locked. SyncE state is reported independently via its own
+        # notification endpoints (/sync/synce-status/lock-state and
+        # /sync/synce-status/synce-clock-quality) and alarm (100.119).
+        # See: ITU-T G.8275.1, O-RAN WG4 sync architecture.
+
         # overall state depends on os_clock_state and single chained gnss/ptp state
         # Need to figure out which gnss/ptp is disciplining the PHC that syncs
         # os_clock
