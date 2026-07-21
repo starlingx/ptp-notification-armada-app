@@ -4,11 +4,17 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 import mock
+import sys
 import unittest
 import json
 import time
 
 from dataclasses import dataclass
+from unittest.mock import MagicMock
+
+# Mock pynetlink before any imports that reference it
+sys.modules['pynetlink'] = MagicMock()
+
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.model.dto.osclockstate import OsClockState
 from trackingfunctionsdk.model.dto.overallclockstate import OverallClockState
