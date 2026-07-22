@@ -59,6 +59,11 @@ spec:
             value: "{{ .Values.notification.endpoint.pass }}"
           - name: RABBITMQ_NODE_PORT
             value: "{{ .Values.notification.endpoint.port }}"
+        volumeMounts:
+          - name: rabbitmq-config
+            mountPath: /etc/rabbitmq/conf.d/90-oslo-compat.conf
+            subPath: rabbitmq.conf
+            readOnly: true
       - name: {{ .Chart.Name }}-location
         image: "{{ .Values.location.image.repository }}:{{ .Values.location.image.tag }}"
         imagePullPolicy: {{ .Values.location.image.pullPolicy }}
@@ -234,6 +239,9 @@ spec:
             readOnly: true
 {{ end }}
       volumes:
+        - name: rabbitmq-config
+          configMap:
+            name: {{ .Chart.Name }}-rabbitmq-config
         - name: scripts
           configMap:
             name: {{ .Chart.Name }}-scripts-configmap

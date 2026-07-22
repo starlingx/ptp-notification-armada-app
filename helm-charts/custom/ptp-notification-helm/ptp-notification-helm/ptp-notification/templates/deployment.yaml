@@ -38,6 +38,10 @@ spec:
       affinity:
 {{ toYaml .Values.registration.affinity | indent 8 }}
 {{- end }}
+      volumes:
+      - name: rabbitmq-config
+        configMap:
+          name: {{ .Chart.Name }}-rabbitmq-config
       containers:
       - name: rabbitmq
         image: "{{ .Values.registration.image.repository }}:{{ .Values.registration.image.tag }}"
@@ -48,4 +52,9 @@ spec:
               value: "{{ .Values.registration.endpoint.pass }}"
             - name: RABBITMQ_NODE_PORT
               value: "{{ .Values.registration.endpoint.port }}"
+        volumeMounts:
+        - name: rabbitmq-config
+          mountPath: /etc/rabbitmq/conf.d/90-oslo-compat.conf
+          subPath: rabbitmq.conf
+          readOnly: true
 ---

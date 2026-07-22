@@ -24,3 +24,35 @@ metadata:
     chart: {{ .Chart.Name }}
 data:
 {{ tpl (.Files.Glob "resources/scripts/init/*").AsConfig . | indent 2 }}
+---
+# RabbitMQ 4.3.0 disabled transient non-exclusive queues by default.
+# oslo.messaging 17.x declares fanout queues as durable=False, exclusive=False
+# which RabbitMQ 4.3+ rejects (error 541). This cannot be fixed by oslo.messaging
+# config options alone — amqp_durable_queues only affects topic queues, and
+# rabbit_transient_quorum_queue changes exchange durability causing conflicts
+# with other clients. Configuring the broker is the official migration path.
+#
+# REMOVAL CRITERIA (delete this ConfigMap + volume/volumeMounts when EITHER):
+#   (a) oslo.messaging is upgraded to a version that declares fanout queues
+#       with exclusive=True (check impl_rabbit.py:declare_fanout_consumer), OR
+#   (b) rabbit_stream_fanout=True becomes the default in oslo.messaging.
+# REMOVAL SCOPE: This file (configmap.yaml second document), plus the
+#   rabbitmq-config volume and volumeMount entries in deployment.yaml and
+#   daemonset.yaml. All added in the same commit (grep for rabbitmq-config).
+# See also: https://www.rabbitmq.com/docs/deprecated-features
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-rabbitmq-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    release: {{ .Release.Name }}
+    app: {{ include "notification.name" . }}
+    chart: {{ .Chart.Name }}
+data:
+  rabbitmq.conf: |
+    # Permit deprecated transient non-exclusive queues.
+    # Required by oslo.messaging 17.x/18.x rabbit driver fanout pattern.
+    # RabbitMQ 4.3.0+ rejects these by default (error 541).
+    # Safe to remove when oslo.messaging declares fanout queues as exclusive.
+    deprecated_features.permit.transient_nonexcl_queues = true
