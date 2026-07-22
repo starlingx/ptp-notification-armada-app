@@ -635,3 +635,114 @@ class DaemonTests(unittest.TestCase):
         )
         expected = OverallClockState.Locked
         self._test__get_overall_sync_state(testdata, expected)
+
+
+# Context including SyncE instance for query handler tests
+context_with_synce = context.copy()
+context_with_synce['SYNCE_INSTANCES'] = ['synce1']
+
+
+class TestSynceClockQualityQuery(unittest.TestCase):
+    """Tests for pull-mode query of synce-status/clock-quality."""
+
+    @mock.patch("trackingfunctionsdk.services.daemon.SynceMonitor")
+    @mock.patch("trackingfunctionsdk.services.daemon.PtpMonitor")
+    @mock.patch("trackingfunctionsdk.services.daemon.OsClockMonitor")
+    @mock.patch("trackingfunctionsdk.services.daemon.GnssMonitor")
+    def setUp(self, gnss_mock, osclock_mock, ptp_mock, synce_mock):
+        sqlalchemy_conf = json.dumps({
+            "url": "sqlite:///apiserver.db", "echo": False})
+        gnss_mock.side_effect = [
+            mock.Mock(name=i) for i in context_with_synce["GNSS_CONFIGS"]]
+        ptp_mock.side_effect = [
+            mock.Mock(name=i) for i in context_with_synce["PTP4L_CONFIGS"]]
+        synce_mock.side_effect = [
+            mock.Mock(name='synce1')]
+
+        self.worker = PtpWatcherDefault(
+            None, sqlalchemy_conf, json.dumps(context_with_synce))
+
+        # Populate syncetracker_context with clock_quality
+        self.worker.syncetracker_context['synce1']['clock_quality'] = 0x02
+        self.worker.syncetracker_context['synce1'][
+            'clock_quality_event_time'] = 1700000000.0
+        self.worker.syncetracker_context['synce1']['sync_state'] = 'Locked'
+        self.worker.syncetracker_context['synce1'][
+            'last_event_time'] = 1700000000.0
+
+    def _query(self, resource_address, optional=None):
+        handler = self.worker._PtpWatcherDefault__ptprequest_handler
+        return handler.query_status(
+            ResourceAddress=resource_address, optional=optional)
+
+    def test_clock_quality_query_returns_ql_value(self):
+        """Pull-mode query for clock-quality returns cached QL."""
+        result = self._query('/././sync/synce-status/clock-quality')
+        self.assertIsNotNone(result)
+        if constants.NOTIFICATION_FORMAT == 'standard':
+            self.assertIsInstance(result, list)
+            self.assertEqual(len(result), 1)
+            data = result[0]
+        else:
+            self.assertIsInstance(result, dict)
+            data = result['synce1']
+        self.assertEqual(
+            data['source'], '/sync/synce-status/clock-quality')
+        self.assertEqual(
+            data['data']['values'][0]['value'], '2')
+        self.assertEqual(
+            data['data']['values'][0]['data_type'],
+            constants.DATA_TYPE_METRIC)
+        self.assertEqual(
+            data['data']['values'][0]['value_type'],
+            constants.VALUE_TYPE_METRIC)
+
+    def test_clock_quality_query_specific_instance(self):
+        """Pull-mode query with optional instance filter."""
+        result = self._query(
+            '/././sync/synce-status/clock-quality', optional='synce1')
+        self.assertIsNotNone(result)
+        if constants.NOTIFICATION_FORMAT == 'standard':
+            data = result[0]
+        else:
+            data = result['synce1']
+        self.assertEqual(
+            data['data']['values'][0]['value'], '2')
+
+    def test_clock_quality_query_unknown_instance_returns_empty(self):
+        """Pull-mode query with unknown instance returns empty."""
+        result = self._query(
+            '/././sync/synce-status/clock-quality', optional='nonexistent')
+        if constants.NOTIFICATION_FORMAT == 'standard':
+            self.assertEqual(result, [])
+        else:
+            self.assertEqual(result, {})
+
+    def test_lock_state_query_still_works(self):
+        """Verify lock-state query is not broken by clock-quality fix."""
+        result = self._query('/././sync/synce-status/lock-state')
+        self.assertIsNotNone(result)
+        if constants.NOTIFICATION_FORMAT == 'standard':
+            self.assertIsInstance(result, list)
+            self.assertEqual(len(result), 1)
+            data = result[0]
+        else:
+            data = result['synce1']
+        self.assertEqual(
+            data['source'], '/sync/synce-status/lock-state')
+        self.assertEqual(
+            data['data']['values'][0]['value'], 'LOCKED')
+
+    def test_clock_quality_default_before_first_poll(self):
+        """Query before first poll returns default 0xff (Unknown)."""
+        # Remove the cached clock_quality to simulate pre-first-poll state
+        del self.worker.syncetracker_context['synce1']['clock_quality']
+        del self.worker.syncetracker_context['synce1'][
+            'clock_quality_event_time']
+        result = self._query('/././sync/synce-status/clock-quality')
+        if constants.NOTIFICATION_FORMAT == 'standard':
+            data = result[0]
+        else:
+            data = result['synce1']
+        self.assertEqual(
+            data['data']['values'][0]['value'], '255')

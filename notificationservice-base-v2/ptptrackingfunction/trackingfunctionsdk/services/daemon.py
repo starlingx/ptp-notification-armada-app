@@ -250,44 +250,107 @@ class PtpWatcherDefault:
                 if (resource_path == constants.SOURCE_SYNCE_LOCK_STATE or
                         resource_path == constants.SOURCE_SYNC_ALL):
                     self.watcher.syncetracker_context_lock.acquire()
-                    if (optional and
-                            self.watcher.syncetracker_context.get(optional)):
-                        sync_state = (
-                            self.watcher.syncetracker_context[optional].get(
-                                'sync_state', 'Unknown'))
-                        last_event_time = (
-                            self.watcher.syncetracker_context[optional].get(
-                                'last_event_time', time.time()))
-                        lastStatus[optional] = self._build_event_response(
-                            constants.SOURCE_SYNCE_LOCK_STATE,
-                            last_event_time,
-                            utils.format_resource_address(
-                                nodename,
-                                constants.SOURCE_SYNCE_LOCK_STATE,
-                                optional),
-                            sync_state)
-                        newStatus.append(lastStatus[optional])
-                    elif not optional:
-                        for config in self.daemon_context.get(
-                                'SYNCE_INSTANCES', []):
+                    try:
+                        if (optional and
+                                self.watcher.syncetracker_context.get(
+                                    optional)):
                             sync_state = (
-                                self.watcher.syncetracker_context[config].get(
+                                self.watcher.syncetracker_context[
+                                    optional].get(
                                     'sync_state', 'Unknown'))
                             last_event_time = (
-                                self.watcher.syncetracker_context[config].get(
+                                self.watcher.syncetracker_context[
+                                    optional].get(
                                     'last_event_time', time.time()))
-                            lastStatus[config] = self._build_event_response(
-                                constants.SOURCE_SYNCE_LOCK_STATE,
-                                last_event_time,
-                                utils.format_resource_address(
-                                    nodename,
+                            lastStatus[optional] = \
+                                self._build_event_response(
                                     constants.SOURCE_SYNCE_LOCK_STATE,
-                                    config),
-                                sync_state)
-                            newStatus.append(lastStatus[config])
-                    else:
-                        lastStatus = None
-                    self.watcher.syncetracker_context_lock.release()
+                                    last_event_time,
+                                    utils.format_resource_address(
+                                        nodename,
+                                        constants.SOURCE_SYNCE_LOCK_STATE,
+                                        optional),
+                                    sync_state)
+                            newStatus.append(lastStatus[optional])
+                        elif not optional:
+                            for config in self.daemon_context.get(
+                                    'SYNCE_INSTANCES', []):
+                                sync_state = (
+                                    self.watcher.syncetracker_context[
+                                        config].get(
+                                        'sync_state', 'Unknown'))
+                                last_event_time = (
+                                    self.watcher.syncetracker_context[
+                                        config].get(
+                                        'last_event_time', time.time()))
+                                lastStatus[config] = \
+                                    self._build_event_response(
+                                        constants.SOURCE_SYNCE_LOCK_STATE,
+                                        last_event_time,
+                                        utils.format_resource_address(
+                                            nodename,
+                                            constants.SOURCE_SYNCE_LOCK_STATE,
+                                            config),
+                                        sync_state)
+                                newStatus.append(lastStatus[config])
+                        else:
+                            lastStatus = None
+                    finally:
+                        self.watcher.syncetracker_context_lock.release()
+                if (resource_path == constants.SOURCE_SYNCE_CLOCK_QUALITY or
+                        resource_path == constants.SOURCE_SYNC_ALL):
+                    self.watcher.syncetracker_context_lock.acquire()
+                    try:
+                        if (optional and
+                                self.watcher.syncetracker_context.get(
+                                    optional)):
+                            ql = (
+                                self.watcher.syncetracker_context[
+                                    optional].get(
+                                    'clock_quality', 0xff))
+                            last_event_time = (
+                                self.watcher.syncetracker_context[
+                                    optional].get(
+                                    'clock_quality_event_time',
+                                    time.time()))
+                            lastStatus[optional] = \
+                                self._build_event_response(
+                                    constants.SOURCE_SYNCE_CLOCK_QUALITY,
+                                    last_event_time,
+                                    utils.format_resource_address(
+                                        nodename,
+                                        constants.SOURCE_SYNCE_CLOCK_QUALITY,
+                                        optional),
+                                    str(ql),
+                                    constants.VALUE_TYPE_METRIC)
+                            newStatus.append(lastStatus[optional])
+                        elif not optional:
+                            for config in self.daemon_context.get(
+                                    'SYNCE_INSTANCES', []):
+                                ql = (
+                                    self.watcher.syncetracker_context[
+                                        config].get(
+                                        'clock_quality', 0xff))
+                                last_event_time = (
+                                    self.watcher.syncetracker_context[
+                                        config].get(
+                                        'clock_quality_event_time',
+                                        time.time()))
+                                lastStatus[config] = \
+                                    self._build_event_response(
+                                        constants.SOURCE_SYNCE_CLOCK_QUALITY,
+                                        last_event_time,
+                                        utils.format_resource_address(
+                                            nodename,
+                                            constants.SOURCE_SYNCE_CLOCK_QUALITY,
+                                            config),
+                                        str(ql),
+                                        constants.VALUE_TYPE_METRIC)
+                                newStatus.append(lastStatus[config])
+                        else:
+                            lastStatus = None
+                    finally:
+                        self.watcher.syncetracker_context_lock.release()
                 if (resource_path == constants.SOURCE_SYNC_PTP_CLOCK_CLASS or
                         resource_path == constants.SOURCE_SYNC_ALL):
                     self.watcher.ptptracker_context_lock.acquire()
@@ -1121,10 +1184,13 @@ class PtpWatcherDefault:
 
             if new_event or forced:
                 self.syncetracker_context_lock.acquire()
-                self.syncetracker_context[instance]['sync_state'] = sync_state
-                self.syncetracker_context[instance][
-                    'last_event_time'] = event_time
-                self.syncetracker_context_lock.release()
+                try:
+                    self.syncetracker_context[instance][
+                        'sync_state'] = sync_state
+                    self.syncetracker_context[instance][
+                        'last_event_time'] = event_time
+                finally:
+                    self.syncetracker_context_lock.release()
 
                 resource_address = utils.format_resource_address(
                     self.node_name,
@@ -1169,6 +1235,15 @@ class PtpWatcherDefault:
         for synce_monitor in self.synce_monitor_list:
             instance = synce_monitor.synce4l_service_name
             new_event, ql, event_time = synce_monitor.get_clock_quality()
+
+            # Cache QL in context for pull-mode CurrentState queries
+            self.syncetracker_context_lock.acquire()
+            try:
+                self.syncetracker_context[instance]['clock_quality'] = ql
+                self.syncetracker_context[instance][
+                    'clock_quality_event_time'] = event_time
+            finally:
+                self.syncetracker_context_lock.release()
 
             if new_event or forced:
                 resource_address = utils.format_resource_address(
