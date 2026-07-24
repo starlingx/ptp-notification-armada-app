@@ -106,6 +106,24 @@ badRequest (400), itemNotFound (404), conflict(409)
        "UriLocation": "http://127.0.0.1:8080/ocloudNotifications/v2/subscriptions/8ded8d18-1fee-11ed-854c-8a6cf180560d"
    }
 
+::
+
+   {
+       "EndpointUri": "http://127.0.0.1:9090/v2/resource_status/ptp",
+       "ResourceAddress": "/./controller-0/synce-inst1/sync/synce-status/lock-state",
+       "SubscriptionId": "a3e4f7c2-2a1b-11ef-b84c-9a7cf180560d",
+       "UriLocation": "http://127.0.0.1:8080/ocloudNotifications/v2/subscriptions/a3e4f7c2-2a1b-11ef-b84c-9a7cf180560d"
+   }
+
+::
+
+   {
+       "EndpointUri": "http://127.0.0.1:9090/v2/resource_status/ptp",
+       "ResourceAddress": "/./controller-0/synce-inst1/sync/synce-status/clock-quality",
+       "SubscriptionId": "b5f6a8d3-2a1b-11ef-b84c-9a7cf180560d",
+       "UriLocation": "http://127.0.0.1:8080/ocloudNotifications/v2/subscriptions/b5f6a8d3-2a1b-11ef-b84c-9a7cf180560d"
+   }
+
 ----------------------
 Manage Subscriptions
 ----------------------
@@ -246,6 +264,27 @@ itemNotFound (404)
    :widths: 20, 20, 20, 60
 
    "ResourceAddress", "plain", "xsd:string", "Specifies a hierarchical path which consists of the resource. Only the current cluster and node is supported. PTP instance name is supported."
+
+**Supported resource paths**
+
+.. csv-table::
+   :header: "Resource Path", "Event Type", "data_type", "value_type", "Possible Values"
+   :widths: 30, 30, 10, 10, 20
+
+   "``/sync/sync-status/sync-state``", "``event.sync.sync-status.synchronization-state-change``", "notification", "enumeration", "LOCKED, HOLDOVER, FREERUN"
+   "``/sync/sync-status/os-clock-sync-state``", "``event.sync.sync-status.os-clock-sync-state-change``", "notification", "enumeration", "LOCKED, HOLDOVER, FREERUN"
+   "``/sync/ptp-status/lock-state``", "``event.sync.ptp-status.ptp-state-change``", "notification", "enumeration", "LOCKED, HOLDOVER, FREERUN"
+   "``/sync/ptp-status/clock-class``", "``event.sync.ptp-status.ptp-clock-class-change``", "metric", "metric", "6, 7, 52, 140, 248, ..."
+   "``/sync/gnss-status/gnss-sync-status``", "``event.sync.gnss-status.gnss-state-change``", "notification", "enumeration", "SYNCHRONIZED, NOT_SYNCHRONIZED"
+   "``/sync/synce-status/lock-state``", "``event.sync.synce-status.synce-state-change``", "notification", "enumeration", "LOCKED, HOLDOVER, FREERUN"
+   "``/sync/synce-status/clock-quality``", "``event.sync.synce-status.synce-clock-quality-change``", "metric", "metric", "ITU-T G.8264 SSM/QL value (e.g. 2=QL-PRC, 4=QL-SEC, 15=QL-DNU)"
+
+.. note::
+
+   For per-instance queries, prefix the resource path with the instance name:
+   ``/./node-name/instance-name/sync/synce-status/lock-state``.
+   When no instance is specified, the response includes all instances of that
+   resource type.
 
 This operation does not accept a request body.
 **Response parameters**
@@ -416,6 +455,51 @@ This operation does not accept a request body.
       }
    ]
 
+::
+
+   [
+      {
+         "id": "7f2a91c4-3b5e-4d8f-a012-6e8c9f4b2d1a",
+         "specversion": "1.0",
+         "source": "/sync/synce-status/lock-state",
+         "type": "event.sync.synce-status.synce-state-change",
+         "time": "2024-11-15T15:22:34112847Z",
+         "data": {
+               "version": "1.0",
+               "values": [
+                  {
+                     "data_type": "notification",
+                     "ResourceAddress": "/././synce-inst1/sync/synce-status/lock-state",
+                     "value_type": "enumeration",
+                     "value": "LOCKED"
+                  }
+               ]
+         }
+      }
+   ]
+
+::
+
+   [
+      {
+         "id": "e4d8a6b2-5c7f-4e9a-b321-8f1d2c6e7a9b",
+         "specversion": "1.0",
+         "source": "/sync/synce-status/clock-quality",
+         "type": "event.sync.synce-status.synce-clock-quality-change",
+         "time": "2024-11-15T15:22:34112860Z",
+         "data": {
+               "version": "1.0",
+               "values": [
+                  {
+                     "data_type": "metric",
+                     "ResourceAddress": "/././synce-inst1/sync/synce-status/clock-quality",
+                     "value_type": "metric",
+                     "value": "2"
+                  }
+               ]
+         }
+      }
+   ]
 
 This operation does not accept a request body.
 
@@ -487,3 +571,45 @@ badRequest (400), itemNotFound (404), tiemout(408)
       }
    }
 
+
+::
+
+   {
+       "id": "c7e3b5a1-4d2f-4a9e-8b76-3f1e5d9c8a2b",
+       "specversion": "1.0",
+       "source": "/sync/synce-status/lock-state",
+       "type": "event.sync.synce-status.synce-state-change",
+       "time": "2024-11-15T19:45:12334521Z",
+       "data": {
+         "version": "1.0",
+         "values": [
+            {
+               "data_type": "notification",
+               "ResourceAddress": "/././synce-inst1/sync/synce-status/lock-state",
+               "value_type": "enumeration",
+               "value": "FREERUN"
+            }
+         ]
+      }
+   }
+
+::
+
+   {
+       "id": "a9f2d4e6-8c1b-4f3a-b567-2e4d8a7c9f1e",
+       "specversion": "1.0",
+       "source": "/sync/synce-status/clock-quality",
+       "type": "event.sync.synce-status.synce-clock-quality-change",
+       "time": "2024-11-15T19:45:12334535Z",
+       "data": {
+         "version": "1.0",
+         "values": [
+            {
+               "data_type": "metric",
+               "ResourceAddress": "/././synce-inst1/sync/synce-status/clock-quality",
+               "value_type": "metric",
+               "value": "15"
+            }
+         ]
+      }
+   }
