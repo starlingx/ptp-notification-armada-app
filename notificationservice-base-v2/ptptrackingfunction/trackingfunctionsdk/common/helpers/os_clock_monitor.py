@@ -265,12 +265,12 @@ class OsClockMonitor:
                             utc_offset_valid = bool(int(line.split()[1]))
 
                 if not utc_offset_valid:
-                    leapfile = utils.get_ts2phc_leapfile()
-                    utc_offset = utils.get_latest_offset_from_leapfile(leapfile)
+                    utc_offset = utils.get_latest_offset_from_leapfile()
                     if utc_offset is not None:
                         LOG.info('currentUtcOffsetValid is %s, using the '
                                  'value %s from leapfile %s',
-                                 utc_offset_valid, utc_offset, leapfile)
+                                 utc_offset_valid, utc_offset,
+                                 constants.LEAP_FILE_PATH)
                     else:
                         utc_offset = constants.UTC_OFFSET
                         LOG.warning('currentUtcOffsetValid is %s, and could '
