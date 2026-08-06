@@ -41,7 +41,10 @@ GM_IS_PRESENT = "true"
 CLOCK_CLASS_VALUE6 = "6"
 CLOCK_CLASS_VALUE7 = "7"
 CLOCK_CLASS_VALUE135 = "135"
-CLOCK_CLASS_LOCKED_LIST = [CLOCK_CLASS_VALUE6, CLOCK_CLASS_VALUE7, CLOCK_CLASS_VALUE135]
+CLOCK_CLASS_LOCKED_LIST = [
+    CLOCK_CLASS_VALUE6,
+    CLOCK_CLASS_VALUE7,
+    CLOCK_CLASS_VALUE135]
 # ts2phc constants
 NMEA_SERIALPORT = "ts2phc.nmea_serialport"
 GNSS_PIN = "GNSS-1PPS"
@@ -52,7 +55,9 @@ GNSS_DPLL_1 = "DPLL1"
 # NTP epoch starts on 1900-01-01, Unix epoch on 1970-01-01
 # Difference in seconds: 70 years worth of seconds
 NTP_EPOCH_OFFSET = 2208988800
-LEAP_FILE_PATH = '/usr/share/zoneinfo/leap-seconds.list'
+# Leapfile is deployed by puppet to the PTP config directory.
+# The container sees it via the /ptp/ mount (host /etc/ → /ptp/).
+LEAP_FILE_PATH = '/ptp/linuxptp/ptpinstance/leap-seconds.list'
 UTC_OFFSET = "37"
 
 # Notification formatting
@@ -123,6 +128,7 @@ ZL_MODULE_PATH_CLKID = "/hostsys/module/zl3073x/parameters/clock_id"
 GNSS_TYPE = 'gnss'
 
 PHC_PATH = "/hostsys/class/net/{}/device/ptp/{}"
+
 
 class ClockSourceType(object):
     TypePTP = "PTP"
