@@ -195,6 +195,54 @@ class PtpWatcherDefault:
             }
             return lastStatus
 
+        def _build_extended_event_response(
+                self, resource_path, last_event_time, resource_address,
+                sync_state, extended_info):
+            """Build a CloudEvent with extended per-pin data.
+
+            Contains two values entries:
+            1. Aggregate state (enumeration) -- backward compatible
+            2. Extended info (metric) -- per-pin details as JSON
+            """
+            lastStatus = {
+                'id': uuidutils.generate_uuid(),
+                'specversion': constants.SPEC_VERSION,
+                'source': resource_path,
+                'type': source_type[resource_path],
+                'time': last_event_time,
+                'data': {
+                    'version': constants.DATA_VERSION,
+                    'values': [
+                        {
+                            'data_type':
+                                constants.DATA_TYPE_NOTIFICATION,
+                            'ResourceAddress': resource_address,
+                            'value_type':
+                                constants.VALUE_TYPE_ENUMERATION,
+                            'value': sync_state.upper()
+                        },
+                        {
+                            'data_type':
+                                constants.DATA_TYPE_METRIC,
+                            'ResourceAddress': resource_address,
+                            'value_type':
+                                constants.VALUE_TYPE_METRIC,
+                            'value': {
+                                'active_source':
+                                    extended_info.get(
+                                        'active_source'),
+                                'dpll_state':
+                                    extended_info.get(
+                                        'dpll_state', 'unknown'),
+                                'pins':
+                                    extended_info.get('pins', {})
+                            }
+                        }
+                    ]
+                }
+            }
+            return lastStatus
+
         def query_status(self, **rpc_kwargs):
             # Client PULL status requests come through here
             # Dict is used for legacy notification format
@@ -347,6 +395,64 @@ class PtpWatcherDefault:
                                         str(ql),
                                         constants.VALUE_TYPE_METRIC)
                                 newStatus.append(lastStatus[config])
+                        else:
+                            lastStatus = None
+                    finally:
+                        self.watcher.syncetracker_context_lock.release()
+                if (resource_path ==
+                        constants.SOURCE_SYNCE_LOCK_STATE_EXTENDED or
+                        resource_path == constants.SOURCE_SYNC_ALL):
+                    self.watcher.syncetracker_context_lock.acquire()
+                    try:
+                        if (optional and
+                                self.watcher.syncetracker_context.get(
+                                    optional)):
+                            ctx = self.watcher.syncetracker_context[optional]
+                            extended_info = ctx.get('extended_info', {})
+                            last_event_time = ctx.get(
+                                'last_extended_event_time', time.time())
+                            sync_state = extended_info.get(
+                                'sync_state', 'Unknown')
+                            response = \
+                                self._build_extended_event_response(
+                                    constants
+                                    .SOURCE_SYNCE_LOCK_STATE_EXTENDED,
+                                    last_event_time,
+                                    utils.format_resource_address(
+                                        nodename,
+                                        constants
+                                        .SOURCE_SYNCE_LOCK_STATE_EXTENDED,
+                                        optional),
+                                    sync_state,
+                                    extended_info)
+                            lastStatus[optional] = response
+                            newStatus.append(response)
+                        elif not optional:
+                            for config in self.daemon_context.get(
+                                    'SYNCE_INSTANCES', []):
+                                ctx = self.watcher.syncetracker_context[
+                                    config]
+                                extended_info = ctx.get(
+                                    'extended_info', {})
+                                last_event_time = ctx.get(
+                                    'last_extended_event_time',
+                                    time.time())
+                                sync_state = extended_info.get(
+                                    'sync_state', 'Unknown')
+                                response = \
+                                    self._build_extended_event_response(
+                                        constants
+                                        .SOURCE_SYNCE_LOCK_STATE_EXTENDED,
+                                        last_event_time,
+                                        utils.format_resource_address(
+                                            nodename,
+                                            constants
+                                            .SOURCE_SYNCE_LOCK_STATE_EXTENDED,
+                                            config),
+                                        sync_state,
+                                        extended_info)
+                                lastStatus[config] = response
+                                newStatus.append(response)
                         else:
                             lastStatus = None
                     finally:
@@ -551,6 +657,14 @@ class PtpWatcherDefault:
             self.syncetracker_context[config]['holdover_seconds'] = \
                 instance_config_parser.get_instance_holdover_time(config)
             self.syncetracker_context[config]['poll_freq_seconds'] = 2
+            self.syncetracker_context[config]['extended_info'] = {
+                'sync_state': 'Unknown',
+                'active_source': None,
+                'dpll_state': 'unknown',
+                'pins': {}
+            }
+            self.syncetracker_context[config]['last_extended_event_time'] = \
+                self.init_time
         self.syncetracker_context_lock = threading.Lock()
 
         # OS Clock Context
@@ -665,6 +779,7 @@ class PtpWatcherDefault:
                 self.__publish_gnss_status(forced)
             if self.syncetracker_context:
                 self.__publish_synce_status(forced)
+                self.__publish_synce_status_extended(forced)
                 self.__publish_synce_clock_quality(forced)
             self.__publish_os_clock_status(forced)
             self.__publish_overall_sync_status(forced)
@@ -1228,6 +1343,85 @@ class PtpWatcherDefault:
                 else:
                     self.ptpeventproducer.publish_status(
                         lastStatus, constants.SOURCE_SYNCE_LOCK_STATE)
+                    self.ptpeventproducer.publish_status(
+                        lastStatus, constants.SOURCE_SYNC_ALL)
+
+    def __publish_synce_status_extended(self, forced=False):
+        for synce_monitor in self.synce_monitor_list:
+            instance = synce_monitor.synce4l_service_name
+            new_event, extended_info, event_time = \
+                synce_monitor.get_synce_status_extended()
+            LOG.info("%s synce_status_extended: new_event=%s, active=%s",
+                     instance, new_event,
+                     extended_info.get('active_source') if extended_info
+                     else None)
+
+            if (new_event or forced) and extended_info is not None:
+                self.syncetracker_context_lock.acquire()
+                try:
+                    self.syncetracker_context[instance][
+                        'extended_info'] = extended_info
+                    self.syncetracker_context[instance][
+                        'last_extended_event_time'] = event_time
+                finally:
+                    self.syncetracker_context_lock.release()
+
+                sync_state = extended_info.get('sync_state', 'Unknown')
+                resource_address = utils.format_resource_address(
+                    self.node_name,
+                    constants.SOURCE_SYNCE_LOCK_STATE_EXTENDED,
+                    instance)
+                response = {
+                    'id': uuidutils.generate_uuid(),
+                    'specversion': constants.SPEC_VERSION,
+                    'source':
+                        constants.SOURCE_SYNCE_LOCK_STATE_EXTENDED,
+                    'type': source_type[
+                        constants.SOURCE_SYNCE_LOCK_STATE_EXTENDED],
+                    'time': event_time,
+                    'data': {
+                        'version': constants.DATA_VERSION,
+                        'values': [
+                            {
+                                'data_type':
+                                    constants.DATA_TYPE_NOTIFICATION,
+                                'ResourceAddress': resource_address,
+                                'value_type':
+                                    constants.VALUE_TYPE_ENUMERATION,
+                                'value': sync_state.upper()
+                            },
+                            {
+                                'data_type':
+                                    constants.DATA_TYPE_METRIC,
+                                'ResourceAddress': resource_address,
+                                'value_type':
+                                    constants.VALUE_TYPE_METRIC,
+                                'value': {
+                                    'active_source':
+                                        extended_info.get(
+                                            'active_source'),
+                                    'dpll_state':
+                                        extended_info.get(
+                                            'dpll_state', 'unknown'),
+                                    'pins':
+                                        extended_info.get('pins', {})
+                                }
+                            }
+                        ]
+                    }
+                }
+                lastStatus = {instance: response}
+                newStatus = [response]
+                if constants.NOTIFICATION_FORMAT == 'standard':
+                    self.ptpeventproducer.publish_status(
+                        newStatus,
+                        constants.SOURCE_SYNCE_LOCK_STATE_EXTENDED)
+                    self.ptpeventproducer.publish_status(
+                        newStatus, constants.SOURCE_SYNC_ALL)
+                else:
+                    self.ptpeventproducer.publish_status(
+                        lastStatus,
+                        constants.SOURCE_SYNCE_LOCK_STATE_EXTENDED)
                     self.ptpeventproducer.publish_status(
                         lastStatus, constants.SOURCE_SYNC_ALL)
 

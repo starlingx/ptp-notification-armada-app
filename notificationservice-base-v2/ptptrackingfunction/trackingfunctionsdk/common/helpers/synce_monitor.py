@@ -16,6 +16,7 @@ from trackingfunctionsdk.common.helpers import constants
 from pynetlink import NetlinkDPLL
 from pynetlink import DeviceType
 from pynetlink import LockStatus
+from pynetlink import PinDirection
 
 
 LOG = logging.getLogger(__name__)
@@ -66,6 +67,10 @@ class SynceMonitor:
         self._last_ql = None
         self._ql_event_time = datetime.datetime.now(
             datetime.timezone.utc).timestamp()
+        self._last_extended_info = None
+        self._extended_event_time = datetime.datetime.now(
+            datetime.timezone.utc).timestamp()
+        self._last_raw_status = None
         LOG.info("SyncE Monitor initialized: instance=%s, holdover_time=%ds, "
                  "clock_id=%s, ql=[locked=0x%02x, holdover=0x%02x, "
                  "freerun=0x%02x]",
@@ -220,6 +225,7 @@ class SynceMonitor:
         current_time = datetime.datetime.now(datetime.timezone.utc).timestamp()
 
         raw_status = self._read_eec_status()
+        self._last_raw_status = raw_status
 
         if raw_status is None:
             new_state = previous_state  # no change on read failure
@@ -255,6 +261,121 @@ class SynceMonitor:
 
         self._sync_state = new_state
         return new_event, new_state, self._event_time
+
+    def _read_pin_states(self):
+        """Read per-pin DPLL state for the EEC device filtered by clock_id.
+
+        Returns a dict of {pin_label: {state, priority}} and the name of
+        the active (connected) source pin, or (None, None) on failure.
+        """
+        dpll = self._get_dpll()
+        if not dpll or self._clock_id is None:
+            return None, None
+
+        try:
+            # A single clock_id exposes both the EEC (frequency) and PPS
+            # (phase) DPLL device; get_pins_by_clock_id() returns a copy of
+            # each pin per parent device, so an input pin (e.g. GNSS_1PPS_IN)
+            # appears once under each engine with independent per-parent
+            # state. Scope to the EEC device -- SyncE is frequency-domain,
+            # matching _read_eec_status()/get_synce_status() -- so the PPS
+            # copy does not overwrite the EEC copy in pin_info below and
+            # active_source stays deterministic. Verified on GNR-D (zl3073x,
+            # sx-047): pin 7 GNSS_1PPS_IN present under both dev=0 (EEC) and
+            # dev=1 (PPS).
+            pins = dpll.get_pins_by_clock_id(self._clock_id) \
+                .filter_by_device_type(DeviceType.EEC)
+            pin_info = {}
+            active_source = None
+            for pin in pins:
+                # Only report INPUT pins (timing sources). OUTPUT pins are
+                # DPLL outputs, not selectable sources; including them makes
+                # active_source pick an output and floods the pins map.
+                # E810/other-HW safe: if pin_direction is unavailable, fall
+                # back to excluding OUT* labels; if neither is conclusive,
+                # include the pin rather than crash.
+                label = (pin.pin_package_label or
+                         pin.pin_board_label or
+                         f"pin_{pin.pin_id}")
+                # Determine if this is an OUTPUT pin (to exclude). Prefer the
+                # PinDirection enum; fall back to the OUT* label heuristic when
+                # the direction value is not one we recognize, so foreign
+                # hardware (e.g. E810) that does not populate pin_direction
+                # never silently loses inputs.
+                direction = getattr(pin, 'pin_direction', None)
+                is_output = False
+                if direction == getattr(PinDirection, 'OUTPUT', object()):
+                    is_output = True
+                elif direction == getattr(PinDirection, 'INPUT', object()):
+                    is_output = False
+                elif str(label).upper().startswith('OUT'):
+                    is_output = True
+                if is_output:
+                    continue
+                state_str = (pin.pin_state.value
+                             if pin.pin_state else 'unknown')
+                pin_info[label] = {
+                    'state': state_str,
+                    'priority': pin.pin_priority,
+                }
+                # EEC selects a single input; the connected input is the
+                # active source. If multiple report connected, last wins.
+                if state_str == 'connected':
+                    active_source = label
+            return pin_info, active_source
+        except Exception as e:
+            LOG.warning("SynceMonitor: pin read failed: %s", e)
+            self._dpll = None
+            return None, None
+
+    def get_synce_status_extended(self):
+        """Poll DPLL and return (new_event, extended_info, event_time).
+
+        extended_info dict contains:
+          - sync_state: aggregate EEC state (same as get_synce_status)
+          - active_source: package_label of the connected pin (or None)
+          - dpll_state: raw kernel lock status string
+          - pins: dict of {label: {state, priority}}
+
+        new_event is True when any pin state changes or active_source
+        changes.
+        """
+        # Reuse the aggregate state cached by get_synce_status(), which
+        # __publish_synce_status() runs earlier in the same poll cycle (see
+        # daemon.py, __publish_synce_status() then __publish_synce_status_
+        # extended()). This avoids a second get_all_devices() netlink read per
+        # instance per poll. The on-demand query path serves lock-state-
+        # extended from the cached syncetracker_context, so this method is only
+        # invoked from the poll loop after get_synce_status() has populated the
+        # cache.
+        sync_state = self._sync_state
+        raw_status = self._last_raw_status
+
+        current_time = datetime.datetime.now(datetime.timezone.utc).timestamp()
+        pin_info, active_source = self._read_pin_states()
+
+        if pin_info is None:
+            # Read failure -- preserve last known extended state
+            return False, self._last_extended_info, self._extended_event_time
+
+        dpll_state_str = (raw_status.value if raw_status else 'unknown')
+
+        extended_info = {
+            'sync_state': sync_state,
+            'active_source': active_source,
+            'dpll_state': dpll_state_str,
+            'pins': pin_info,
+        }
+
+        # Detect changes
+        new_event = (extended_info != self._last_extended_info)
+        if new_event:
+            self._extended_event_time = current_time
+            self._last_extended_info = extended_info
+            LOG.info("SyncE extended state change: active=%s, pins=%d",
+                     active_source, len(pin_info))
+
+        return new_event, extended_info, self._extended_event_time
 
     def get_clock_quality(self):
         """Return (new_event, ql_value, event_time) for clock-quality.
