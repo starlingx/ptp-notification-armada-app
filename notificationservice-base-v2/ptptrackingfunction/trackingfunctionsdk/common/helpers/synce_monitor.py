@@ -8,6 +8,8 @@
 import configparser
 import datetime
 import logging
+import socket
+import struct
 
 from trackingfunctionsdk.common.helpers import constants
 
@@ -17,6 +19,15 @@ from pynetlink import LockStatus
 
 
 LOG = logging.getLogger(__name__)
+
+# synce4l management API TLV message types (synce_external_api.h).
+# The socket path is the synce4l 'smc_socket_path' config value.
+SYNCE4L_MSG_DEV_NAME = 1
+SYNCE4L_MSG_GET_QL = 4
+SYNCE4L_MSG_END_MARKER = 8
+SYNCE4L_MSG_ERR = 3
+# Default socket path when smc_socket_path is not set in the config.
+SYNCE4L_DEFAULT_SOCKET = "/run/synce4l_socket"
 
 
 class SynceState:
@@ -35,8 +46,12 @@ class SynceMonitor:
         self.holdover_time = holdover_time
         self._dpll = None
         self._clock_id = self._parse_clock_id(synce4l_instance)
-        # T-GM defaults. T-BC should source QL from synce4l ESMC
-        # (follow-on story).
+        # Preferred QL source is the synce4l management socket (the QL
+        # synce4l is operating on, i.e. the received ESMC QL for a T-BC).
+        # The state->QL mapping below is used as a fallback when the
+        # socket is unavailable (e.g. synce4l not running, older synce4l
+        # without the management API, or a read error).
+        self._socket_path = self._parse_socket_path(synce4l_instance)
         monitoring = self._parse_monitoring_config(synce4l_instance)
         self._locked_ql = (locked_ql if locked_ql is not None
                            else monitoring.get('static_ql', 0x02))
@@ -94,6 +109,72 @@ class SynceMonitor:
             LOG.warning("SynceMonitor %s: monitoring config parse failed: %s",
                         instance_name, e)
         return result
+
+    def _parse_socket_path(self, instance_name):
+        """Parse smc_socket_path from the synce4l [global] config section.
+
+        Returns the configured socket path, or the synce4l default when
+        the key is absent.
+        """
+        config_path = (f"{constants.PTP_CONFIG_PATH}"
+                       f"synce4l-{instance_name}.conf")
+        try:
+            config = configparser.ConfigParser(delimiters=' ')
+            config.read(config_path)
+            if config.has_option('global', 'smc_socket_path'):
+                return config['global']['smc_socket_path'].strip()
+        except Exception as e:
+            LOG.warning("SynceMonitor %s: socket_path parse failed: %s",
+                        instance_name, e)
+        return SYNCE4L_DEFAULT_SOCKET
+
+    def _query_synce4l_ql(self):
+        """Query the synce4l management socket for the operating QL.
+
+        Returns the QL as an int (the value synce4l is acting on, which
+        for a T-BC is the received ESMC QL), or None on any failure so
+        the caller can fall back to the state-derived mapping.
+        """
+        if not self._socket_path:
+            return None
+        dev = self.synce4l_service_name.encode()
+        # DEV_NAME(dev) + GET_QL(empty) + END_MARKER, one write.
+        pkt = (struct.pack('<HH', SYNCE4L_MSG_DEV_NAME, len(dev)) + dev
+               + struct.pack('<HH', SYNCE4L_MSG_GET_QL, 0)
+               + struct.pack('<HH', SYNCE4L_MSG_END_MARKER, 0))
+        sock = None
+        try:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            sock.connect(self._socket_path)
+            sock.sendall(pkt)
+            resp = sock.recv(256)
+        except Exception as e:
+            LOG.debug("SynceMonitor %s: synce4l QL query failed: %s",
+                      self.synce4l_service_name, e)
+            return None
+        finally:
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception as e:
+                    LOG.debug("SynceMonitor %s: socket close failed: %s",
+                              self.synce4l_service_name, e)
+        return self._parse_ql_response(resp)
+
+    @staticmethod
+    def _parse_ql_response(resp):
+        """Extract the GET_QL uint8 value from a synce4l TLV response."""
+        i = 0
+        while i + 4 <= len(resp):
+            msg_type, length = struct.unpack('<HH', resp[i:i + 4])
+            i += 4
+            if msg_type == SYNCE4L_MSG_ERR:
+                return None
+            if msg_type == SYNCE4L_MSG_GET_QL and length >= 1:
+                return resp[i]
+            i += length
+        return None
 
     def _get_dpll(self):
         """Lazy-init and reconnect on failure."""
@@ -176,22 +257,30 @@ class SynceMonitor:
         return new_event, new_state, self._event_time
 
     def get_clock_quality(self):
-        """Return (new_event, ql_value, event_time) for clock-quality notification.
+        """Return (new_event, ql_value, event_time) for clock-quality.
 
-        QL mapping (configurable via instance-monitoring.conf):
-          Locked  -> locked_ql  (default 0x02 / QL-PRC)
+        Preferred source is the synce4l management socket (MSG_GET_QL),
+        which reports the QL synce4l is operating on -- for a T-BC this
+        is the QL received in ESMC from the selected upstream source, as
+        required by O-RAN (clock quality "advertised in ESMC packets").
+
+        Fallback (socket unavailable) is a state-derived mapping,
+        configurable via instance-monitoring.conf:
+          Locked   -> locked_ql   (default 0x02 / QL-PRC)
           Holdover -> holdover_ql (default 0x04 / QL-SEC)
           Freerun  -> freerun_ql  (default 0x0f / QL-DNU)
         """
-        state = self._sync_state
-        if state == SynceState.Locked:
-            ql = self._locked_ql
-        elif state == SynceState.Holdover:
-            ql = self._holdover_ql
-        elif state == SynceState.Freerun:
-            ql = self._freerun_ql
-        else:
-            ql = 0xff  # Unknown
+        ql = self._query_synce4l_ql()
+        if ql is None:
+            state = self._sync_state
+            if state == SynceState.Locked:
+                ql = self._locked_ql
+            elif state == SynceState.Holdover:
+                ql = self._holdover_ql
+            elif state == SynceState.Freerun:
+                ql = self._freerun_ql
+            else:
+                ql = 0xff  # Unknown
 
         if ql != self._last_ql:
             self._last_ql = ql
