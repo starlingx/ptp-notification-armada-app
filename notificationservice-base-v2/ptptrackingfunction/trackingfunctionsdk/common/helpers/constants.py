@@ -41,6 +41,10 @@ GM_IS_PRESENT = "true"
 CLOCK_CLASS_VALUE6 = "6"
 CLOCK_CLASS_VALUE7 = "7"
 CLOCK_CLASS_VALUE135 = "135"
+# clockClass 248 is the default (free-run) value reported when the clock is
+# neither locked to, nor in valid/traceable holdover from, a time source
+# traceable to a PRTC (per IEEE 1588 / ITU-T G.8275.1).
+CLOCK_CLASS_VALUE248 = "248"
 CLOCK_CLASS_LOCKED_LIST = [
     CLOCK_CLASS_VALUE6,
     CLOCK_CLASS_VALUE7,
