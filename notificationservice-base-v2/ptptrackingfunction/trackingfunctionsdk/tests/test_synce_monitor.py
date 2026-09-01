@@ -4,8 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 import sys
+import struct
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from enum import Enum
 
 # Mock pynetlink before any imports that reference it
@@ -188,6 +189,61 @@ class TestSynceMonitor(unittest.TestCase):
         self.monitor.get_clock_quality()  # first
         new_event, _, _ = self.monitor.get_clock_quality()
         self.assertFalse(new_event)
+
+
+def _ql_response(dev, ql):
+    """Build a synce4l TLV response echoing DEV_NAME + GET_QL(ql)."""
+    d = dev.encode()
+    return (struct.pack('<HH', 1, len(d)) + d
+            + struct.pack('<HH', 4, 1) + bytes([ql])
+            + struct.pack('<HH', 8, 0))
+
+
+class TestSynceClockQualitySocket(unittest.TestCase):
+    """clock-quality sourced from the synce4l management socket."""
+
+    def setUp(self):
+        self.monitor = SynceMonitor('synce_test', holdover_time=30)
+        self.monitor._clock_id = 1
+        self.monitor._socket_path = '/run/fake_synce4l_socket'
+        # Fallback mapping values (used only when the socket fails).
+        self.monitor._sync_state = SynceState.Locked
+        self.monitor._locked_ql = 0x02
+
+    def test_parse_ql_response(self):
+        """GET_QL uint8 is extracted from a TLV response."""
+        self.assertEqual(
+            SynceMonitor._parse_ql_response(_ql_response('synce_test', 0x01)),
+            0x01)
+
+    def test_parse_ql_response_error_tlv(self):
+        """An error TLV yields None (caller falls back)."""
+        err = struct.pack('<HH', 3, 4) + b'oops' + struct.pack('<HH', 8, 0)
+        self.assertIsNone(SynceMonitor._parse_ql_response(err))
+
+    def test_clock_quality_uses_socket_ql(self):
+        """When the socket returns a QL it is reported, not the mapping."""
+        with patch('socket.socket') as mock_sock_cls:
+            sock = mock_sock_cls.return_value
+            sock.recv.return_value = _ql_response('synce_test', 0x04)
+            new_event, ql, _ = self.monitor.get_clock_quality()
+        self.assertTrue(new_event)
+        # 0x04 came from the socket; the Locked-state mapping is 0x02.
+        self.assertEqual(ql, 0x04)
+
+    def test_clock_quality_falls_back_on_socket_error(self):
+        """Socket failure falls back to the state-derived QL mapping."""
+        with patch('socket.socket') as mock_sock_cls:
+            sock = mock_sock_cls.return_value
+            sock.connect.side_effect = OSError("no socket")
+            new_event, ql, _ = self.monitor.get_clock_quality()
+        self.assertTrue(new_event)
+        self.assertEqual(ql, 0x02)  # Locked-state fallback
+
+    def test_query_returns_none_when_no_socket_path(self):
+        """No configured socket path -> query returns None."""
+        self.monitor._socket_path = None
+        self.assertIsNone(self.monitor._query_synce4l_ql())
 
 
 if __name__ == '__main__':
