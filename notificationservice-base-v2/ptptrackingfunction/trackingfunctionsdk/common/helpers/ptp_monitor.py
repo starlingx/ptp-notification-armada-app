@@ -177,7 +177,7 @@ class PtpMonitor:
                             self._clock_class_retry)
                 clock_class = self._clock_class
             else:
-                clock_class = "248"
+                clock_class = constants.CLOCK_CLASS_VALUE248
                 self._clock_class_retry = 3
         if clock_class != self._clock_class:
             self._clock_class = clock_class
@@ -235,8 +235,27 @@ class PtpMonitor:
                         "PMC %s PTP4L %s PTP4LCONF %s",
                         pmc, ptp4l, ptp4lconf)
             sync_state = PtpState.Freerun
+            # A critical resource (e.g. ptp4l) is down, so pmc was not run and
+            # self.pmc_query_results still holds the values from the last
+            # successful poll. Leaving them in place makes set_ptp_clock_class()
+            # keep reporting the stale locked clockClass (e.g. 6) even though
+            # this instance is no longer locked. Invalidate the cached results
+            # so the clock class degrades to 248 (FREERUN), consistent with the
+            # sync state transitioning out of Locked.
+            #
+            # A stopped ptp4l/pmc is a definitive loss, not a transient poll
+            # miss, so bypass the anti-swing retry (which exists to ride out a
+            # single failed pmc read) and degrade to 248 immediately instead of
+            # dwelling on the stale clockClass for a few cycles.
+            self.pmc_query_results = {}
+            self._clock_class_retry = 0
         # determine if transition into holdover mode
-        if sync_state == PtpState.Freerun:
+        # A stopped ptp4l service is not a real holdover: nothing is
+        # disciplining the clock and the DPLL/holdover state cannot be
+        # confirmed. When ptp4l is down, report Freerun directly (skip the
+        # holdover transition) so the sync state stays consistent with the
+        # degraded clockClass 248.
+        if sync_state == PtpState.Freerun and ptp4l:
             if previous_sync_state in [constants.UNKNOWN_PHC_STATE,
                                        PtpState.Freerun]:
                 sync_state = PtpState.Freerun
