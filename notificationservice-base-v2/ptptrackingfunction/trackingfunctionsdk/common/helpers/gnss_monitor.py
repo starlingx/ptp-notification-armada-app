@@ -125,12 +125,33 @@ class GnssMonitor(Observer):
 
         self.gnss_cgu_handler.read_cgu()
 
+        # Only count the EEC/PPS DPLL toward "GNSS synchronized" when the
+        # corresponding reference pin is actually a GNSS pin, mirroring the
+        # guard applied in __init__(). On GNR-D the DPLL fails over to a
+        # SyncE recovered-clock pin when GNSS is lost and keeps reporting
+        # LOCKED_AND_HOLDOVER; without this pin-type check a SyncE
+        # (frequency-only) lock is misreported as GNSS synchronization.
+        eec_ref = self.gnss_cgu_handler.get_eec_current_ref()
+        eec_type = self.gnss_cgu_handler.get_eec_pin_type()
+        eec_is_gnss = (eec_ref == constants.GNSS_PIN
+                       or eec_type == constants.GNSS_TYPE)
+
+        pps_ref = self.gnss_cgu_handler.get_pps_current_ref()
+        pps_type = self.gnss_cgu_handler.get_pps_pin_type()
+        pps_is_gnss = (pps_ref == constants.GNSS_PIN
+                       or pps_type == constants.GNSS_TYPE)
+
         self.gnss_eec_state = self.gnss_cgu_handler.get_eec_status()
         self.gnss_pps_state = self.gnss_cgu_handler.get_pps_status()
-        LOG.debug("GNSS EEC Status is: %s", self.gnss_eec_state)
-        LOG.debug("GNSS PPS Status is: %s", self.gnss_pps_state)
-        if (self.gnss_pps_state == constants.GNSS_LOCKED_HO_ACQ and
-                self.gnss_eec_state == constants.GNSS_LOCKED_HO_ACQ):
+        LOG.debug("GNSS EEC Status is: %s (pin is GNSS: %s)",
+                  self.gnss_eec_state, eec_is_gnss)
+        LOG.debug("GNSS PPS Status is: %s (pin is GNSS: %s)",
+                  self.gnss_pps_state, pps_is_gnss)
+        eec_ok = (eec_is_gnss
+                  and self.gnss_eec_state == constants.GNSS_LOCKED_HO_ACQ)
+        pps_ok = (pps_is_gnss
+                  and self.gnss_pps_state == constants.GNSS_LOCKED_HO_ACQ)
+        if eec_ok and pps_ok:
             self._state = GnssState.Synchronized
         else:
             self._state = GnssState.Failure_Nofix
