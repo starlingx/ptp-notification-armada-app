@@ -21,6 +21,27 @@ LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
 
 
+def _pin_is_gnss(pin_ref, pin_type):
+    """Return True when a DPLL reference pin is a GNSS pin.
+
+    The pin type reported by CguHandler is a PinType enum (e.g.
+    PinType.GNSS), so it must be compared by its ``.value`` against the
+    string constant ``constants.GNSS_TYPE``. Comparing the enum object
+    directly to the string always evaluates False, which previously caused
+    a locked GNSS reference to be misreported as FAILURE-NOFIX on real
+    hardware.
+
+    The board-label check is kept as a fallback and tolerates the label
+    variants seen across NIC families (e.g. "GNSS-1PPS" and "GNSS_1PPS_IN").
+    """
+    pin_type_value = getattr(pin_type, "value", pin_type)
+    if pin_type_value == constants.GNSS_TYPE:
+        return True
+    if pin_ref in constants.GNSS_PIN_LABELS:
+        return True
+    return False
+
+
 class Observer(ABC):
     @abstractmethod
     def update(self, subject, matched_line) -> None:
@@ -68,12 +89,12 @@ class GnssMonitor(Observer):
         # Initialize status
         eec_ref = self.gnss_cgu_handler.get_eec_current_ref()
         eec_type = self.gnss_cgu_handler.get_eec_pin_type()
-        if eec_ref == constants.GNSS_PIN or eec_type == constants.GNSS_TYPE:
+        if _pin_is_gnss(eec_ref, eec_type):
             self.gnss_eec_state = self.gnss_cgu_handler.get_eec_status()
 
         pps_ref = self.gnss_cgu_handler.get_pps_current_ref()
         pps_type = self.gnss_cgu_handler.get_pps_pin_type()
-        if pps_ref == constants.GNSS_PIN or pps_type == constants.GNSS_TYPE:
+        if _pin_is_gnss(pps_ref, pps_type):
             self.gnss_pps_state = self.gnss_cgu_handler.get_pps_status()
 
     def set_ptp_devices(self):
@@ -133,13 +154,11 @@ class GnssMonitor(Observer):
         # (frequency-only) lock is misreported as GNSS synchronization.
         eec_ref = self.gnss_cgu_handler.get_eec_current_ref()
         eec_type = self.gnss_cgu_handler.get_eec_pin_type()
-        eec_is_gnss = (eec_ref == constants.GNSS_PIN
-                       or eec_type == constants.GNSS_TYPE)
+        eec_is_gnss = _pin_is_gnss(eec_ref, eec_type)
 
         pps_ref = self.gnss_cgu_handler.get_pps_current_ref()
         pps_type = self.gnss_cgu_handler.get_pps_pin_type()
-        pps_is_gnss = (pps_ref == constants.GNSS_PIN
-                       or pps_type == constants.GNSS_TYPE)
+        pps_is_gnss = _pin_is_gnss(pps_ref, pps_type)
 
         self.gnss_eec_state = self.gnss_cgu_handler.get_eec_status()
         self.gnss_pps_state = self.gnss_cgu_handler.get_pps_status()

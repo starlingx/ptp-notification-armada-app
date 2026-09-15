@@ -52,6 +52,11 @@ CLOCK_CLASS_LOCKED_LIST = [
 # ts2phc constants
 NMEA_SERIALPORT = "ts2phc.nmea_serialport"
 GNSS_PIN = "GNSS-1PPS"
+# Board labels reported for the GNSS 1PPS reference pin vary across NIC
+# families / DPLL drivers (e.g. E810/ice reports "GNSS-1PPS" while GNR-D
+# E825/zl3073x reports "GNSS_1PPS_IN"). GNSS_PIN is kept for backward
+# compatibility; GNSS_PIN_LABELS is the authoritative set for label matching.
+GNSS_PIN_LABELS = frozenset({GNSS_PIN, "GNSS_1PPS_IN"})
 GNSS_LOCKED_HO_ACQ = LockStatus.LOCKED_AND_HOLDOVER.value
 GNSS_DPLL_0 = "DPLL0"
 GNSS_DPLL_1 = "DPLL1"
