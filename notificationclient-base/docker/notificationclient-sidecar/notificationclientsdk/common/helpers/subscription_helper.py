@@ -29,7 +29,7 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
                 data = format_notification_data(subscriptioninfo, notification)
                 data = json.dumps(data)
                 response = requests.post(url, data=data, headers=headers,
-                                        timeout=timeout)
+                                         timeout=timeout)
                 response.raise_for_status()
             else:
                 if isinstance(notification, list):
@@ -39,8 +39,8 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
                     for item in notification:
                         data = json.dumps(item)
                         LOG.info("Notification to post %s", (data))
-                        response = requests.post(url, data=data, headers=headers,
-                                                timeout=timeout)
+                        response = requests.post(
+                            url, data=data, headers=headers, timeout=timeout)
                         response.raise_for_status()
                 else:
                     # Dict type notification response format
@@ -49,17 +49,18 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
                         # Not a nested dict, post the data
                         data = json.dumps(notification)
                         LOG.info("Notification to post %s", (data))
-                        response = requests.post(url, data=data, headers=headers,
-                                                timeout=timeout)
+                        response = requests.post(
+                            url, data=data, headers=headers, timeout=timeout)
                         response.raise_for_status()
                     else:
                         for item in notification:
                             # Nested dict with instance tags, post each item
-                            data = format_notification_data(subscriptioninfo, {item: notification[item]})
+                            data = format_notification_data(
+                                subscriptioninfo, {item: notification[item]})
                             data = json.dumps(data)
                             LOG.info("Notification to post %s", (data))
-                            response = requests.post(url, data=data, headers=headers,
-                                                    timeout=timeout)
+                            response = requests.post(
+                                url, data=data, headers=headers, timeout=timeout)
                             response.raise_for_status()
 
             if notification == {}:
@@ -97,6 +98,7 @@ def notify(subscriptioninfo, notification, timeout=2, retry=3):
 
     return result
 
+
 def format_notification_data(subscriptioninfo, notification):
     if isinstance(notification, list):
         return notification
@@ -133,13 +135,13 @@ def format_notification_data(subscriptioninfo, notification):
                 notification[instance])
         for instance in formatted_notification[resource_mapped_value]:
             this_delivery_time = instance['time']
-            if type(this_delivery_time) != str:
+            if not isinstance(this_delivery_time, str):
                 format_time = datetime.fromtimestamp(
                     float(this_delivery_time)).strftime('%Y-%m-%dT%H:%M:%S%fZ')
                 instance['time'] = format_time
     else:
         LOG.warning("format_notification_data: No valid source "
-                        "address found in notification")
+                    "address found in notification")
     LOG.debug("format_notification_data: Added parent key for client "
               "consumption: %s" % formatted_notification)
     return formatted_notification
@@ -165,6 +167,22 @@ def parse_resource_address(resource_address):
     # resource_address is the full address without any optional hierarchy
     # resource_path is the specific identifier for the resource
     return clusterName, nodeName, resource_path, optional, resource_address
+
+
+def resource_path_is_ancestor(ancestor_path, descendant_path):
+    """Return True when ancestor_path is a path-segment ancestor of the other.
+
+    A resource path only "contains" another when the shorter path is a true
+    path-segment ancestor of the longer one, i.e. it is followed by a '/'
+    separator. A raw string prefix test is wrong because it also matches
+    sibling resources whose names share a prefix, e.g.
+    '/sync/synce-status/lock-state' is a raw prefix of
+    '/sync/synce-status/lock-state-extended' but they are distinct resources.
+    Requiring the separator keeps legitimate parent matches (e.g. '/sync'
+    covers '/sync/synce-status/lock-state') while treating lock-state and
+    lock-state-extended as independent.
+    """
+    return descendant_path.startswith(ancestor_path + '/')
 
 
 def set_nodename_in_resource_address(resource_address, nodename):

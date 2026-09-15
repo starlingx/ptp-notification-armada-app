@@ -104,10 +104,12 @@ class PtpService(object):
             check_pod_ip = ipaddress.ip_address(broker_pod_ip)
             if check_pod_ip.version == 4:
                 broker_host = "{0}".format(broker_pod_ip)
-            else: #IPv6
+            else:  # IPv6
                 broker_host = "[{0}]".format(broker_pod_ip)
         except ValueError as err:
-            LOG.error("%s: broker_pod_ip %s is not a valid address" % (err, broker_pod_ip))
+            LOG.error(
+                "%s: broker_pod_ip %s is not a valid address" %
+                (err, broker_pod_ip))
             raise client_exception.InvalidEndpoint(broker_name)
 
         broker_transport_endpoint = "rabbit://{0}:{1}@{2}:{3}".format(
@@ -172,17 +174,26 @@ class PtpService(object):
             return True, "resourceAddress {0} is equal to {1}".format(
                 resource_address_a, resource_address_b)
 
-        if resource_path_a.startswith(resource_path_b):
+        # A resource path only "contains" another when the other is a true
+        # path-segment ancestor of it (see resource_path_is_ancestor). A raw
+        # startswith() prefix test also matches sibling resources whose names
+        # share a prefix, e.g. '/sync/synce-status/lock-state' is a raw prefix
+        # of '/sync/synce-status/lock-state-extended' but they are distinct
+        # resources. The helper requires a '/' segment boundary, keeping the
+        # legitimate parent match (e.g. '/sync' covers a child) while treating
+        # lock-state and lock-state-extended as independent.
+        if subscription_helper.resource_path_is_ancestor(
+                resource_path_b, resource_path_a):
             return True, "resourceAddress {1} contains {0}".format(
                 resource_address_a, resource_address_b)
 
-        if resource_path_b.startswith(resource_path_a):
+        if subscription_helper.resource_path_is_ancestor(
+                resource_path_a, resource_path_b):
             return True, "resourceAddress {0} contains {1}".format(
                 resource_address_a, resource_address_b)
 
         return False, "resourceAddress {0} is different from {1}".format(
             resource_address_a, resource_address_b)
-
 
     def add_subscription(self, subscription_dto):
         resource_address = None
