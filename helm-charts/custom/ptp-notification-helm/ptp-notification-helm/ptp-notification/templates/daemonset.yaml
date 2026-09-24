@@ -206,11 +206,40 @@ spec:
           successThreshold: 1
           timeoutSeconds: {{ .Values.ptptrackingv2.endpoint.livenessTimeoutSeconds }}
 {{ end }}
+{{- if .Values.ptptrackingv2.privileged }}
         securityContext:
           privileged: true
           capabilities:
               add:
-              - CAP_SYS_ADMIN
+              - SYS_ADMIN
+{{- else }}
+        securityContext:
+          privileged: false
+          capabilities:
+              drop:
+              - ALL
+              # NET_ADMIN is required for the DPLL/SyncE clock-state reads the
+              # tracking code performs over netlink (pynetlink NetlinkDPLL in
+              # cgu_handler); without it those queries fail with EPERM
+              # ("OS error: Operation not permitted"). phc_ctl device access
+              # needs no capability — this is the only one required unprivileged.
+              # NOTE: Kubernetes expects capability names WITHOUT the "CAP_"
+              # prefix; "CAP_NET_ADMIN" is silently ignored, leaving CapEff empty.
+              add:
+              - NET_ADMIN
+{{- if not .Values.ptptrackingv2.device.simulated }}
+        # Request one unit of the bundled PTP device group from the
+        # generic-device-plugin (templates/generic-device-plugin.yaml). The
+        # resource name must match the plugin's --domain (devic.es); both are
+        # hardcoded so they cannot drift. A request of 1 injects all present
+        # /dev/ptp* devices.
+        resources:
+          limits:
+            devic.es/ptp: "1"
+          requests:
+            devic.es/ptp: "1"
+{{- end }}
+{{- end }}
         volumeMounts:
           - name: scripts
             mountPath: /mnt

@@ -78,6 +78,17 @@ location:
 ptptrackingv2:
   enabled: True
   imagePullSecrets: default-registry-key
+  # privileged: controls the ptptrackingv2 container securityContext.
+  #   False (default): drop privileged/SYS_ADMIN and obtain /dev/ptp* access
+  #                    via the generic-device-plugin (the plugin is shipped by
+  #                    templates/generic-device-plugin.yaml, and the container
+  #                    requests devic.es/ptp: 1 in daemonset.yaml). Clears
+  #                    C-0193. The unprivileged path keeps only NET_ADMIN
+  #                    (needed for the DPLL/SyncE netlink reads); phc_ctl device
+  #                    access itself needs no capability.
+  #   True: legacy behavior — privileged + SYS_ADMIN, direct host access to
+  #         /dev/ptp* (triggers C-0193). Fallback only.
+  privileged: false
   notification_format: "standard"
   ptp4lSocket: /var/run/ptp4l-ptp4l-legacy
   ptp4lServiceName: True

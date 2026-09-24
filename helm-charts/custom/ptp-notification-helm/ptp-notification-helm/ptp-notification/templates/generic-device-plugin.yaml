@@ -1,0 +1,155 @@
+#
+# Copyright (c) 2026 Wind River Systems, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# squat/generic-device-plugin DaemonSet. Grants unprivileged pods access to
+# /dev/ptp* character devices via the device cgroup allow-list, so the
+# ptptrackingv2 container can run phc_ctl without privileged/SYS_ADMIN.
+#
+# SELF-CONTAINED BY DESIGN: all plugin configuration is inlined in this file,
+# not in values.yaml. This plugin is a transitional, chart-local stand-in for a
+# future central platform device plugin. When that lands, removing the plugin is
+# a matter of deleting THIS FILE alone (and pointing ptptrackingv2.privileged=false
+# consumers at the central resource) — nothing else in the chart depends on it.
+#
+# The --device config advertises a single bundled group: one allocatable unit
+# (devic.es/ptp: 1) that injects all present /dev/ptp* devices at once. Every
+# path is optional so the group registers regardless of how many PTP clocks a
+# node has (ptp0..ptp9 covers nodes with many clocks).
+#
+# Rendered only in the unprivileged path: the plugin exists solely to give the
+# unprivileged ptptrackingv2 container /dev/ptp* access. When
+# ptptrackingv2.privileged=true the legacy privileged path is used and the
+# plugin is unused, so the whole DaemonSet is gated on privileged=false below.
+{{- if not .Values.ptptrackingv2.privileged }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ .Chart.Name }}-generic-device-plugin
+  # Same namespace as the rest of the chart (not kube-system) so the whole app
+  # lives in one namespace and 'system application-remove ptp-notification'
+  # tears it down completely. The device plugin registers with the local
+  # kubelet over the node-local hostPath socket (/var/lib/kubelet/device-plugins),
+  # which is namespace-agnostic, so it works the same in any namespace.
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: generic-device-plugin
+    app.kubernetes.io/instance: {{ .Chart.Name }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: generic-device-plugin
+      app.kubernetes.io/instance: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: generic-device-plugin
+        app.kubernetes.io/instance: {{ .Chart.Name }}
+    spec:
+      priorityClassName: system-node-critical
+      # Scope the plugin to PTP nodes only (it must not run cluster-wide).
+      # Reuses the same ptp-notification=true host label the notification pod
+      # is scheduled on, so the plugin co-locates with PTP workloads.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: ptp-notification
+                operator: In
+                values:
+                - "true"
+      # Allow scheduling on control-plane/master PTP nodes.
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+      containers:
+      - name: generic-device-plugin
+        image: "docker.io/squat/generic-device-plugin:2cc50b0"
+        imagePullPolicy: IfNotPresent
+        args:
+        - --domain
+        - "devic.es"
+        - --device
+        - |
+          name: ptp
+          groups:
+              # count advertises this same bundled group as multiple allocatable
+              # units (node shows devic.es/ptp: <count>). The PTP clocks are
+              # read-only (phc_ctl cmp), so multiple consumers can safely hold
+              # their own allocation of the full bundle concurrently. count must
+              # be >= the number of pods per node that request devic.es/ptp.
+              # Set to 2 for the two consumers: ptp-notification + temporal
+              # vortex. Raise it if more concurrent consumers are added.
+            - count: 2
+              paths:
+                - path: /dev/ptp0
+                  optional: true
+                - path: /dev/ptp1
+                  optional: true
+                - path: /dev/ptp2
+                  optional: true
+                - path: /dev/ptp3
+                  optional: true
+                - path: /dev/ptp4
+                  optional: true
+                - path: /dev/ptp5
+                  optional: true
+                - path: /dev/ptp6
+                  optional: true
+                - path: /dev/ptp7
+                  optional: true
+                - path: /dev/ptp8
+                  optional: true
+                - path: /dev/ptp9
+                  optional: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 10Mi
+          limits:
+            cpu: 50m
+            memory: 20Mi
+        # Device discovery: the plugin reads the kubelet device-plugin socket
+        # dir and enumerates/stats /dev/ptp* via the hostPath mounts below. It
+        # never opens the PTP clocks (consumer pods do that), but it must stat
+        # the device nodes, which are root:root mode 0600 on the host.
+        #
+        # Hardening is intentionally partial here:
+        #   - not privileged, no privilege escalation, all capabilities dropped
+        #   - but it runs as root (uid 0) because non-root cannot stat the
+        #     root-owned /dev/ptp* nodes, which makes discovery advertise 0
+        #     devices (devic.es/ptp: 0) and leaves consumer pods unschedulable.
+        #
+        # Enforce runAsNonRoot/runAsUser on the *consumer* workloads instead,
+        # not on this device plugin.
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          # Must run as root to stat /dev/ptp*; non-root -> 0 devices advertised.
+          # runAsNonRoot: true
+          # runAsUser: 65532
+          # runAsGroup: 65532
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: device-plugin
+          mountPath: /var/lib/kubelet/device-plugins
+        - name: dev
+          mountPath: /dev
+      volumes:
+      - name: device-plugin
+        hostPath:
+          path: /var/lib/kubelet/device-plugins
+      - name: dev
+        hostPath:
+          path: /dev
+  updateStrategy:
+    type: RollingUpdate
+{{- end }}
