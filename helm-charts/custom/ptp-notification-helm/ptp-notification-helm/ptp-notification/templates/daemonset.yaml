@@ -215,14 +215,28 @@ spec:
 {{- else }}
         securityContext:
           privileged: false
+          # Run as the non-root 'ptp' user (uid/gid 1000) baked into the image.
+          # /dev/ptp* device access works with NO capability because the
+          # container runtime chowns the injected device node to this uid/gid
+          # (containerd device_ownership_from_security_context=true).
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          # allowPrivilegeEscalation must be true so the NET_ADMIN file
+          # capability set on the Python interpreter (see Dockerfile) can take
+          # effect; with it false the kernel zeroes capabilities gained via
+          # file capabilities.
+          allowPrivilegeEscalation: true
           capabilities:
               drop:
               - ALL
               # NET_ADMIN is required for the DPLL/SyncE clock-state reads the
               # tracking code performs over netlink (pynetlink NetlinkDPLL in
               # cgu_handler); without it those queries fail with EPERM
-              # ("OS error: Operation not permitted"). phc_ctl device access
-              # needs no capability — this is the only one required unprivileged.
+              # ("OS error: Operation not permitted"). Adding it here keeps
+              # NET_ADMIN in the bounding set for the non-root uid; the +ep file
+              # capability on the Python interpreter promotes it to effective in
+              # the tracking process. phc_ctl device access needs no capability.
               # NOTE: Kubernetes expects capability names WITHOUT the "CAP_"
               # prefix; "CAP_NET_ADMIN" is silently ignored, leaving CapEff empty.
               add:
@@ -255,9 +269,6 @@ spec:
           - name: logs
             mountPath: /logs/
             readOnly: true
-          - name: ice
-            mountPath: /ice/
-            readOnly: true
           - name: proc
             mountPath: /host/proc/
           - name: hostsys
@@ -285,10 +296,6 @@ spec:
         - name: logs
           hostPath:
             path: /var/log/
-            type: Directory
-        - name: ice
-          hostPath:
-            path: /sys/kernel/debug/
             type: Directory
         - name: proc
           hostPath:

@@ -127,12 +127,20 @@ class PtpMonitor:
         """Read PTP instance config file"""
         self.domain_number = 0
         self.uds_address = f"{constants.VAR_RUN_PATH}/ptp4l-{self.ptp4l_service_name}"
+        # Read-only management socket. ptp4l exposes uds_ro_address (0666,
+        # world-connectable) for unprivileged GET queries, defaulting to
+        # "<uds_address>ro". The notification service (running as non-root)
+        # cannot connect to the 0660 root-owned control socket, so it queries
+        # this read-only socket instead. An explicit uds_ro_address in the
+        # config overrides the derived default.
+        uds_ro_address = None
         try:
             with open(self.ptp4l_config, 'r', encoding='utf-8') as config_file:
                 config_lines = config_file.readlines()
                 config_lines = [line.rstrip() for line in config_lines]
         except FileNotFoundError:
             LOG.warning("Config file not found: %s", self.ptp4l_config)
+            self.uds_ro_address = self.uds_address + "ro"
             return
 
         section = None
@@ -147,6 +155,13 @@ class PtpMonitor:
                 match = re.match(r"^uds_address (.*)$", line)
                 if match:
                     self.uds_address = match.group(1)
+                match = re.match(r"^uds_ro_address (.*)$", line)
+                if match:
+                    uds_ro_address = match.group(1)
+
+        # Prefer an explicit uds_ro_address; otherwise derive it from the
+        # (possibly customized) uds_address as ptp4l does.
+        self.uds_ro_address = uds_ro_address or (self.uds_address + "ro")
 
     def set_ptp_sync_state(self):
         (new_ptp_sync_event, ptp_sync_state,
@@ -304,11 +319,18 @@ class PtpMonitor:
 
         for key in range(1, len_dic + 1):
             cmd = ptp_dict_to_use[key][0]
+            # Query ptp4l's read-only management socket (uds_ro_address,
+            # "<uds_address>ro"). ptp4l creates two UDS: the writable control
+            # socket (srw-rw---- root:root, 0660) and a read-only one
+            # (srw-rw-rw-, 0666) for unprivileged clients. The notification
+            # service only issues GET queries, so it uses the read-only socket
+            # -- required now that the container runs as a non-root user, which
+            # cannot connect to the 0660 control socket.
             cmd = ' '.join([
                 f"{constants.PMC_PATH}",
                 "-b 0 -u",
                 f"-d {self.domain_number}",
-                f"-s {self.uds_address}",
+                f"-s {self.uds_ro_address}",
                 cmd
             ])
 

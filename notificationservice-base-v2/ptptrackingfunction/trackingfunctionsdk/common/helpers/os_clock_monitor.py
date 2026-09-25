@@ -212,6 +212,56 @@ class OsClockMonitor:
             gm_identity, clock_identity)
         return False
 
+    def _resolve_uds_ro_address(self, uds_addr):
+        """Resolve the ptp4l read-only management socket for pmc GET queries.
+
+        uds_addr is the ptp4l control socket this phc2sys instance points at
+        (e.g. /var/run/ptp4l-ptp1). The read-only socket is defined by the
+        ptp4l 'uds_ro_address' option, which is not necessarily
+        "<uds_address>ro" -- it can be a custom path. phc2sys configs do not
+        carry uds_ro_address, so read it from the owning ptp4l instance
+        config (PTP_CONFIG_PATH/ptp4l-<name>.conf), mirroring
+        ptp_monitor.read_ptp_config_file(). Fall back to ptp4l's own default
+        of "<uds_address>ro" when the ptp4l config is missing or sets no
+        explicit uds_ro_address.
+        """
+        default_ro_addr = uds_addr + "ro"
+        instance = os.path.basename(uds_addr)
+        prefix = "ptp4l-"
+        if not instance.startswith(prefix):
+            LOG.debug("set_utc_offset: uds_addr %s is not a ptp4l-<name> "
+                      "socket, using default read-only socket %s",
+                      uds_addr, default_ro_addr)
+            return default_ro_addr
+
+        ptp4l_config = (constants.PTP_CONFIG_PATH
+                        + "%s.conf" % instance)
+        try:
+            with open(ptp4l_config, 'r', encoding='utf-8') as config_file:
+                config_lines = [line.rstrip() for line in config_file]
+        except FileNotFoundError:
+            LOG.debug("set_utc_offset: ptp4l config %s not found, using "
+                      "default read-only socket %s",
+                      ptp4l_config, default_ro_addr)
+            return default_ro_addr
+
+        section = None
+        for line in config_lines:
+            if re.match(r"^\[.*\]$", line):
+                section = line.strip("[]")
+                continue
+            if section == 'global':
+                match = re.match(r"^uds_ro_address (.*)$", line)
+                if match:
+                    uds_ro_addr = match.group(1)
+                    LOG.debug("set_utc_offset: uds_ro_addr %s (from %s)",
+                              uds_ro_addr, ptp4l_config)
+                    return uds_ro_addr
+
+        LOG.debug("set_utc_offset: no uds_ro_address in %s, using default "
+                  "read-only socket %s", ptp4l_config, default_ro_addr)
+        return default_ro_addr
+
     def set_utc_offset(self, pidfile_path="/var/run/"):
         # Check command line options for offset
         utc_offset = self._get_phc2sys_command_line_option(pidfile_path, '-O')
@@ -249,11 +299,24 @@ class OsClockMonitor:
                               domain_number)
 
             if domain_number is not None and uds_addr:
-                grand_master = self._is_grandmaster(uds_addr, domain_number)
+                # Query ptp4l's read-only management socket for these GET
+                # operations. The non-root container cannot connect to the
+                # 0660 root-owned control socket, so pmc would otherwise
+                # return nothing (observed as "gm_identity=None").
+                #
+                # uds_ro_address is a ptp4l option and lives in the ptp4l
+                # instance config, not in this phc2sys config (which only
+                # carries a copy of uds_address). Resolve the read-only
+                # socket from the ptp4l config that owns uds_addr so a custom,
+                # non-"ro"-suffixed uds_ro_address is honored and os_clock
+                # stays in sync with ptp_monitor; fall back to the ptp4l
+                # default "<uds_address>ro" only when the config defines none.
+                uds_ro_addr = self._resolve_uds_ro_address(uds_addr)
+                grand_master = self._is_grandmaster(uds_ro_addr, domain_number)
                 # If not a grandmaster, we get UTC Offset from pmc if it's valid
                 if not grand_master:
                     data = subprocess.check_output([
-                        constants.PMC_PATH, '-s', uds_addr,
+                        constants.PMC_PATH, '-s', uds_ro_addr,
                         '-u', '-b', '0', '-d', domain_number,
                         'GET TIME_PROPERTIES_DATA_SET'
                     ]).decode()

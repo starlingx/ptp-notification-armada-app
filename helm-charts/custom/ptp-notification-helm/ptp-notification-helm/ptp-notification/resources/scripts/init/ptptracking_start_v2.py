@@ -11,7 +11,6 @@ import json
 import logging
 import os
 import re
-from pathlib import Path
 
 from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.services.config_watcher import ConfigFileWatcher
@@ -50,11 +49,20 @@ def build_context():
     ptp4l_configs, ptp4l_instances = get_configs(
         f"{constants.PTP_CONFIG_PATH}ptp4l-*.conf", "PTP4L_SERVICE_NAME", "ptp4l")
 
-    # GNSS only if ice driver present
-    gnss_configs, gnss_instances = [], []
-    if Path("/ice/ice/").is_dir():
-        gnss_configs, gnss_instances = get_configs(
-            f"{constants.TS2PHC_CONFIG_PATH}ts2phc-*.conf", "TS2PHC_SERVICE_NAME", "ts2phc")
+    # GNSS / ts2phc: gated only by config presence and the TS2PHC_SERVICE_NAME
+    # flag, like ptp4l and synce4l below. GNSS-capable-device detection is
+    # handled at runtime by the netlink DPLL layer (CguHandler/NetlinkDPLL): when
+    # no GNSS DPLL is present the clock-id cannot be resolved and the monitor
+    # degrades to GnssState.Failure_Nofix, so the debugfs/ice-dir probe is not
+    # needed here.
+    # (The previous "/ice/ice" check probed the ice driver's debugfs subtree,
+    # which requires root and is unavailable when the container runs non-root.
+    # That check dated from when GNSS monitoring read debugfs and so needed the
+    # out-of-tree ice driver; now that monitoring is netlink-based it is
+    # obsolete, and dropping it simply makes in-tree-driver nodes track GNSS the
+    # same way as out-of-tree-driver nodes.)
+    gnss_configs, gnss_instances = get_configs(
+        f"{constants.TS2PHC_CONFIG_PATH}ts2phc-*.conf", "TS2PHC_SERVICE_NAME", "ts2phc")
 
     # SyncE
     synce_configs, synce_instances = get_configs(
