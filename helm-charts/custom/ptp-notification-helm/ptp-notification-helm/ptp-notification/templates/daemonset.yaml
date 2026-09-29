@@ -42,6 +42,17 @@ spec:
       containers:
       - name: {{ .Chart.Name }}-rabbitmq
         image: "{{ .Values.notification.image.repository }}:{{ .Values.notification.image.tag }}"
+        # Run as the rabbitmq user (uid/gid 999) built into the upstream image;
+        # /var/lib/rabbitmq and /etc/rabbitmq are already owned by 999, so no
+        # capability, fsGroup, or volume change is needed.
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+          runAsGroup: 999
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
         env:
           - name: THIS_NODE_NAME
             valueFrom:
@@ -67,6 +78,17 @@ spec:
       - name: {{ .Chart.Name }}-location
         image: "{{ .Values.location.image.repository }}:{{ .Values.location.image.tag }}"
         imagePullPolicy: {{ .Values.location.image.pullPolicy }}
+        # Run as the non-root 'location' user (uid/gid 1000) baked into the
+        # image. The service only serves HTTP on port 8080 (unprivileged) and
+        # logs to stdout -- no writable host paths, no capabilities.
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
         tty: true
         stdin: true
         env:
