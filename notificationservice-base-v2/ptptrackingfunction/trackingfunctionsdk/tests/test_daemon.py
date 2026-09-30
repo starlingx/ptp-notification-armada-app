@@ -636,6 +636,114 @@ class DaemonTests(unittest.TestCase):
         expected = OverallClockState.Locked
         self._test__get_overall_sync_state(testdata, expected)
 
+    def _run_overall_with_dpll(self, testdata, dpll_present,
+                               time_source_locked):
+        """Drive __get_overall_sync_state after wiring the two dpll-mgr
+        signals used by the Solution-1 branch: the host-level presence gate
+        (_dpll_mgr_present) and the primary GNSS monitor's
+        is_time_source_locked()."""
+        holdover_time = float(
+            self.worker.overalltracker_context['holdover_seconds'])
+        last_event_time = time.time()
+
+        self.osclockmonitor_mock_instance.get_source_ptp_device.return_value \
+            = testdata.osclock.sync_source
+        self.osclockmonitor_mock_instance.get_os_clock_state.return_value = (
+            testdata.osclock.sync_state)
+
+        for i, g in enumerate(self.gnssmonitor_mock_instances):
+            g.get_ptp_devices.return_value = testdata.ts2phc[i].ptp_devices
+            g._state = testdata.ts2phc[i].sync_state
+            g.is_time_source_locked.return_value = time_source_locked
+
+        for i, p in enumerate(self.ptpmonitor_mock_instances):
+            p.get_ptp_devices.return_value = testdata.ptp4l[i].ptp_devices
+            p.get_ptp_sync_state.return_value = (
+                None, testdata.ptp4l[i].sync_state, None)
+            p.get_ptp_sync_source.return_value = testdata.ptp4l[i].sync_source
+
+        with mock.patch.object(self.worker, "_dpll_mgr_present",
+                               return_value=dpll_present):
+            _, sync_state, _ = (
+                self.worker._PtpWatcherDefault__get_overall_sync_state(
+                    holdover_time, 2, OverallClockState.Freerun,
+                    last_event_time))
+        return sync_state
+
+    def _dpll_failover_testdata(self):
+        # GNR-D after GNSS->SDP0 failover: os-clock still Locked; the PHC's
+        # ptp4l is a local GM (sync_source=TypeGNSS); GNSS per-source is
+        # Failure_Nofix (pin-aware, DPLL on SDP0). Without the dpll-mgr
+        # branch this degrades to Freerun/Holdover.
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked, sync_source="ptp0")
+        ptp4ldata0 = PTP4lData(
+            ptp_devices=["ptp0"], sync_state=PtpState.Freerun,
+            sync_source=constants.ClockSourceType.TypeGNSS)
+        ptp4ldata1 = PTP4lData(
+            ptp_devices=["ptp1"], sync_state=PtpState.Freerun,
+            sync_source=constants.ClockSourceType.TypeNA)
+        ts2phcdata0 = ts2phcData(
+            ptp_devices=["ptp0"], sync_state=GnssState.Failure_Nofix)
+        ts2phcdata1 = ts2phcData(
+            ptp_devices=["ptp1"], sync_state=GnssState.Failure_Nofix)
+        return TestData(
+            osclock=osclockdata,
+            ptp4l=[ptp4ldata0, ptp4ldata1],
+            ts2phc=[ts2phcdata0, ts2phcdata1])
+
+    def test__overall__dpll_mgr_backhaul_failover__locked(self):
+        # dpll-mgr present + DPLL locked to a valid time source (SDP0/ext) ->
+        # overall stays Locked even though GNSS per-source is not synced.
+        self._setup()
+        sync_state = self._run_overall_with_dpll(
+            self._dpll_failover_testdata(),
+            dpll_present=True, time_source_locked=True)
+        self.assertEqual(sync_state, OverallClockState.Locked)
+
+    def test__overall__dpll_mgr_absent__branch_inert(self):
+        # No dpll-mgr on host -> new branch is a no-op -> GNSS not synced +
+        # no locked ptp4l -> degrades (not Locked). Verifies the gate.
+        self._setup()
+        sync_state = self._run_overall_with_dpll(
+            self._dpll_failover_testdata(),
+            dpll_present=False, time_source_locked=True)
+        self.assertNotEqual(sync_state, OverallClockState.Locked)
+
+    def test__overall__dpll_mgr_present_synce_only__not_locked(self):
+        # dpll-mgr present but DPLL locked to SyncE only (frequency-only):
+        # is_time_source_locked() is False -> overall must NOT be Locked.
+        self._setup()
+        sync_state = self._run_overall_with_dpll(
+            self._dpll_failover_testdata(),
+            dpll_present=True, time_source_locked=False)
+        self.assertNotEqual(sync_state, OverallClockState.Locked)
+
+    def test__overall__gnss_synced_unaffected_by_dpll_branch(self):
+        # Steady state (GNSS synced): the existing TypeGNSS+Synchronized
+        # branch wins; the dpll-mgr branch is never consulted.
+        self._setup()
+        osclockdata = OsClockData(
+            sync_state=OsClockState.Locked, sync_source="ptp0")
+        ptp4ldata0 = PTP4lData(
+            ptp_devices=["ptp0"], sync_state=PtpState.Freerun,
+            sync_source=constants.ClockSourceType.TypeGNSS)
+        ptp4ldata1 = PTP4lData(
+            ptp_devices=["ptp1"], sync_state=PtpState.Freerun,
+            sync_source=constants.ClockSourceType.TypeNA)
+        ts2phcdata0 = ts2phcData(
+            ptp_devices=["ptp0"], sync_state=GnssState.Synchronized)
+        ts2phcdata1 = ts2phcData(
+            ptp_devices=["ptp1"], sync_state=GnssState.Failure_Nofix)
+        testdata = TestData(
+            osclock=osclockdata,
+            ptp4l=[ptp4ldata0, ptp4ldata1],
+            ts2phc=[ts2phcdata0, ts2phcdata1])
+        # even with dpll not present, GNSS-synced keeps it Locked
+        sync_state = self._run_overall_with_dpll(
+            testdata, dpll_present=False, time_source_locked=False)
+        self.assertEqual(sync_state, OverallClockState.Locked)
+
 
 # Context including SyncE instance for query handler tests
 context_with_synce = context.copy()

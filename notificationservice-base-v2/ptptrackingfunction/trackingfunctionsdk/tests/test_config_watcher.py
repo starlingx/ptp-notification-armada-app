@@ -140,6 +140,67 @@ class TestConfigFileWatcher(unittest.TestCase):
 
         self.callback_mock.assert_not_called()
 
+    def test_dpll_mgr_json_created_triggers_callback(self):
+        """Test that creating a dpll-mgr json triggers callback.
+
+        Adding or removing a dpll-mgr instance may not change any .conf
+        file, so the dpll-mgr json must itself be watched to keep the
+        daemon's dpll-mgr detection in sync.
+        """
+        self.watcher = ConfigFileWatcher(
+            self.test_dir,
+            self.callback_mock,
+            debounce_seconds=0.5
+        )
+        self.watcher.start()
+        time.sleep(0.2)
+
+        test_file = os.path.join(self.test_dir, 'dpll-mgr-dpll-mgr1.json')
+        with open(test_file, 'w') as f:
+            f.write('{}')
+
+        time.sleep(1)
+
+        self.callback_mock.assert_called_once()
+
+    def test_dpll_mgr_json_deleted_triggers_callback(self):
+        """Test that deleting a dpll-mgr json triggers callback"""
+        test_file = os.path.join(self.test_dir, 'dpll-mgr-dpll-mgr1.json')
+        with open(test_file, 'w') as f:
+            f.write('{}')
+
+        self.watcher = ConfigFileWatcher(
+            self.test_dir,
+            self.callback_mock,
+            debounce_seconds=0.5
+        )
+        self.watcher.start()
+        time.sleep(0.2)
+
+        os.remove(test_file)
+
+        time.sleep(1)
+
+        self.callback_mock.assert_called_once()
+
+    def test_non_dpll_mgr_json_ignored(self):
+        """Test that a json that is not a dpll-mgr config is ignored"""
+        self.watcher = ConfigFileWatcher(
+            self.test_dir,
+            self.callback_mock,
+            debounce_seconds=0.5
+        )
+        self.watcher.start()
+        time.sleep(0.2)
+
+        test_file = os.path.join(self.test_dir, 'other.json')
+        with open(test_file, 'w') as f:
+            f.write('{}')
+
+        time.sleep(1)
+
+        self.callback_mock.assert_not_called()
+
     def test_debouncing_multiple_changes(self):
         """Test that multiple rapid changes result in single callback"""
         self.watcher = ConfigFileWatcher(

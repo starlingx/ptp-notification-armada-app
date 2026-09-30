@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 import datetime
+import glob
 import json
 import logging
 import multiprocessing as mp
@@ -602,6 +603,9 @@ class PtpWatcherDefault:
         self.event = event
         self.reload_requested = reload_requested
         self.init_time = time.time()
+        # Cached host-level "is dpll-mgr deployed?" flag (see
+        # _dpll_mgr_present). None until first evaluated.
+        self._dpll_mgr_present_cached = None
         # Holdover config now comes from instance-monitoring.conf per instance
 
         self.daemon_context = json.loads(daemon_context_json)
@@ -871,6 +875,28 @@ class PtpWatcherDefault:
 
         return primary_gnss, gnss_state
 
+    def _dpll_mgr_present(self):
+        """Return True if dpll-mgr is deployed on this host.
+
+        Detected by the presence of a dpll-mgr-<instance>.json config in the
+        PTP instance config dir, mirroring the collectd ptp plugin's
+        detection. Used to gate the dpll-mgr-specific overall sync-state
+        branch so it is a no-op on non-dpll-mgr systems (legacy E810,
+        SyncE-only T-GM, pure-GNSS).
+
+        Cached after first evaluation. The config watcher reloads the daemon
+        (recreating this worker and re-evaluating presence) when a
+        dpll-mgr-<instance>.json is added or removed, so the cache does not go
+        stale when a dpll-mgr instance is added or deleted at runtime.
+        """
+        if self._dpll_mgr_present_cached is None:
+            pattern = (constants.PTP_CONFIG_PATH
+                       + constants.DPLL_MGR_CONFIG_GLOB)
+            self._dpll_mgr_present_cached = len(glob.glob(pattern)) > 0
+            LOG.info("dpll-mgr presence on host: %s (glob %s)",
+                     self._dpll_mgr_present_cached, pattern)
+        return self._dpll_mgr_present_cached
+
     def __get_overall_sync_state(
         self, holdover_time, freq, sync_state, last_event_time
     ):
@@ -985,6 +1011,25 @@ class PtpWatcherDefault:
                     and ptp_state is PtpState.Locked
                 ):
                     sync_state = OverallClockState.Locked
+
+                # dpll-mgr (GNR-D): the GNSS source is reported
+                # not-synchronized after a failover to the PTP backhaul
+                # (SDP0, pin_type=ext), but the DPLL disciplining this PHC is
+                # still locked to a valid phase/time source, so the overall
+                # timing is healthy and must stay Locked. SyncE-only failover
+                # is excluded (SyncE is frequency-only -> not in
+                # TIME_SOURCE_PIN_TYPES), preserving the correct
+                # degrade-to-holdover behavior. Gated on dpll-mgr presence so
+                # this is a no-op on non-dpll-mgr systems.
+                elif (
+                    self._dpll_mgr_present()
+                    and primary_gnss is not None
+                    and primary_gnss.is_time_source_locked()
+                ):
+                    sync_state = OverallClockState.Locked
+                    chaining_info += (
+                        "\ndpll-mgr: DPLL locked to a valid time-source pin "
+                        "(gnss/ext) -> overall Locked")
 
         if sync_state == OverallClockState.Freerun:
             if previous_sync_state in [
