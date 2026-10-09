@@ -38,6 +38,12 @@ class OsClockMonitor:
         self.phc2sys_ha_enabled = False
         self.phc2sys_com_socket = None
         self.valid_phc_interfaces = None
+        self.phc2sys_oot_log_throttle_count = 0
+        self.phc2sys_not_running_log_throttle_count = 0
+        self.ha_no_valid_phc_log_throttle_count = 0
+        self.phc2sys_using_rt_clock_log_throttle_count = 0
+        self.phc2sys_no_source_clock_log_throttle_count = 0
+        self.unable_to_determine_gm_log_throttle_count = 0
 
         self.phc2sys_tolerance_low = constants.PHC2SYS_TOLERANCE_LOW
         self.phc2sys_tolerance_high = constants.PHC2SYS_TOLERANCE_HIGH
@@ -130,7 +136,7 @@ class OsClockMonitor:
                 if hasattr(client_socket, 'close'):
                     client_socket.close()
         else:
-            LOG.warning("No socket path supplied for instance %s",
+            LOG.debug("No socket path supplied for instance %s",
                         self.phc2sys_instance)
             return None
 
@@ -140,13 +146,17 @@ class OsClockMonitor:
         selected_phc_interface = self.query_phc2sys_socket(
             'clock source', self.phc2sys_com_socket)
         if str(self.valid_phc_interfaces) == 'None':
-            LOG.info("No valid PHC device found for HA phc2sys selection.")
+            LOG.debug(
+                "No valid PHC device found for HA phc2sys selection."
+            )
             self._state = OsClockState.Freerun
             self.phc_interface = selected_phc_interface
             self.ptp_device = None
         elif selected_phc_interface != self.phc_interface:
-            LOG.info("Phc2sys source interface changed from %s to %s",
-                     self.phc_interface, self.valid_phc_interfaces)
+            LOG.info(
+                "Phc2sys (HA) source interface changed: %s -> %s",
+                self.phc_interface, selected_phc_interface
+            )
             self.phc_interface = selected_phc_interface
 
         if self.phc_interface is not None:
@@ -204,12 +214,16 @@ class OsClockMonitor:
                 "GM identity: %s, local clock identity: %s, "
                 "is_grandmaster: %s",
                 gm_identity, clock_identity, is_gm)
+            self.unable_to_determine_gm_log_throttle_count = 0
             return is_gm
 
-        LOG.warning(
-            "Unable to determine GM status: "
-            "gm_identity=%s, clock_identity=%s",
-            gm_identity, clock_identity)
+        if self.unable_to_determine_gm_log_throttle_count % \
+                constants.LOG_THROTTLE == 0:
+            LOG.warning(
+                "Unable to determine GM status: "
+                "gm_identity=%s, clock_identity=%s",
+                gm_identity, clock_identity)
+        self.unable_to_determine_gm_log_throttle_count += 1
         return False
 
     def _resolve_uds_ro_address(self, uds_addr):
@@ -330,16 +344,16 @@ class OsClockMonitor:
                 if not utc_offset_valid:
                     utc_offset = utils.get_latest_offset_from_leapfile()
                     if utc_offset is not None:
-                        LOG.info('currentUtcOffsetValid is %s, using the '
-                                 'value %s from leapfile %s',
-                                 utc_offset_valid, utc_offset,
-                                 constants.LEAP_FILE_PATH)
+                        LOG.debug('currentUtcOffsetValid is %s, using the '
+                                  'value %s from leapfile %s',
+                                  utc_offset_valid, utc_offset,
+                                  constants.LEAP_FILE_PATH)
                     else:
                         utc_offset = constants.UTC_OFFSET
-                        LOG.warning('currentUtcOffsetValid is %s, and could '
-                                    'not read value from leapfile, using the '
-                                    'default currentUtcOffset %s',
-                                    utc_offset_valid, utc_offset)
+                        LOG.debug('currentUtcOffsetValid is %s, and could '
+                                  'not read value from leapfile, using the '
+                                  'default currentUtcOffset %s',
+                                  utc_offset_valid, utc_offset)
 
         utc_offset_nanoseconds = abs(int(utc_offset)) * 1000000000
         self.phc2sys_tolerance_low = utc_offset_nanoseconds - \
@@ -349,8 +363,8 @@ class OsClockMonitor:
         LOG.debug('utc_offset_nanoseconds is %s, '
                   'phc2sys_tolerance_threshold is %s',
                   utc_offset_nanoseconds, self.phc2sys_tolerance_threshold)
-        LOG.info('phc2sys_tolerance_low is %s, phc2sys_tolerance_high is %s',
-                 self.phc2sys_tolerance_low, self.phc2sys_tolerance_high)
+        LOG.debug('phc2sys_tolerance_low is %s, phc2sys_tolerance_high is %s',
+                  self.phc2sys_tolerance_low, self.phc2sys_tolerance_high)
 
     def get_os_clock_time_source(self, pidfile_path="/var/run/"):
         """Determine which PHC is disciplining the OS clock"""
@@ -358,16 +372,30 @@ class OsClockMonitor:
         self.phc_interface = self._get_phc2sys_command_line_option(
             pidfile_path, '-s')
         if self.phc_interface == constants.CLOCK_REALTIME:
-            LOG.info("PHC2SYS is using CLOCK_REALTIME, OS Clock is not being "
-                     "disciplined by a PHC")
+            if self.phc2sys_using_rt_clock_log_throttle_count % \
+                    constants.LOG_THROTTLE == 0:
+                LOG.info(
+                    "PHC2SYS is using CLOCK_REALTIME, OS Clock is not being "
+                    "disciplined by a PHC"
+                )
             self.phc_interface = None
+            self.phc2sys_using_rt_clock_log_throttle_count += 1
+        else:
+            self.phc2sys_using_rt_clock_log_throttle_count = 0
         if self.phc_interface is None:
             self.phc_interface = self._check_config_file_interface()
         if self.phc_interface is None:
-            LOG.info("No PHC device found for phc2sys")
+            if self.phc2sys_no_source_clock_log_throttle_count % \
+                    constants.LOG_THROTTLE == 0:
+                LOG.info(
+                    "PHC2SYS has no source clock, OS Clock is not being "
+                    "disciplined by a PHC"
+                )
             self._state = OsClockState.Freerun
+            self.phc2sys_no_source_clock_log_throttle_count += 1
         else:
             self.ptp_device = self._get_interface_phc_device()
+            self.phc2sys_no_source_clock_log_throttle_count = 0
 
     def _get_phc2sys_command_line_option(self, pidfile_path, flag):
         pidfile = pidfile_path + "phc2sys-" + self.phc2sys_instance + ".pid"
@@ -440,9 +468,9 @@ class OsClockMonitor:
             # We have seen rare instances where the ptp device cannot be read
             # but then works fine on the next attempt. Setting the offset to 0
             # here will allow the OS clock to move to holdover. If there is a
-            # real fault, it will stay in holdover and tranition to freerun but
-            # if it was just a single miss, it will return to locked on the
-            # next check.
+            # real fault, it will stay in holdover and transition to free run.
+            # But if it was just a single miss, it will return to locked
+            # on the next check.
             LOG.warning("Unable to read device offset for %s due to %s",
                         ptp_device_path, ex)
             LOG.warning("Check operation of %s. Defaulting offset value to 0.",
@@ -455,22 +483,39 @@ class OsClockMonitor:
             utils.check_critical_resources('', self.phc2sys_instance)
         if offset_int > self.phc2sys_tolerance_high or \
                 offset_int < self.phc2sys_tolerance_low:
-            LOG.warning("PHC2SYS offset is outside of tolerance")
+            if self.phc2sys_oot_log_throttle_count % \
+                    constants.LOG_THROTTLE == 0:
+                LOG.warning("PHC2SYS offset is outside of tolerance")
             self._state = OsClockState.Freerun
+            self.phc2sys_oot_log_throttle_count += 1
+            self.phc2sys_not_running_log_throttle_count = 0
         elif not phc2sys:
-            LOG.warning("Phc2sys instance %s is not running",
-                        self.phc2sys_instance)
+            if self.phc2sys_not_running_log_throttle_count % \
+                    constants.LOG_THROTTLE == 0:
+                LOG.warning(
+                    "Phc2sys instance %s is not running",
+                    self.phc2sys_instance
+                )
             self._state = OsClockState.Freerun
+            self.phc2sys_oot_log_throttle_count = 0
+            self.phc2sys_not_running_log_throttle_count += 1
         else:
-            LOG.info("PHC2SYS offset is within tolerance: %s", offset_int)
+            LOG.debug("PHC2SYS offset is within tolerance: %s", offset_int)
             self._state = OsClockState.Locked
+            self.phc2sys_oot_log_throttle_count = 0
+            self.phc2sys_not_running_log_throttle_count = 0
 
         # Perform an extra check for HA Phc2sys to ensure we have a source
         # interface
         if self.phc2sys_ha_enabled:
             if str(self.valid_phc_interfaces) == 'None':
-                LOG.warning("No valid PHC device selected for HA phc2sys")
+                if self.ha_no_valid_phc_log_throttle_count % \
+                        constants.LOG_THROTTLE == 0:
+                    LOG.warning("No valid PHC device selected for HA phc2sys")
                 self._state = OsClockState.Freerun
+                self.ha_no_valid_phc_log_throttle_count += 1
+            else:
+                self.ha_no_valid_phc_log_throttle_count = 0
 
     def get_os_clock_state(self):
         return self._state
@@ -496,18 +541,18 @@ class OsClockMonitor:
             if previous_sync_state in [constants.UNKNOWN_PHC_STATE,
                                        constants.FREERUN_PHC_STATE]:
                 self._state = OsClockState.Freerun
-                LOG.info("OS Clock Holdover: Remaining in FREERUN state "
-                         "(previous: %s)", previous_sync_state)
+                LOG.debug("OS Clock Holdover: Remaining in FREERUN state "
+                          "(previous: %s)", previous_sync_state)
             elif previous_sync_state == constants.LOCKED_PHC_STATE:
                 self._state = OsClockState.Holdover
                 LOG.info("OS Clock Holdover: Transitioning LOCKED -> HOLDOVER "
                          "(holdover_time=%ds)", self.holdover_time)
             elif (previous_sync_state == constants.HOLDOVER_PHC_STATE and
                     time_in_holdover < self.holdover_time):
-                LOG.info("OS Clock Holdover: Remaining in HOLDOVER "
-                         "(%ds/%ds elapsed, %ds remaining)",
-                         time_in_holdover, self.holdover_time,
-                         self.holdover_time - time_in_holdover)
+                LOG.debug("OS Clock Holdover: Remaining in HOLDOVER "
+                          "(%ds/%ds elapsed, %ds remaining)",
+                          time_in_holdover, self.holdover_time,
+                          self.holdover_time - time_in_holdover)
                 self._state = OsClockState.Holdover
             else:
                 self._state = OsClockState.Freerun

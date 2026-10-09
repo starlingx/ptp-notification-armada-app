@@ -153,6 +153,9 @@ GNSS_TYPE = 'gnss'
 
 PHC_PATH = "/hostsys/class/net/{}/device/ptp/{}"
 
+# logging throttle (print message once every LOG_THROTTLE times)
+LOG_THROTTLE = 10
+
 
 class ClockSourceType(object):
     TypePTP = "PTP"

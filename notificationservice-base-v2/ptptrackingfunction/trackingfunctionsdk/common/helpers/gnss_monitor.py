@@ -61,6 +61,7 @@ class GnssMonitor(Observer):
                  cgu_path=None, holdover_time=30):
         self.config_file = config_file
         self.ts2phc_service_name = None
+        self.ts2phc_not_running_log_throttle_count = 0
         try:
             pattern = '(?<=' + \
                       constants.TS2PHC_CONFIG_PATH + \
@@ -139,10 +140,15 @@ class GnssMonitor(Observer):
         # Check that ts2phc is running, else Freerun
         pid_file = f'/var/run/ts2phc-{self.ts2phc_service_name}.pid'
         if not os.path.isfile(pid_file):
-            LOG.warning("TS2PHC instance %s is not running, "
-                        "reporting GNSS unlocked.", self.ts2phc_service_name)
+            if self.ts2phc_not_running_log_throttle_count % \
+                    constants.LOG_THROTTLE == 0:
+                LOG.warning("TS2PHC instance %s is not running, "
+                            "reporting GNSS unlocked.", self.ts2phc_service_name)
+            self.ts2phc_not_running_log_throttle_count += 1
             self._state = GnssState.Failure_Nofix
             return
+        else:
+            self.ts2phc_not_running_log_throttle_count = 0
 
         self.gnss_cgu_handler.read_cgu()
 
@@ -250,7 +256,7 @@ class GnssMonitor(Observer):
                     "(holdover_time=%ds)", self.holdover_time)
             elif (previous_sync_state == GnssState.Holdover and
                     time_in_holdover < self.holdover_time):
-                LOG.info(
+                LOG.debug(
                     "GNSS Holdover: Remaining in HOLDOVER "
                     "(%ds/%ds elapsed, %ds remaining)",
                     time_in_holdover, self.holdover_time,
@@ -264,7 +270,7 @@ class GnssMonitor(Observer):
                         "FAILURE_NOFIX (holdover expired: %ds >= %ds)",
                         time_in_holdover, self.holdover_time)
                 else:
-                    LOG.info(
+                    LOG.debug(
                         "GNSS Holdover: Remaining in FAILURE_NOFIX state "
                         "(previous: %s)", previous_sync_state)
 

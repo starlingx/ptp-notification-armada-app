@@ -81,9 +81,9 @@ def check_results(result, total_ptp_keywords, port_count, offset_threshold=None)
 
     # check for a healthy result
     if len(result) != total_ptp_keywords:
-        LOG.info("Results %s", result)
-        LOG.info("Results len %s, total_ptp_keywords %s",
-                 len(result), total_ptp_keywords)
+        LOG.debug("Results %s", result)
+        LOG.debug("Results len %s, total_ptp_keywords %s",
+                  len(result), total_ptp_keywords)
         raise RuntimeError("PMC results are incomplete, retrying")
     # determine the current sync state and sync source
     if (result[constants.GM_PRESENT].lower() != constants.GM_IS_PRESENT

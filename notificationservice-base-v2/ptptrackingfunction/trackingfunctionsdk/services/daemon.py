@@ -587,10 +587,10 @@ class PtpWatcherDefault:
                         newStatus = lastStatus['overall_sync_status']
 
             if constants.NOTIFICATION_FORMAT == 'standard':
-                LOG.info("PULL status returning: %s", newStatus)
+                LOG.debug("PULL status returning: %s", newStatus)
                 return newStatus
             else:
-                LOG.info("PULL status returning: {}".format(lastStatus))
+                LOG.debug("PULL status returning: {}".format(lastStatus))
                 return lastStatus
 
         def trigger_delivery(self, **rpc_kwargs):
@@ -996,7 +996,7 @@ class PtpWatcherDefault:
                 if sync_source == constants.ClockSourceType.TypeNA:
                     # The PTP device is not being disciplined by any
                     # PTP4l/TS2PHC instances
-                    LOG.warning(
+                    LOG.debug(
                         "PTP device used by PHC2SYS is not synced/configured on any PTP4l/TS2PHC "
                         "instances.")
 
@@ -1037,9 +1037,9 @@ class PtpWatcherDefault:
                 constants.FREERUN_PHC_STATE,
             ]:
                 sync_state = OverallClockState.Freerun
-                LOG.info(
-                    "Overall Holdover: Remaining in FREERUN state (previous: %s)" %
-                    previous_sync_state)
+                LOG.debug(
+                    "Overall Holdover: Remaining in FREERUN state "
+                    "(previous: %s)" % previous_sync_state)
             elif previous_sync_state == constants.LOCKED_PHC_STATE:
                 sync_state = OverallClockState.Holdover
                 LOG.info("Overall Holdover: Transitioning LOCKED -> HOLDOVER "
@@ -1048,10 +1048,10 @@ class PtpWatcherDefault:
                 previous_sync_state == constants.HOLDOVER_PHC_STATE
                 and time_in_holdover < overall_holdover_time
             ):
-                LOG.info("Overall Holdover: Remaining in HOLDOVER "
-                         "(%ds/%ds elapsed, %ds remaining)",
-                         time_in_holdover, overall_holdover_time,
-                         overall_holdover_time - time_in_holdover)
+                LOG.debug("Overall Holdover: Remaining in HOLDOVER "
+                          "(%ds/%ds elapsed, %ds remaining)",
+                          time_in_holdover, overall_holdover_time,
+                          overall_holdover_time - time_in_holdover)
                 sync_state = OverallClockState.Holdover
             else:
                 sync_state = OverallClockState.Freerun
@@ -1170,10 +1170,15 @@ class PtpWatcherDefault:
         lastStatus = {}
         newStatus = []
 
+        previous_sync_state = sync_state
         new_event, sync_state, new_event_time = self.__get_os_clock_status(
             holdover_time, freq, sync_state, last_event_time)
-        LOG.info("os_clock_status: state is %s, new_event is %s "
-                 % (sync_state, new_event))
+        if new_event:
+            LOG.info("os_clock_status changed: %s -> %s",
+                     previous_sync_state, sync_state)
+        else:
+            LOG.debug("os_clock_status: state is %s, new_event is %s",
+                      sync_state, new_event)
         if new_event or forced:
             self.osclocktracker_context_lock.acquire()
             self.osclocktracker_context['sync_state'] = sync_state
@@ -1225,10 +1230,15 @@ class PtpWatcherDefault:
         last_event_time = self.overalltracker_context.get('last_event_time',
                                                           time.time())
 
+        previous_sync_state = sync_state
         new_event, sync_state, new_event_time = self.__get_overall_sync_state(
             holdover_time, freq, sync_state, last_event_time)
-        LOG.info("overall_sync_state: state is %s, new_event is %s "
-                 % (sync_state, new_event))
+        if new_event:
+            LOG.info("overall_sync_state changed: %s -> %s",
+                     previous_sync_state, sync_state)
+        else:
+            LOG.debug("overall_sync_state: state is %s, new_event is %s",
+                      sync_state, new_event)
 
         if new_event or forced:
             # Update context
@@ -1283,10 +1293,16 @@ class PtpWatcherDefault:
                 self.gnsstracker_context[gnss.ts2phc_service_name].get(
                     'last_event_time', time.time())
 
+            previous_sync_state = sync_state
             new_event, sync_state, new_event_time = self.__get_gnss_status(
                 sync_state, last_event_time, gnss)
-            LOG.info("%s gnss_status: state is %s, new_event is %s"
-                     % (gnss.ts2phc_service_name, sync_state, new_event))
+            if new_event:
+                LOG.info("%s gnss_status changed: %s -> %s",
+                         gnss.ts2phc_service_name, previous_sync_state,
+                         sync_state)
+            else:
+                LOG.debug("%s gnss_status: state is %s, new_event is %s",
+                          gnss.ts2phc_service_name, sync_state, new_event)
 
             if new_event or forced:
                 # update context
@@ -1338,9 +1354,15 @@ class PtpWatcherDefault:
     def __publish_synce_status(self, forced=False):
         for synce_monitor in self.synce_monitor_list:
             instance = synce_monitor.synce4l_service_name
+            previous_sync_state = self.syncetracker_context.get(
+                instance, {}).get('sync_state', 'Unknown')
             new_event, sync_state, event_time = synce_monitor.get_synce_status()
-            LOG.info("%s synce_status: state is %s, new_event is %s",
-                     instance, sync_state, new_event)
+            if new_event:
+                LOG.info("%s synce_status changed: %s -> %s",
+                         instance, previous_sync_state, sync_state)
+            else:
+                LOG.debug("%s synce_status: state is %s, new_event is %s",
+                          instance, sync_state, new_event)
 
             if new_event or forced:
                 self.syncetracker_context_lock.acquire()
@@ -1396,10 +1418,14 @@ class PtpWatcherDefault:
             instance = synce_monitor.synce4l_service_name
             new_event, extended_info, event_time = \
                 synce_monitor.get_synce_status_extended()
-            LOG.info("%s synce_status_extended: new_event=%s, active=%s",
-                     instance, new_event,
-                     extended_info.get('active_source') if extended_info
-                     else None)
+            active_source = (extended_info.get('active_source')
+                             if extended_info else None)
+            if new_event:
+                LOG.info("%s synce_status_extended changed: active=%s",
+                         instance, active_source)
+            else:
+                LOG.debug("%s synce_status_extended: new_event=%s, active=%s",
+                          instance, new_event, active_source)
 
             if (new_event or forced) and extended_info is not None:
                 self.syncetracker_context_lock.acquire()
@@ -1539,16 +1565,32 @@ class PtpWatcherDefault:
                 self.ptptracker_context[ptp_monitor.ptp4l_service_name].get(
                     'last_event_time', time.time())
 
+            previous_sync_state = sync_state
+            previous_clock_class = self.ptptracker_context[
+                ptp_monitor.ptp4l_service_name].get('clock_class', 'Unknown')
+
             new_event, sync_state, new_event_time = self.__get_ptp_status(
                 holdover_time, freq, sync_state, last_event_time, ptp_monitor)
-            LOG.info("%s PTP sync state: state is %s, new_event is %s" % (
-                ptp_monitor.ptp4l_service_name, sync_state, new_event))
+            if new_event:
+                LOG.info("%s PTP sync state changed: %s -> %s",
+                         ptp_monitor.ptp4l_service_name,
+                         previous_sync_state, sync_state)
+            else:
+                LOG.debug("%s PTP sync state: state is %s, new_event is %s",
+                          ptp_monitor.ptp4l_service_name, sync_state,
+                          new_event)
 
             new_clock_class_event, clock_class, clock_class_event_time = \
                 ptp_monitor.get_ptp_clock_class()
-            LOG.info("%s PTP clock class: clockClass is %s, new_event is %s"
-                     % (ptp_monitor.ptp4l_service_name, clock_class,
-                        new_clock_class_event))
+            if new_clock_class_event:
+                LOG.info("%s PTP clock class changed: %s -> %s",
+                         ptp_monitor.ptp4l_service_name,
+                         previous_clock_class, clock_class)
+            else:
+                LOG.debug("%s PTP clock class: clockClass is %s, "
+                          "new_event is %s",
+                          ptp_monitor.ptp4l_service_name, clock_class,
+                          new_clock_class_event)
             if new_event or forced:
                 # update context
                 self.ptptracker_context_lock.acquire()

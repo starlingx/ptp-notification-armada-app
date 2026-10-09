@@ -37,6 +37,10 @@ class PtpMonitor:
     _ptp_event_time = None
     _clock_class_event_time = None
     _clock_class_retry = 3
+    # Tracks whether the clockClass retry countdown has already been logged for
+    # the current outage, so the countdown is emitted once per outage instead
+    # of every poll cycle.
+    _clock_class_degraded = False
 
     # Critical resources
     ptp4l_service_name = None
@@ -60,6 +64,9 @@ class PtpMonitor:
 
     def __init__(self, ptp4l_instance, holdover_time,
                  phc2sys_service_name, init=True, offset_threshold=None):
+
+        self.missing_critical_resource_log_throttle_count = 0
+        self._pmc_incomplete_logged_count = 0
 
         if not init:
             return
@@ -215,27 +222,38 @@ class PtpMonitor:
     def set_ptp_clock_class(self):
         try:
             clock_class = self.pmc_query_results['gm.ClockClass']
-            # Reset retry counter upon getting clock class
             self._clock_class_retry = 3
+            self._clock_class_degraded = False
         except KeyError:
-            LOG.warning(
-                "set_ptp_clock_class: Unable to read current clockClass")
+            # clockClass is not available. Walk the retry countdown, logging
+            # the countdown only once per outage, then degrade to 248. Do not
+            # restart the countdown afterwards, so the warnings are not
+            # repeated every poll cycle while clockClass stays unavailable.
             if self._clock_class_retry > 0:
                 self._clock_class_retry -= 1
-                LOG.warning("Trying to get clockClass %s more time(s) before "
-                            "setting clockClass 248 (FREERUN)",
-                            self._clock_class_retry)
+                if not self._clock_class_degraded:
+                    self._clock_class_degraded = True
+                    LOG.debug(
+                        "set_ptp_clock_class: Unable to read current "
+                        "clockClass")
+                LOG.warning(
+                    "Trying to get clockClass %s more time(s) before "
+                    "setting clockClass 248 (FREERUN)",
+                    self._clock_class_retry)
                 clock_class = self._clock_class
             else:
                 clock_class = constants.CLOCK_CLASS_VALUE248
-                self._clock_class_retry = 3
         if clock_class != self._clock_class:
+            LOG.debug(
+                "PTP clock class changed: %s -> %s",
+                self._clock_class,
+                clock_class
+            )
             self._clock_class = clock_class
             self._new_clock_class_event = True
             self._clock_class_event_time = \
                 datetime.datetime.utcnow().timestamp()
             LOG.debug(self.pmc_query_results)
-            LOG.info("PTP clock class is %s", self._clock_class)
         else:
             self._new_clock_class_event = False
 
@@ -276,8 +294,12 @@ class PtpMonitor:
                 sync_state, sync_source = utils.check_results(
                     self.pmc_query_results, total_ptp_keywords,
                     port_count, self.offset_threshold)
+                self._pmc_incomplete_logged_count = 0
             except RuntimeError as err:
-                LOG.warning(err)
+                if self._pmc_incomplete_logged_count % \
+                   constants.LOG_THROTTLE == 0:
+                    LOG.warning(err)
+                self._pmc_incomplete_logged_count += 1
                 sync_state = previous_sync_state
                 sync_source = previous_sync_source
 
@@ -305,10 +327,16 @@ class PtpMonitor:
                          "clockClass %s, reporting Monitoring",
                          self.ptp4l_service_name,
                          self.pmc_query_results.get(constants.GM_CLOCK_CLASS))
+            self.missing_critical_resource_log_throttle_count = 0
         else:
-            LOG.warning("Missing critical resource: "
-                        "PMC %s PTP4L %s PTP4LCONF %s",
-                        pmc, ptp4l, ptp4lconf)
+            if self.missing_critical_resource_log_throttle_count % \
+                    constants.LOG_THROTTLE == 0:
+                LOG.warning(
+                    "Missing critical resource: "
+                    "PMC %s PTP4L %s PTP4LCONF %s",
+                    pmc, ptp4l, ptp4lconf
+                )
+            self.missing_critical_resource_log_throttle_count += 1
             sync_state = PtpState.Freerun
             # A critical resource (e.g. ptp4l) is down, so pmc was not run and
             # self.pmc_query_results still holds the values from the last
@@ -334,8 +362,8 @@ class PtpMonitor:
             if previous_sync_state in [constants.UNKNOWN_PHC_STATE,
                                        PtpState.Freerun]:
                 sync_state = PtpState.Freerun
-                LOG.info("PTP Holdover: Remaining in FREERUN state "
-                         "(previous: %s)", previous_sync_state)
+                LOG.debug("PTP Holdover: Remaining in FREERUN state "
+                          "(previous: %s)", previous_sync_state)
             elif previous_sync_state in [PtpState.Locked,
                                          PtpState.Monitoring]:
                 sync_state = PtpState.Holdover
@@ -344,10 +372,10 @@ class PtpMonitor:
                          previous_sync_state, self.holdover_time)
             elif (previous_sync_state == PtpState.Holdover and
                     time_in_holdover < self.holdover_time):
-                LOG.info("PTP Holdover: Remaining in HOLDOVER "
-                         "(%ds/%ds elapsed, %ds remaining)",
-                         time_in_holdover, self.holdover_time,
-                         self.holdover_time - time_in_holdover)
+                LOG.debug("PTP Holdover: Remaining in HOLDOVER "
+                          "(%ds/%ds elapsed, %ds remaining)",
+                          time_in_holdover, self.holdover_time,
+                          self.holdover_time - time_in_holdover)
                 sync_state = PtpState.Holdover
             else:
                 sync_state = PtpState.Freerun

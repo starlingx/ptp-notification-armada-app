@@ -45,6 +45,7 @@ class TestPtp4lDownClockClass(unittest.TestCase):
         ptp_monitor._clock_class_retry = 3
         ptp_monitor._new_clock_class_event = False
         ptp_monitor._clock_class_event_time = self.mock_time
+        ptp_monitor.missing_critical_resource_log_throttle_count = 0
         return ptp_monitor
 
     @patch('datetime.datetime')
@@ -96,7 +97,7 @@ class TestPtp4lDownClockClass(unittest.TestCase):
                 self.assertTrue(new_clock_class_event)
                 self.assertEqual(clock_class, constants.CLOCK_CLASS_VALUE248)
                 # retry counter is reset after degrading
-                self.assertEqual(ptp_monitor._clock_class_retry, 3)
+                self.assertEqual(ptp_monitor._clock_class_retry, 0)
 
     @patch('datetime.datetime')
     def test_reference_lost_with_ptp4l_running_still_holdover(
