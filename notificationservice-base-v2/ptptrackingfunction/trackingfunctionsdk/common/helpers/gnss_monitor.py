@@ -177,6 +177,49 @@ class GnssMonitor(Observer):
 
         LOG.debug("Set state GNSS to %s", self._state)
 
+    def is_time_source_locked(self):
+        """Return True if the DPLL is locked to a valid PHASE/TIME source
+        (GNSS or an external/SDP 1PPS backhaul pin), independent of whether
+        that source is GNSS specifically.
+
+        Used by the overall sync-state aggregation: after a dpll-mgr failover
+        GNSS -> PTP-backhaul (SDP0, pin_type=ext) the DPLL stays locked (it
+        just switches pins), so the overall timing is still healthy even
+        though the GNSS per-source view (pin-aware) correctly reports GNSS
+        lost. SyncE (synce-eth-port, frequency-only), MUX and the internal
+        oscillator do NOT count -- they cannot keep the overall state Locked.
+        This is distinct from get_gnss_status(), which is GNSS-pin-specific.
+
+        The required device-lock depends on the active phase/time (PPS) pin
+        type:
+          - GNSS pin : EEC and PPS both locked. A GNSS/PRTC source disciplines
+            both frequency (EEC) and phase/time (PPS); if the EEC is not locked
+            to GNSS, GNSS is not genuinely healthy.
+          - external pin (PTP backhaul SDP0): PPS locked. The EEC is expected
+            to remain in holdover on the backhaul, so only the phase/time (PPS)
+            lock to the backhaul 1PPS is required.
+          - any other pin type: not a valid phase/time source -> False (this
+            method simply does not contribute; the overall state is then
+            decided by the other aggregation branches, unchanged).
+
+        Reads the CGU directly (fresh read_cgu + accessors) rather than the
+        cached gnss_eec_state/gnss_pps_state: set_gnss_status() only records
+        those cached values when the active pin is GNSS, and CguHandler filters
+        its pin set to CONNECTED + INPUT so the accessors return the ACTIVE
+        input pin's status and type.
+        """
+        self.gnss_cgu_handler.read_cgu()
+        pps_type = self.gnss_cgu_handler.get_pps_pin_type()
+        pps_type = getattr(pps_type, "value", pps_type)
+        pps_status = self.gnss_cgu_handler.get_pps_status()
+        if pps_type == constants.PIN_TYPE_GNSS:
+            eec_status = self.gnss_cgu_handler.get_eec_status()
+            return (eec_status == constants.GNSS_LOCKED_HO_ACQ
+                    and pps_status == constants.GNSS_LOCKED_HO_ACQ)
+        if pps_type == constants.PIN_TYPE_EXT:
+            return pps_status == constants.GNSS_LOCKED_HO_ACQ
+        return False
+
     def get_gnss_status(
             self,
             sync_state=None,

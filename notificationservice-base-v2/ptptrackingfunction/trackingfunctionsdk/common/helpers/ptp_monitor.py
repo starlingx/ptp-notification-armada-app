@@ -12,6 +12,8 @@
 #
 #
 import datetime
+import glob
+import json
 import logging
 import re
 import sys
@@ -40,6 +42,7 @@ class PtpMonitor:
     ptp4l_service_name = None
     ptp4l_config = None
     phc2sys_service_name = None
+    is_dpll_mgr_backhaul = False
 
     ptp_oper_dict = {
         # [pmc cmd, ptp keywords,...]
@@ -82,6 +85,7 @@ class PtpMonitor:
         self._clock_class_event_time = \
             datetime.datetime.utcnow().timestamp()
         self.read_ptp_config_file()
+        self.is_dpll_mgr_backhaul = self._detect_dpll_mgr_backhaul()
         self.set_ptp_sync_state()
         self.set_ptp_clock_class()
 
@@ -162,6 +166,37 @@ class PtpMonitor:
         # Prefer an explicit uds_ro_address; otherwise derive it from the
         # (possibly customized) uds_address as ptp4l does.
         self.uds_ro_address = uds_ro_address or (self.uds_address + "ro")
+
+    def _detect_dpll_mgr_backhaul(self):
+        """Return True if this ptp4l instance is the dpll-mgr backhaul.
+
+        The dpll-mgr PTP backhaul monitor is the ptp4l instance whose UDS
+        address matches the dpll-mgr "ptp_bh" channel call_channel. This is
+        the authoritative, operation-mode-independent signal: it identifies
+        the backhaul whether it is free-running (HW_BASED) or servoing
+        (SW_BASED). Returns False on non-dpll-mgr hosts and for every other
+        instance (fronthaul, GNSS, etc.), so their reporting is unchanged.
+        """
+        for filename in glob.glob(constants.PTP_CONFIG_PATH
+                                  + constants.DPLL_MGR_CONFIG_GLOB):
+            try:
+                with open(filename, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+            except (OSError, ValueError) as err:
+                LOG.warning("Failed to parse dpll-mgr config %s: %s",
+                            filename, err)
+                continue
+            channel = config.get('channels', {}).get('ptp_bh')
+            if not isinstance(channel, dict):
+                continue
+            uds = channel.get('call_channel', '')
+            if uds.startswith('uds:'):
+                uds = uds[len('uds:'):]
+            if uds and uds == self.uds_address:
+                LOG.info("Instance %s is the dpll-mgr backhaul (uds=%s)",
+                         self.ptp4l_service_name, self.uds_address)
+                return True
+        return False
 
     def set_ptp_sync_state(self):
         (new_ptp_sync_event, ptp_sync_state,
@@ -245,6 +280,31 @@ class PtpMonitor:
                 LOG.warning(err)
                 sync_state = previous_sync_state
                 sync_source = previous_sync_source
+
+            # The dpll-mgr PTP-backhaul monitor does not discipline the PHC
+            # while GNSS is the active source: dpll-mgr parks it (gear PARK),
+            # so its port stays UNCALIBRATED and never reaches SLAVE, and
+            # check_results() reports Freerun. When it is healthy - sees its
+            # GM (gmPresent=true) with a locked clockClass - report Monitoring
+            # instead of Freerun to reflect that it is operating normally
+            # (participating in BMCA, monitoring the backhaul GM), just not
+            # disciplining the clock. On failover dpll-mgr drives it, its port
+            # reaches SLAVE and check_results() reports Locked, so this remap
+            # does not apply then. Gated on the dpll-mgr backhaul identity, not
+            # on free_running, so it holds whether the backhaul is free-running
+            # (HW_BASED) or servoing (SW_BASED).
+            if (self.is_dpll_mgr_backhaul
+                    and sync_state == PtpState.Freerun
+                    and self.pmc_query_results.get(
+                        constants.GM_PRESENT, '').lower()
+                    == constants.GM_IS_PRESENT
+                    and self.pmc_query_results.get(constants.GM_CLOCK_CLASS)
+                    in utils.ptp4l_clock_class_locked):
+                sync_state = PtpState.Monitoring
+                LOG.info("dpll-mgr backhaul %s: GM present with "
+                         "clockClass %s, reporting Monitoring",
+                         self.ptp4l_service_name,
+                         self.pmc_query_results.get(constants.GM_CLOCK_CLASS))
         else:
             LOG.warning("Missing critical resource: "
                         "PMC %s PTP4L %s PTP4LCONF %s",
@@ -276,10 +336,12 @@ class PtpMonitor:
                 sync_state = PtpState.Freerun
                 LOG.info("PTP Holdover: Remaining in FREERUN state "
                          "(previous: %s)", previous_sync_state)
-            elif previous_sync_state == PtpState.Locked:
+            elif previous_sync_state in [PtpState.Locked,
+                                         PtpState.Monitoring]:
                 sync_state = PtpState.Holdover
-                LOG.info("PTP Holdover: Transitioning LOCKED -> HOLDOVER "
-                         "(holdover_time=%ds)", self.holdover_time)
+                LOG.info("PTP Holdover: Transitioning %s -> HOLDOVER "
+                         "(holdover_time=%ds)",
+                         previous_sync_state, self.holdover_time)
             elif (previous_sync_state == PtpState.Holdover and
                     time_in_holdover < self.holdover_time):
                 LOG.info("PTP Holdover: Remaining in HOLDOVER "

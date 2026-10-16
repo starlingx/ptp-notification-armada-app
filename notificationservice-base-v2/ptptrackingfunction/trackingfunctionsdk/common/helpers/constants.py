@@ -6,10 +6,12 @@
 
 from os import path
 import os
+from enum import Enum
 
 # Handle optional pynetlink import
 try:
     from pynetlink import LockStatus
+    from pynetlink import PinType
 except ImportError:
     # Create mock LockStatus for testing environments
     class MockLockStatus:
@@ -17,11 +19,18 @@ except ImportError:
             value = "LOCKED_AND_HOLDOVER"
     LockStatus = MockLockStatus()
 
+    # Mock PinType mirroring the pynetlink DPLL pin-type enum.
+    class MockPinType(Enum):
+        GNSS = "gnss"
+        EXT = "ext"
+    PinType = MockPinType
+
 # phc states constants
 FREERUN_PHC_STATE = "Freerun"
 LOCKED_PHC_STATE = "Locked"
 HOLDOVER_PHC_STATE = "Holdover"
 UNKNOWN_PHC_STATE = "Unknown"
+MONITORING_PHC_STATE = "Monitoring"
 # PMC command constants
 PORT_STATE = "portState"
 PORT = "port{}"
@@ -58,6 +67,12 @@ GNSS_PIN = "GNSS-1PPS"
 # compatibility; GNSS_PIN_LABELS is the authoritative set for label matching.
 GNSS_PIN_LABELS = frozenset({GNSS_PIN, "GNSS_1PPS_IN"})
 GNSS_LOCKED_HO_ACQ = LockStatus.LOCKED_AND_HOLDOVER.value
+DPLL_MGR_CONFIG_GLOB = "dpll-mgr-*.json"
+# DPLL pin types that count as a valid phase/time source, derived from the
+# pynetlink PinType enum (single source of truth with the DPLL bindings).
+PIN_TYPE_GNSS = PinType.GNSS.value
+PIN_TYPE_EXT = PinType.EXT.value
+TIME_SOURCE_PIN_TYPES = frozenset({PIN_TYPE_GNSS, PIN_TYPE_EXT})
 GNSS_DPLL_0 = "DPLL0"
 GNSS_DPLL_1 = "DPLL1"
 

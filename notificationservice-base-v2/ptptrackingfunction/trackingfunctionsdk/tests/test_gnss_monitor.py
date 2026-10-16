@@ -195,3 +195,98 @@ class SetGnssStatusEnumPinTypeTests(unittest.TestCase):
         mon.set_gnss_status()
         from trackingfunctionsdk.model.dto.gnssstate import GnssState
         self.assertEqual(mon._state, GnssState.Synchronized)
+
+
+class IsTimeSourceLockedTests(unittest.TestCase):
+    """is_time_source_locked() reports whether the DPLL is locked to ANY
+    valid phase/time source (GNSS or an external/SDP 1PPS backhaul pin),
+    used by the overall sync-state aggregation. SyncE (frequency-only),
+    MUX and the internal oscillator must NOT count."""
+
+    def _make_monitor(self):
+        cgu_path = testpath + "test_input_files/mock_cgu_output_logan_beach"
+        gnss_config = testpath + "test_input_files/ts2phc_valid.conf"
+        with mock.patch('trackingfunctionsdk.common.helpers.ptpsync.glob',
+                        return_value=[]):
+            mon = GnssMonitor(gnss_config, cgu_path=cgu_path)
+        mon.ts2phc_service_name = 'ts1'
+        mon.gnss_cgu_handler = mock.MagicMock()
+        from trackingfunctionsdk.common.helpers import constants
+        mon.gnss_cgu_handler.get_eec_status.return_value = \
+            constants.GNSS_LOCKED_HO_ACQ
+        mon.gnss_cgu_handler.get_pps_status.return_value = \
+            constants.GNSS_LOCKED_HO_ACQ
+        return mon
+
+    def test_gnss_pin_is_time_source_locked(self):
+        mon = self._make_monitor()
+        mon.gnss_cgu_handler.get_eec_pin_type.return_value = 'gnss'
+        mon.gnss_cgu_handler.get_pps_pin_type.return_value = 'gnss'
+        self.assertTrue(mon.is_time_source_locked())
+
+    def test_gnss_pin_requires_eec_locked(self):
+        # On a GNSS pin both EEC and PPS must be locked. If the EEC is not
+        # locked-ho-acq, GNSS is not genuinely healthy -> not locked.
+        mon = self._make_monitor()
+        mon.gnss_cgu_handler.get_eec_status.return_value = 'holdover'
+        mon.gnss_cgu_handler.get_pps_pin_type.return_value = 'gnss'
+        self.assertFalse(mon.is_time_source_locked())
+
+    def test_ext_backhaul_pin_is_time_source_locked(self):
+        # After GNSS->SDP0 failover the DPLL phase/time (PPS) locks to the
+        # backhaul pin (pin_type=ext) while the EEC is expected to remain in
+        # holdover. PPS lock to the backhaul 1PPS is sufficient -- still a
+        # valid phase/time source, so overall timing is healthy.
+        mon = self._make_monitor()
+        mon.gnss_cgu_handler.get_eec_status.return_value = 'holdover'
+        mon.gnss_cgu_handler.get_eec_pin_type.return_value = 'gnss'
+        mon.gnss_cgu_handler.get_pps_pin_type.return_value = 'ext'
+        self.assertTrue(mon.is_time_source_locked())
+
+    def test_ext_backhaul_pin_requires_pps_locked(self):
+        # On the backhaul (ext) pin the PPS must be locked; if it is not,
+        # there is no valid phase/time lock -> not locked.
+        mon = self._make_monitor()
+        mon.gnss_cgu_handler.get_pps_status.return_value = 'holdover'
+        mon.gnss_cgu_handler.get_pps_pin_type.return_value = 'ext'
+        self.assertFalse(mon.is_time_source_locked())
+
+    def test_synce_pin_is_not_time_source_locked(self):
+        # SyncE is frequency-only -- must NOT keep overall Locked.
+        mon = self._make_monitor()
+        mon.gnss_cgu_handler.get_eec_pin_type.return_value = 'synce-eth-port'
+        mon.gnss_cgu_handler.get_pps_pin_type.return_value = 'synce-eth-port'
+        self.assertFalse(mon.is_time_source_locked())
+
+    def test_not_device_locked_is_not_time_source_locked(self):
+        # DPLL not locked-ho-acq -> False regardless of pin type.
+        mon = self._make_monitor()
+        mon.gnss_cgu_handler.get_eec_status.return_value = 'holdover'
+        mon.gnss_cgu_handler.get_pps_status.return_value = 'holdover'
+        mon.gnss_cgu_handler.get_eec_pin_type.return_value = 'gnss'
+        mon.gnss_cgu_handler.get_pps_pin_type.return_value = 'gnss'
+        self.assertFalse(mon.is_time_source_locked())
+
+    def test_pps_pin_type_drives_decision(self):
+        # The active phase/time (PPS) pin type drives the decision. A PPS lock
+        # to the backhaul (ext) counts even if the EEC pin reports a different
+        # (frequency-only) source.
+        mon = self._make_monitor()
+        mon.gnss_cgu_handler.get_eec_pin_type.return_value = 'synce-eth-port'
+        mon.gnss_cgu_handler.get_pps_pin_type.return_value = 'ext'
+        self.assertTrue(mon.is_time_source_locked())
+
+    def test_undefined_pin_type_is_not_time_source_locked(self):
+        # Unknown/undefined PPS pin type (e.g. pynetlink-missing mock path)
+        # contributes nothing -> False.
+        mon = self._make_monitor()
+        mon.gnss_cgu_handler.get_pps_pin_type.return_value = 'undefined'
+        self.assertFalse(mon.is_time_source_locked())
+
+    def test_enum_pin_type_is_tolerated(self):
+        # get_*_pin_type() returns a PinType enum on real hardware; the
+        # method must compare by .value.
+        mon = self._make_monitor()
+        mon.gnss_cgu_handler.get_eec_pin_type.return_value = _FakePinType.GNSS
+        mon.gnss_cgu_handler.get_pps_pin_type.return_value = _FakePinType.GNSS
+        self.assertTrue(mon.is_time_source_locked())

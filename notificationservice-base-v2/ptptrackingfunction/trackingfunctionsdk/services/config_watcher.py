@@ -4,13 +4,16 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+import fnmatch
 import logging
+import os
 import threading
 import time
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import log_helper
 
 LOG = logging.getLogger(__name__)
@@ -69,17 +72,33 @@ class _ConfigChangeHandler(FileSystemEventHandler):
     def __init__(self, on_change_callback):
         self.on_change_callback = on_change_callback
 
+    @staticmethod
+    def _is_watched_file(event):
+        """Return True for a config file the daemon reacts to.
+
+        Reload on ptp4l/ts2phc/phc2sys/synce4l .conf files and on the
+        dpll-mgr-<instance>.json config. The dpll-mgr json is included so
+        that adding or removing a dpll-mgr instance -- which may not change
+        any .conf file -- still triggers a reload, keeping the daemon's
+        host-level dpll-mgr detection in sync.
+        """
+        if event.is_directory:
+            return False
+        name = os.path.basename(event.src_path)
+        return (name.endswith('.conf')
+                or fnmatch.fnmatch(name, constants.DPLL_MGR_CONFIG_GLOB))
+
     def on_created(self, event):
-        if not event.is_directory and event.src_path.endswith('.conf'):
+        if self._is_watched_file(event):
             LOG.info("Config file created: %s", event.src_path)
             self.on_change_callback()
 
     def on_modified(self, event):
-        if not event.is_directory and event.src_path.endswith('.conf'):
+        if self._is_watched_file(event):
             LOG.info("Config file modified: %s", event.src_path)
             self.on_change_callback()
 
     def on_deleted(self, event):
-        if not event.is_directory and event.src_path.endswith('.conf'):
+        if self._is_watched_file(event):
             LOG.info("Config file deleted: %s", event.src_path)
             self.on_change_callback()
