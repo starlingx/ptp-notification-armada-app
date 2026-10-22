@@ -22,12 +22,16 @@ from pynetlink import PinDirection
 LOG = logging.getLogger(__name__)
 
 # synce4l management API TLV message types (synce_external_api.h).
-# The socket path is the synce4l 'smc_socket_path' config value.
+# The socket path is taken from the synce4l config: the read-only
+# 'smc_ro_socket_path' when present (preferred, GET-only and
+# world-connectable for the non-root container), otherwise the
+# full-access 'smc_socket_path'.
 SYNCE4L_MSG_DEV_NAME = 1
 SYNCE4L_MSG_GET_QL = 4
 SYNCE4L_MSG_END_MARKER = 8
 SYNCE4L_MSG_ERR = 3
-# Default socket path when smc_socket_path is not set in the config.
+# Default socket path when neither smc_ro_socket_path nor smc_socket_path
+# is set in the config.
 SYNCE4L_DEFAULT_SOCKET = "/run/synce4l_socket"
 
 
@@ -116,16 +120,22 @@ class SynceMonitor:
         return result
 
     def _parse_socket_path(self, instance_name):
-        """Parse smc_socket_path from the synce4l [global] config section.
+        """Parse the synce4l management socket path from the [global] section.
 
-        Returns the configured socket path, or the synce4l default when
-        the key is absent.
+        Prefers smc_ro_socket_path (the read-only management socket) when
+        present, since this process only issues GET_QL and the read-only
+        socket is world-connectable so the non-root container can reach it.
+        Falls back to smc_socket_path (the full-access control socket) for
+        compatibility with synce4l builds that do not expose a read-only
+        socket, and finally to the synce4l default when neither key is set.
         """
         config_path = (f"{constants.PTP_CONFIG_PATH}"
                        f"synce4l-{instance_name}.conf")
         try:
             config = configparser.ConfigParser(delimiters=' ')
             config.read(config_path)
+            if config.has_option('global', 'smc_ro_socket_path'):
+                return config['global']['smc_ro_socket_path'].strip()
             if config.has_option('global', 'smc_socket_path'):
                 return config['global']['smc_socket_path'].strip()
         except Exception as e:

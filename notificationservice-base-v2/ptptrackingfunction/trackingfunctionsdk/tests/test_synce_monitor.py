@@ -271,6 +271,58 @@ class TestSynceClockQualitySocket(unittest.TestCase):
         self.assertIsNone(self.monitor._query_synce4l_ql())
 
 
+class _FakeConfig:
+    """Minimal ConfigParser stand-in for _parse_socket_path tests.
+
+    Backed by a {section: {option: value}} dict; implements only the
+    read()/has_option()/__getitem__ surface that _parse_socket_path uses.
+    """
+
+    def __init__(self, data):
+        self._data = data
+
+    def read(self, _path):
+        return []
+
+    def has_option(self, section, option):
+        return option in self._data.get(section, {})
+
+    def __getitem__(self, section):
+        return self._data.get(section, {})
+
+
+class TestSynceParseSocketPath(unittest.TestCase):
+    """_parse_socket_path prefers smc_ro_socket_path, falls back to
+    smc_socket_path, then to the synce4l default."""
+
+    def _parse_with(self, global_section):
+        fake = _FakeConfig({'global': global_section})
+        with patch('configparser.ConfigParser', return_value=fake):
+            # instance_name is only used to build the (unused, mocked) path.
+            monitor = SynceMonitor('synce_test', holdover_time=30)
+            return monitor._parse_socket_path('synce_test')
+
+    def test_prefers_ro_socket_when_present(self):
+        """smc_ro_socket_path wins even when smc_socket_path is also set."""
+        path = self._parse_with({
+            'smc_socket_path': '/var/run/synce4l_socket_synce_test',
+            'smc_ro_socket_path': '/var/run/synce4l_socket_synce_testro',
+        })
+        self.assertEqual(path, '/var/run/synce4l_socket_synce_testro')
+
+    def test_falls_back_to_control_socket(self):
+        """Without an RO socket, use smc_socket_path."""
+        path = self._parse_with({
+            'smc_socket_path': '/var/run/synce4l_socket_synce_test',
+        })
+        self.assertEqual(path, '/var/run/synce4l_socket_synce_test')
+
+    def test_defaults_when_neither_set(self):
+        """Neither key present -> synce4l default socket."""
+        path = self._parse_with({})
+        self.assertEqual(path, synce_monitor.SYNCE4L_DEFAULT_SOCKET)
+
+
 class MockPinState(Enum):
     CONNECTED = "connected"
     SELECTABLE = "selectable"
