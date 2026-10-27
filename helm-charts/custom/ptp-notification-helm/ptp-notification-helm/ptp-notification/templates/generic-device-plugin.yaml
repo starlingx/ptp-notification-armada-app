@@ -108,13 +108,23 @@ spec:
                   optional: true
                 - path: /dev/ptp9
                   optional: true
+        # No memory LIMIT by design: a prior 20Mi cgroup cap OOM-killed the
+        # runc:[2:INIT] bootstrap (CONSTRAINT_MEMCG) before the plugin binary
+        # ever exec'd, and only on nodes with many /dev/ptp* clocks (the
+        # hostPath:/dev mount and init accounting push the peak charge up).
+        # This is a system-node-critical plugin, so a self-inflicted init OOM
+        # must never make PTP consumer pods unschedulable. A memory REQUEST
+        # (no limit) gives it Burstable QoS -- the scheduler reserves memory and
+        # it is no longer a first-to-evict BestEffort pod -- while leaving no
+        # hard ceiling to OOM against. The Go binary's resident set is small and
+        # stable (single-digit MB), so an uncapped limit poses no real runaway
+        # risk here. Only cpu is capped.
         resources:
           requests:
             cpu: 50m
-            memory: 10Mi
+            memory: 32Mi
           limits:
             cpu: 50m
-            memory: 20Mi
         # Device discovery: the plugin reads the kubelet device-plugin socket
         # dir and enumerates/stats /dev/ptp* via the hostPath mounts below. It
         # never opens the PTP clocks (consumer pods do that), but it must stat
