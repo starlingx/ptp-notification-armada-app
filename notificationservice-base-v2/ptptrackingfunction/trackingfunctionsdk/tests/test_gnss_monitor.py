@@ -51,8 +51,11 @@ class GnssMonitorTests(unittest.TestCase):
 
 
 class SetGnssStatusPinAwareTests(unittest.TestCase):
-    """set_gnss_status() must only report Synchronized when the DPLL is locked
-    to a GNSS pin, not to a SyncE (frequency-only) recovered-clock pin."""
+    """set_gnss_status() must report Synchronized based on the GNSS reference
+    pin's own health (present+locked), including when GNSS is a healthy
+    standby (SELECTABLE) rather than the actively-selected master -- and must
+    NOT report Synchronized when GNSS is lost and the DPLL has locked to a
+    SyncE/backhaul pin instead."""
 
     def _make_monitor(self):
         cgu_path = testpath + "test_input_files/mock_cgu_output_logan_beach"
@@ -62,83 +65,136 @@ class SetGnssStatusPinAwareTests(unittest.TestCase):
             mon = GnssMonitor(gnss_config, cgu_path=cgu_path)
         mon.ts2phc_service_name = 'ts1'
         mon.gnss_cgu_handler = mock.MagicMock()
-        from trackingfunctionsdk.common.helpers import constants
-        mon.gnss_cgu_handler.get_eec_status.return_value = \
-            constants.GNSS_LOCKED_HO_ACQ
-        mon.gnss_cgu_handler.get_pps_status.return_value = \
-            constants.GNSS_LOCKED_HO_ACQ
         return mon
 
-    def _set_pins(self, mon, eec_type, pps_type):
+    def _set_gnss_pin(self, mon, eec_state, eec_lock, pps_state, pps_lock):
+        """Program the GNSS reference pin's own state+lock per DPLL device."""
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
         h = mon.gnss_cgu_handler
-        h.get_eec_pin_type.return_value = eec_type
-        h.get_pps_pin_type.return_value = pps_type
-        # current_ref values that are not the GNSS pin, so pin_type drives it
-        h.get_eec_current_ref.return_value = 'other'
-        h.get_pps_current_ref.return_value = 'other'
+
+        def state(device_type):
+            return eec_state if device_type == DeviceType.EEC else pps_state
+
+        def lock(device_type):
+            return eec_lock if device_type == DeviceType.EEC else pps_lock
+        h.get_gnss_pin_state.side_effect = state
+        h.get_gnss_pin_lock.side_effect = lock
 
     @mock.patch('os.path.isfile', return_value=True)
-    def test_gnss_pins_report_synchronized(self, _isfile):
+    def test_gnss_primary_connected_reports_synchronized(self, _isfile):
+        # Scenario 2 (GNSS primary): GNSS pin connected+locked on both
+        # devices -> SYNCHRONIZED (unchanged behaviour).
+        from trackingfunctionsdk.common.helpers import constants
         mon = self._make_monitor()
-        self._set_pins(mon, eec_type='gnss', pps_type='gnss')
+        self._set_gnss_pin(
+            mon,
+            eec_state=constants.GNSS_PIN_STATE_CONNECTED,
+            eec_lock=constants.GNSS_LOCKED_HO_ACQ,
+            pps_state=constants.GNSS_PIN_STATE_CONNECTED,
+            pps_lock=constants.GNSS_LOCKED_HO_ACQ)
+        mon.set_gnss_status()
+        from trackingfunctionsdk.model.dto.gnssstate import GnssState
+        self.assertEqual(mon._state, GnssState.Synchronized)
+
+    @mock.patch('os.path.isfile', return_value=True)
+    def test_gnss_standby_selectable_reports_synchronized(self, _isfile):
+        # THE FIX (PTP backhaul primary, GNSS secondary): EEC GNSS pin
+        # connected+locked, PPS GNSS pin a healthy standby (SELECTABLE)+locked
+        # while the active PPS master is the backhaul -> SYNCHRONIZED
+        # (previously FAILURE-NOFIX).
+        from trackingfunctionsdk.common.helpers import constants
+        mon = self._make_monitor()
+        self._set_gnss_pin(
+            mon,
+            eec_state=constants.GNSS_PIN_STATE_CONNECTED,
+            eec_lock=constants.GNSS_LOCKED_HO_ACQ,
+            pps_state=constants.GNSS_PIN_STATE_SELECTABLE,
+            pps_lock=constants.GNSS_LOCKED_HO_ACQ)
         mon.set_gnss_status()
         from trackingfunctionsdk.model.dto.gnssstate import GnssState
         self.assertEqual(mon._state, GnssState.Synchronized)
 
     @mock.patch('os.path.isfile', return_value=True)
     def test_synce_failover_reports_failure(self, _isfile):
-        # DPLL locked-ho-acq but the active pins are SyncE (frequency only):
-        # GNSS is gone, so this must NOT be reported as synchronized.
+        # GNSS lost -> no GNSS pin present (DPLL rode a SyncE/backhaul pin):
+        # the GNSS accessors report the GNSS pin as undefined/disconnected, so
+        # this must stay FAILURE-NOFIX (SyncE guard preserved).
         mon = self._make_monitor()
-        self._set_pins(mon, eec_type='synce-eth-port',
-                       pps_type='synce-eth-port')
+        self._set_gnss_pin(
+            mon,
+            eec_state='undefined', eec_lock='undefined',
+            pps_state='undefined', pps_lock='undefined')
         mon.set_gnss_status()
         from trackingfunctionsdk.model.dto.gnssstate import GnssState
         self.assertEqual(mon._state, GnssState.Failure_Nofix)
 
     @mock.patch('os.path.isfile', return_value=True)
-    def test_mixed_pps_synce_reports_failure(self, _isfile):
-        # EEC on GNSS but PPS failed over to SyncE -> not fully GNSS locked.
-        mon = self._make_monitor()
-        self._set_pins(mon, eec_type='gnss', pps_type='synce-eth-port')
-        mon.set_gnss_status()
-        from trackingfunctionsdk.model.dto.gnssstate import GnssState
-        self.assertEqual(mon._state, GnssState.Failure_Nofix)
-
-    @mock.patch('os.path.isfile', return_value=True)
-    def test_gnss_by_current_ref_reports_synchronized(self, _isfile):
-        # Pin type undefined but current_ref is the GNSS pin -> synchronized.
+    def test_gnss_disconnected_reports_failure(self, _isfile):
+        # Genuine GNSS loss: GNSS pin DISCONNECTED on both devices.
         from trackingfunctionsdk.common.helpers import constants
         mon = self._make_monitor()
-        h = mon.gnss_cgu_handler
-        h.get_eec_pin_type.return_value = 'undefined'
-        h.get_pps_pin_type.return_value = 'undefined'
-        h.get_eec_current_ref.return_value = constants.GNSS_PIN
-        h.get_pps_current_ref.return_value = constants.GNSS_PIN
+        self._set_gnss_pin(
+            mon,
+            eec_state='disconnected', eec_lock=constants.GNSS_LOCKED_HO_ACQ,
+            pps_state='disconnected', pps_lock=constants.GNSS_LOCKED_HO_ACQ)
         mon.set_gnss_status()
         from trackingfunctionsdk.model.dto.gnssstate import GnssState
-        self.assertEqual(mon._state, GnssState.Synchronized)
+        self.assertEqual(mon._state, GnssState.Failure_Nofix)
+
+    @mock.patch('os.path.isfile', return_value=True)
+    def test_gnss_selectable_but_unlocked_reports_failure(self, _isfile):
+        # No false-healthy: a GNSS pin that is SELECTABLE but NOT locked
+        # (acquiring / no fix) must NOT be reported synchronized.
+        from trackingfunctionsdk.common.helpers import constants
+        mon = self._make_monitor()
+        self._set_gnss_pin(
+            mon,
+            eec_state=constants.GNSS_PIN_STATE_CONNECTED,
+            eec_lock=constants.GNSS_LOCKED_HO_ACQ,
+            pps_state=constants.GNSS_PIN_STATE_SELECTABLE,
+            pps_lock='holdover')
+        mon.set_gnss_status()
+        from trackingfunctionsdk.model.dto.gnssstate import GnssState
+        self.assertEqual(mon._state, GnssState.Failure_Nofix)
+
+    @mock.patch('os.path.isfile', return_value=True)
+    def test_eec_not_gnss_reports_failure(self, _isfile):
+        # EEC GNSS pin not present (GNSS not disciplining frequency) while PPS
+        # GNSS pin selectable+locked -> not fully GNSS healthy -> FAILURE.
+        from trackingfunctionsdk.common.helpers import constants
+        mon = self._make_monitor()
+        self._set_gnss_pin(
+            mon,
+            eec_state='disconnected', eec_lock='undefined',
+            pps_state=constants.GNSS_PIN_STATE_SELECTABLE,
+            pps_lock=constants.GNSS_LOCKED_HO_ACQ)
+        mon.set_gnss_status()
+        from trackingfunctionsdk.model.dto.gnssstate import GnssState
+        self.assertEqual(mon._state, GnssState.Failure_Nofix)
+
+    @mock.patch('os.path.isfile', return_value=True)
+    def test_ts2phc_not_running_reports_failure(self, _isfile_true):
+        # ts2phc precheck unchanged: pid file absent -> FAILURE-NOFIX before
+        # any pin inspection.
+        from trackingfunctionsdk.common.helpers import constants
+        mon = self._make_monitor()
+        # Even with a perfectly healthy GNSS pin, the missing pid file wins.
+        self._set_gnss_pin(
+            mon,
+            eec_state=constants.GNSS_PIN_STATE_CONNECTED,
+            eec_lock=constants.GNSS_LOCKED_HO_ACQ,
+            pps_state=constants.GNSS_PIN_STATE_CONNECTED,
+            pps_lock=constants.GNSS_LOCKED_HO_ACQ)
+        with mock.patch('os.path.isfile', return_value=False):
+            mon.set_gnss_status()
+        from trackingfunctionsdk.model.dto.gnssstate import GnssState
+        self.assertEqual(mon._state, GnssState.Failure_Nofix)
 
 
-class _FakePinType(enum.Enum):
-    """Mimic the pynetlink PinType enum returned by CguHandler on real HW.
-
-    The runtime getters are annotated ``-> str`` but actually return a
-    pynetlink enum whose ``.value`` is the string (e.g. 'gnss'). Comparing
-    the enum object directly to the string 'gnss' is always False, which is
-    the exact condition that regressed GNSS detection on hardware while the
-    string-based unit tests kept passing.
-    """
-    GNSS = 'gnss'
-    SYNCE_ETH_PORT = 'synce-eth-port'
-
-
-class SetGnssStatusEnumPinTypeTests(unittest.TestCase):
-    """Regression: pin_type is a PinType enum on real hardware, not a str.
-
-    These tests feed the enum (and GNR-D board-label variant) so the
-    enum-vs-string comparison bug cannot silently return.
-    """
+class SetGnssStatusEnumStateTests(unittest.TestCase):
+    """Regression: the GNSS pin state/lock are pynetlink enums on real
+    hardware (whose ``.value`` is the string), not plain strings. The
+    health check must compare by ``.value``."""
 
     def _make_monitor(self):
         cgu_path = testpath + "test_input_files/mock_cgu_output_logan_beach"
@@ -148,53 +204,45 @@ class SetGnssStatusEnumPinTypeTests(unittest.TestCase):
             mon = GnssMonitor(gnss_config, cgu_path=cgu_path)
         mon.ts2phc_service_name = 'ts1'
         mon.gnss_cgu_handler = mock.MagicMock()
-        from trackingfunctionsdk.common.helpers import constants
-        mon.gnss_cgu_handler.get_eec_status.return_value = \
-            constants.GNSS_LOCKED_HO_ACQ
-        mon.gnss_cgu_handler.get_pps_status.return_value = \
-            constants.GNSS_LOCKED_HO_ACQ
         return mon
 
     @mock.patch('os.path.isfile', return_value=True)
-    def test_enum_pin_type_gnss_reports_synchronized(self, _isfile):
-        # Sanity guard: enum PinType.GNSS != 'gnss' by identity comparison.
-        self.assertNotEqual(_FakePinType.GNSS, 'gnss')
+    def test_enum_state_selectable_reports_synchronized(self, _isfile):
+        # The CguHandler GNSS accessors already unwrap .value, but guard the
+        # monitor against an enum leaking through: feed enum-like objects and
+        # confirm a selectable+locked GNSS standby is Synchronized.
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
+        from trackingfunctionsdk.common.helpers import constants
+
+        class _Lock:
+            value = constants.GNSS_LOCKED_HO_ACQ
         mon = self._make_monitor()
         h = mon.gnss_cgu_handler
-        h.get_eec_pin_type.return_value = _FakePinType.GNSS
-        h.get_pps_pin_type.return_value = _FakePinType.GNSS
-        # current_ref is not a GNSS label, so pin_type must drive the result
-        h.get_eec_current_ref.return_value = 'other'
-        h.get_pps_current_ref.return_value = 'other'
+
+        def state(device_type):
+            return (_FakePinState.CONNECTED if device_type == DeviceType.EEC
+                    else _FakePinState.SELECTABLE)
+
+        def lock(_device_type):
+            return _Lock()
+        h.get_gnss_pin_state.side_effect = state
+        h.get_gnss_pin_lock.side_effect = lock
         mon.set_gnss_status()
         from trackingfunctionsdk.model.dto.gnssstate import GnssState
         self.assertEqual(mon._state, GnssState.Synchronized)
 
-    @mock.patch('os.path.isfile', return_value=True)
-    def test_enum_synce_pin_type_reports_failure(self, _isfile):
-        mon = self._make_monitor()
-        h = mon.gnss_cgu_handler
-        h.get_eec_pin_type.return_value = _FakePinType.SYNCE_ETH_PORT
-        h.get_pps_pin_type.return_value = _FakePinType.SYNCE_ETH_PORT
-        h.get_eec_current_ref.return_value = 'other'
-        h.get_pps_current_ref.return_value = 'other'
-        mon.set_gnss_status()
-        from trackingfunctionsdk.model.dto.gnssstate import GnssState
-        self.assertEqual(mon._state, GnssState.Failure_Nofix)
 
-    @mock.patch('os.path.isfile', return_value=True)
-    def test_gnrd_board_label_reports_synchronized(self, _isfile):
-        # GNR-D/E825 reports board label 'GNSS_1PPS_IN' and pin_type undefined;
-        # label fallback must still recognize it as GNSS.
-        mon = self._make_monitor()
-        h = mon.gnss_cgu_handler
-        h.get_eec_pin_type.return_value = 'undefined'
-        h.get_pps_pin_type.return_value = 'undefined'
-        h.get_eec_current_ref.return_value = 'GNSS_1PPS_IN'
-        h.get_pps_current_ref.return_value = 'GNSS_1PPS_IN'
-        mon.set_gnss_status()
-        from trackingfunctionsdk.model.dto.gnssstate import GnssState
-        self.assertEqual(mon._state, GnssState.Synchronized)
+class _FakePinType(enum.Enum):
+    """Mimic the pynetlink PinType enum returned by CguHandler on real HW."""
+    GNSS = 'gnss'
+    SYNCE_ETH_PORT = 'synce-eth-port'
+
+
+class _FakePinState(enum.Enum):
+    """Mimic the pynetlink PinState enum (its ``.value`` is the string)."""
+    CONNECTED = 'connected'
+    SELECTABLE = 'selectable'
+    DISCONNECTED = 'disconnected'
 
 
 class IsTimeSourceLockedTests(unittest.TestCase):
