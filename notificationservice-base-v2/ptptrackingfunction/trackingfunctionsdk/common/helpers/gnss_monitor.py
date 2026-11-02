@@ -14,32 +14,12 @@ from trackingfunctionsdk.common.helpers import constants
 from trackingfunctionsdk.common.helpers import log_helper
 from trackingfunctionsdk.common.helpers import ptpsync as utils
 from trackingfunctionsdk.common.helpers.cgu_handler import CguHandler
+from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
 from trackingfunctionsdk.common.helpers.instance_config_parser import get_instance_holdover_time
 from trackingfunctionsdk.model.dto.gnssstate import GnssState
 
 LOG = logging.getLogger(__name__)
 log_helper.config_logger(LOG)
-
-
-def _pin_is_gnss(pin_ref, pin_type):
-    """Return True when a DPLL reference pin is a GNSS pin.
-
-    The pin type reported by CguHandler is a PinType enum (e.g.
-    PinType.GNSS), so it must be compared by its ``.value`` against the
-    string constant ``constants.GNSS_TYPE``. Comparing the enum object
-    directly to the string always evaluates False, which previously caused
-    a locked GNSS reference to be misreported as FAILURE-NOFIX on real
-    hardware.
-
-    The board-label check is kept as a fallback and tolerates the label
-    variants seen across NIC families (e.g. "GNSS-1PPS" and "GNSS_1PPS_IN").
-    """
-    pin_type_value = getattr(pin_type, "value", pin_type)
-    if pin_type_value == constants.GNSS_TYPE:
-        return True
-    if pin_ref in constants.GNSS_PIN_LABELS:
-        return True
-    return False
 
 
 class Observer(ABC):
@@ -87,16 +67,16 @@ class GnssMonitor(Observer):
                                            pci_addr, cgu_path)
         self.gnss_cgu_handler.read_cgu()
 
-        # Initialize status
-        eec_ref = self.gnss_cgu_handler.get_eec_current_ref()
-        eec_type = self.gnss_cgu_handler.get_eec_pin_type()
-        if _pin_is_gnss(eec_ref, eec_type):
-            self.gnss_eec_state = self.gnss_cgu_handler.get_eec_status()
-
-        pps_ref = self.gnss_cgu_handler.get_pps_current_ref()
-        pps_type = self.gnss_cgu_handler.get_pps_pin_type()
-        if _pin_is_gnss(pps_ref, pps_type):
-            self.gnss_pps_state = self.gnss_cgu_handler.get_pps_status()
+        # Initialize status: record the GNSS reference pin's own lock status
+        # on each DPLL device (present-or-standby), mirroring the pin-aware
+        # view used by set_gnss_status(). This reads the GNSS pin directly so
+        # a GNSS standby (SELECTABLE, e.g. GNSS secondary behind a PTP primary)
+        # is still observed, not only the actively-selected master pin.
+        self.gnss_cgu_handler.refresh_gnss_pins()
+        self.gnss_eec_state = self.gnss_cgu_handler.get_gnss_pin_lock(
+            DeviceType.EEC)
+        self.gnss_pps_state = self.gnss_cgu_handler.get_gnss_pin_lock(
+            DeviceType.PPS)
 
     def set_ptp_devices(self):
         ptp_devices = set()
@@ -152,36 +132,55 @@ class GnssMonitor(Observer):
 
         self.gnss_cgu_handler.read_cgu()
 
-        # Only count the EEC/PPS DPLL toward "GNSS synchronized" when the
-        # corresponding reference pin is actually a GNSS pin, mirroring the
-        # guard applied in __init__(). On GNR-D the DPLL fails over to a
-        # SyncE recovered-clock pin when GNSS is lost and keeps reporting
-        # LOCKED_AND_HOLDOVER; without this pin-type check a SyncE
-        # (frequency-only) lock is misreported as GNSS synchronization.
-        eec_ref = self.gnss_cgu_handler.get_eec_current_ref()
-        eec_type = self.gnss_cgu_handler.get_eec_pin_type()
-        eec_is_gnss = _pin_is_gnss(eec_ref, eec_type)
-
-        pps_ref = self.gnss_cgu_handler.get_pps_current_ref()
-        pps_type = self.gnss_cgu_handler.get_pps_pin_type()
-        pps_is_gnss = _pin_is_gnss(pps_ref, pps_type)
-
-        self.gnss_eec_state = self.gnss_cgu_handler.get_eec_status()
-        self.gnss_pps_state = self.gnss_cgu_handler.get_pps_status()
-        LOG.debug("GNSS EEC Status is: %s (pin is GNSS: %s)",
-                  self.gnss_eec_state, eec_is_gnss)
-        LOG.debug("GNSS PPS Status is: %s (pin is GNSS: %s)",
-                  self.gnss_pps_state, pps_is_gnss)
-        eec_ok = (eec_is_gnss
-                  and self.gnss_eec_state == constants.GNSS_LOCKED_HO_ACQ)
-        pps_ok = (pps_is_gnss
-                  and self.gnss_pps_state == constants.GNSS_LOCKED_HO_ACQ)
+        # Report GNSS SYNCHRONIZED based on the GNSS reference pin's own
+        # health, not on whichever pin the DPLL has currently selected.
+        #
+        # The DPLL has two devices: EEC (frequency) and PPS (phase/time). When
+        # a PTP 1PPS backhaul is the configured primary and GNSS is the
+        # secondary, the phase/time (PPS) device selects the backhaul pin and
+        # keeps the GNSS pin as a healthy standby (SELECTABLE), while the
+        # frequency (EEC) device still rides GNSS (the backhaul 1PPS cannot
+        # drive a frequency reference). The GNSS source as a whole is still
+        # disciplined and synchronized in this state, so it must be reported
+        # SYNCHRONIZED -- but the actively-selected PPS pin is the backhaul,
+        # not GNSS. Keying on the selected pin therefore misreports a healthy
+        # GNSS standby as FAILURE-NOFIX.
+        #
+        # Inspect the GNSS pin itself on each device: GNSS is synchronized when
+        # its pin is present (CONNECTED or SELECTABLE) AND locked on both
+        # devices. Keying on the GNSS pin's own identity also preserves the
+        # guard against a SyncE recovered-clock failover: when GNSS is lost the
+        # DPLL may lock to a SyncE/backhaul pin, but there is then no GNSS pin
+        # present+locked, so this correctly stays FAILURE-NOFIX.
+        self.gnss_cgu_handler.refresh_gnss_pins()
+        eec_ok = self._gnss_pin_healthy(DeviceType.EEC)
+        pps_ok = self._gnss_pin_healthy(DeviceType.PPS)
+        LOG.debug("GNSS EEC healthy: %s, GNSS PPS healthy: %s",
+                  eec_ok, pps_ok)
         if eec_ok and pps_ok:
             self._state = GnssState.Synchronized
         else:
             self._state = GnssState.Failure_Nofix
 
         LOG.debug("Set state GNSS to %s", self._state)
+
+    def _gnss_pin_healthy(self, device_type):
+        """Return True when the GNSS reference pin on a DPLL device is a
+        healthy source: present (CONNECTED or SELECTABLE) and locked.
+
+        A SELECTABLE GNSS pin is a healthy standby (e.g. GNSS secondary while
+        a PTP backhaul is the active primary) and counts as synchronized. A
+        GNSS pin that is DISCONNECTED, or present but not locked (acquiring /
+        no fix), does NOT -- so a genuine GNSS loss still reports
+        FAILURE-NOFIX.
+        """
+        state = self.gnss_cgu_handler.get_gnss_pin_state(device_type)
+        state = getattr(state, "value", state)
+        lock = self.gnss_cgu_handler.get_gnss_pin_lock(device_type)
+        lock = getattr(lock, "value", lock)
+        present = state in (constants.GNSS_PIN_STATE_CONNECTED,
+                            constants.GNSS_PIN_STATE_SELECTABLE)
+        return present and lock == constants.GNSS_LOCKED_HO_ACQ
 
     def is_time_source_locked(self):
         """Return True if the DPLL is locked to a valid PHASE/TIME source

@@ -69,6 +69,10 @@ class TestGnssMonitorCoverage(unittest.TestCase):
                 .return_value = 'gnss'
             mock_cgu_instance.get_pps_status \
                 .return_value = 'locked-ho-acq'
+            mock_cgu_instance.get_gnss_pin_state \
+                .return_value = 'connected'
+            mock_cgu_instance.get_gnss_pin_lock \
+                .return_value = 'locked-ho-acq'
             monitor = GnssMonitor(
                 config_path,
                 nmea_serialport='/dev/ttyGNSS0')
@@ -132,9 +136,8 @@ class TestGnssMonitorCoverage(unittest.TestCase):
         monitor = self._create_gnss_monitor()
         cgu = monitor.gnss_cgu_handler
         cgu.read_cgu.return_value = None
-        cgu.get_eec_status.return_value = (
-            constants.GNSS_LOCKED_HO_ACQ)
-        cgu.get_pps_status.return_value = (
+        cgu.get_gnss_pin_state.return_value = 'connected'
+        cgu.get_gnss_pin_lock.return_value = (
             constants.GNSS_LOCKED_HO_ACQ)
         monitor.set_gnss_status()
         self.assertEqual(
@@ -152,9 +155,8 @@ class TestGnssMonitorCoverage(unittest.TestCase):
         monitor = self._create_gnss_monitor()
         cgu = monitor.gnss_cgu_handler
         cgu.read_cgu.return_value = None
-        cgu.get_eec_status.return_value = (
-            'unlocked')
-        cgu.get_pps_status.return_value = (
+        cgu.get_gnss_pin_state.return_value = 'connected'
+        cgu.get_gnss_pin_lock.return_value = (
             'unlocked')
         monitor.set_gnss_status()
         self.assertEqual(
@@ -181,9 +183,8 @@ class TestGnssMonitorCoverage(unittest.TestCase):
         """
         monitor = self._create_gnss_monitor()
         cgu = monitor.gnss_cgu_handler
-        cgu.get_eec_status.return_value = (
-            constants.GNSS_LOCKED_HO_ACQ)
-        cgu.get_pps_status.return_value = (
+        cgu.get_gnss_pin_state.return_value = 'connected'
+        cgu.get_gnss_pin_lock.return_value = (
             constants.GNSS_LOCKED_HO_ACQ)
         new_event, state, _ = (
             monitor.get_gnss_status(
@@ -201,10 +202,8 @@ class TestGnssMonitorCoverage(unittest.TestCase):
         """
         monitor = self._create_gnss_monitor()
         cgu = monitor.gnss_cgu_handler
-        cgu.get_eec_status.return_value = (
-            'unlocked')
-        cgu.get_pps_status.return_value = (
-            'unlocked')
+        cgu.get_gnss_pin_state.return_value = 'disconnected'
+        cgu.get_gnss_pin_lock.return_value = 'unlocked'
         new_event, state, _ = (
             monitor.get_gnss_status(
                 GnssState.Synchronized, 0))
@@ -221,10 +220,8 @@ class TestGnssMonitorCoverage(unittest.TestCase):
         """
         monitor = self._create_gnss_monitor()
         cgu = monitor.gnss_cgu_handler
-        cgu.get_eec_status.return_value = (
-            'unlocked')
-        cgu.get_pps_status.return_value = (
-            'unlocked')
+        cgu.get_gnss_pin_state.return_value = 'disconnected'
+        cgu.get_gnss_pin_lock.return_value = 'unlocked'
         new_event, state, _ = (
             monitor.get_gnss_status(
                 GnssState.Failure_Nofix, 0))
@@ -242,10 +239,8 @@ class TestGnssMonitorCoverage(unittest.TestCase):
         monitor = self._create_gnss_monitor()
         monitor.holdover_time = 1
         cgu = monitor.gnss_cgu_handler
-        cgu.get_eec_status.return_value = (
-            'unlocked')
-        cgu.get_pps_status.return_value = (
-            'unlocked')
+        cgu.get_gnss_pin_state.return_value = 'disconnected'
+        cgu.get_gnss_pin_lock.return_value = 'unlocked'
         import time
         old_time = time.time() - 100
         new_event, state, _ = (
@@ -265,10 +260,8 @@ class TestGnssMonitorCoverage(unittest.TestCase):
         monitor = self._create_gnss_monitor()
         monitor.holdover_time = 9999
         cgu = monitor.gnss_cgu_handler
-        cgu.get_eec_status.return_value = (
-            'unlocked')
-        cgu.get_pps_status.return_value = (
-            'unlocked')
+        cgu.get_gnss_pin_state.return_value = 'disconnected'
+        cgu.get_gnss_pin_lock.return_value = 'unlocked'
         import datetime
         now = (
             datetime.datetime.utcnow()

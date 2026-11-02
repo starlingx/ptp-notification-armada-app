@@ -100,6 +100,7 @@ class CguHandler:
         self._cgu_path = cgu_path
         self._clock_id = clock_id
         self._pins = DpllPins()
+        self._gnss_pins = {}
         self._dpll = NetlinkDPLL()
         self._is_serial_module = False
 
@@ -403,3 +404,117 @@ class CguHandler:
             str: EEC current pin type
         """
         return self._get_current_pin_type(DeviceType.EEC)
+
+    def refresh_gnss_pins(self):
+        """Refresh the cached GNSS 1PPS reference pin for each DPLL device.
+
+        Takes a SINGLE unfiltered snapshot of the device's input pins and
+        resolves the GNSS 1PPS reference pin for both devices (EEC and PPS)
+        from that one snapshot, caching the result in ``self._gnss_pins``.
+        The gnss_pin accessors then read from this cache without touching
+        netlink, so get_gnss_pin_state() and get_gnss_pin_lock() for a given
+        device return a state/lock pair from the SAME instant -- avoiding a
+        split read that could stitch an inconsistent pair during a failover
+        transition.
+
+        This read is INDEPENDENT of the cached ``self._pins`` set used by the
+        other accessors. ``self._pins`` is filtered to CONNECTED input pins
+        only (and the incremental re-read forces a full re-read as soon as a
+        cached pin stops being CONNECTED), so a GNSS reference that is a
+        standby (SELECTABLE) rather than the actively-selected master never
+        appears there. To observe a healthy GNSS standby, read the input pins
+        without the CONNECTED filter and select the GNSS 1PPS reference pin.
+
+        Callers must invoke this once per read cycle, alongside read_cgu(),
+        before calling get_gnss_pin_state()/get_gnss_pin_lock().
+        """
+        self._gnss_pins = {}
+        if self._dpll is None or self._clock_id is None:
+            return
+        try:
+            input_pins = self._dpll.get_all_pins() \
+                .filter_by_device_clock_id(self._clock_id) \
+                .filter_by_pin_direction(PinDirection.INPUT)
+        except NetlinkException as err:
+            LOG.error(err)
+            return
+        for device_type in (DeviceType.EEC, DeviceType.PPS):
+            pins = input_pins.filter_by_device_type(device_type)
+            self._gnss_pins[device_type] = self._select_gnss_pin(pins)
+
+    @staticmethod
+    def _select_gnss_pin(pins):
+        """Select the GNSS 1PPS reference pin from a set of input pins.
+
+        A DPLL device can expose more than one gnss-type input pin -- e.g.
+        both the 1PPS reference (board label GNSS_1PPS_IN / GNSS-1PPS, which
+        ts2phc disciplines) and a separate 10 MHz input (GNSS_10M_IN). Only
+        the 1PPS pin reflects GNSS time/phase health, so the board-label match
+        is authoritative; the pin-type fallback (for NIC families that do not
+        report the standard label) prefers a present pin (connected, then
+        selectable) over a disconnected one.
+
+        Returns:
+            The GNSS 1PPS input pin object, or None when no GNSS input pin
+            exists in the given set.
+        """
+        type_fallback = None
+        for pin in pins:
+            label = getattr(pin, "pin_board_label", None)
+            # Authoritative: the GNSS 1PPS reference pin by board label.
+            if label in constants.GNSS_PIN_LABELS:
+                return pin
+            # Fallback (label variance across NICs): remember a gnss-type pin,
+            # preferring a present (connected/selectable) one over
+            # disconnected.
+            pin_type = getattr(
+                getattr(pin, "pin_type", None), "value",
+                getattr(pin, "pin_type", None))
+            if pin_type == constants.GNSS_TYPE:
+                state = getattr(
+                    getattr(pin, "pin_state", None), "value",
+                    getattr(pin, "pin_state", None))
+                if type_fallback is None or state in (
+                        constants.GNSS_PIN_STATE_CONNECTED,
+                        constants.GNSS_PIN_STATE_SELECTABLE):
+                    type_fallback = pin
+        return type_fallback
+
+    def get_gnss_pin_state(self, device_type: DeviceType) -> str:
+        """Get the GNSS input pin state for a DPLL device.
+
+        Unlike get_{eec,pps}_current_ref()/_status(), which report the
+        actively-selected (CONNECTED) pin of the device, this reports the
+        GNSS reference pin's own state even when GNSS is a standby
+        (SELECTABLE) rather than the selected master.
+
+        Reads from the per-cycle cache populated by refresh_gnss_pins(); the
+        caller must have called refresh_gnss_pins() for this read cycle.
+
+        Returns:
+            str: the GNSS pin state (e.g. 'connected', 'selectable',
+                 'disconnected') or 'undefined' when there is no GNSS pin.
+        """
+        pin = self._gnss_pins.get(device_type)
+        if pin is None:
+            return 'undefined'
+        state = getattr(pin, "pin_state", None)
+        return getattr(state, "value", state)
+
+    def get_gnss_pin_lock(self, device_type: DeviceType) -> str:
+        """Get the GNSS input pin lock status for a DPLL device.
+
+        Reports the GNSS reference pin's own lock status even when GNSS is a
+        standby (SELECTABLE) pin (see get_gnss_pin_state()). Reads from the
+        same per-cycle cache as get_gnss_pin_state(), so the state/lock pair
+        for a device is consistent (same snapshot).
+
+        Returns:
+            str: the GNSS pin lock status (e.g. 'locked-ho-acq') or
+                 'undefined' when there is no GNSS pin.
+        """
+        pin = self._gnss_pins.get(device_type)
+        if pin is None:
+            return LockStatus.UNDEFINED.value
+        lock = getattr(pin, "lock_status", None)
+        return getattr(lock, "value", lock)

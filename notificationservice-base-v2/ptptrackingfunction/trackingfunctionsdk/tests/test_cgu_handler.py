@@ -278,3 +278,172 @@ class CguHandlerTests(unittest.TestCase):
 
         self.assertEqual(eec_reference, "undefined")
         self.assertEqual(pps_reference, "undefined")
+
+
+class _FakePin:
+    """Minimal pin object exposing the attributes the GNSS accessors read."""
+
+    def __init__(self, pin_type=None, board_label=None, state=None,
+                 lock=None):
+        self.pin_type = pin_type
+        self.pin_board_label = board_label
+        self.pin_state = state
+        self.lock_status = lock
+
+
+class _FakePinSet:
+    """Chainable fake for the pynetlink pin set used by refresh_gnss_pins().
+
+    Each filter returns self; iteration yields the configured pins so the
+    GNSS pin selection can pick the GNSS pin by type / board label.
+    """
+
+    def __init__(self, pins):
+        self._pins = pins
+
+    def filter_by_device_clock_id(self, _clock_id):
+        return self
+
+    def filter_by_pin_direction(self, _direction):
+        return self
+
+    def filter_by_device_type(self, _device_type):
+        return self
+
+    def __iter__(self):
+        return iter(self._pins)
+
+
+class _FakeDpll:
+    def __init__(self, pins):
+        self._pins = pins
+        self.get_all_pins_calls = 0
+
+    def get_all_pins(self):
+        self.get_all_pins_calls += 1
+        return _FakePinSet(self._pins)
+
+
+class CguHandlerGnssPinTests(unittest.TestCase):
+    """get_gnss_pin_state()/get_gnss_pin_lock() report the GNSS reference
+    pin's OWN state+lock -- including a standby (SELECTABLE) GNSS pin -- from
+    a single per-cycle snapshot (refresh_gnss_pins()) that is independent of
+    the CONNECTED-only ``self._pins`` set."""
+
+    def _handler(self, pins):
+        # pylint: disable=protected-access
+        h = CguHandler("path_no_exists", clock_id=5799633565437375000)
+        h._dpll = _FakeDpll(pins)
+        h.refresh_gnss_pins()
+        return h
+
+    def test_gnss_selectable_pin_state_and_lock(self):
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
+        gnss = _FakePin(pin_type="gnss", board_label="GNSS_1PPS_IN",
+                        state="selectable", lock="locked-ho-acq")
+        h = self._handler([gnss])
+        self.assertEqual(h.get_gnss_pin_state(DeviceType.PPS), "selectable")
+        self.assertEqual(h.get_gnss_pin_lock(DeviceType.PPS), "locked-ho-acq")
+
+    def test_gnss_pin_selected_by_board_label(self):
+        # pin_type undefined but board label identifies GNSS (GNR-D variant).
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
+        sdp = _FakePin(pin_type="ext", board_label="ETH01_SDP_TIMESYNC_0",
+                       state="connected", lock="locked-ho-acq")
+        gnss = _FakePin(pin_type="undefined", board_label="GNSS_1PPS_IN",
+                        state="selectable", lock="locked-ho-acq")
+        h = self._handler([sdp, gnss])
+        self.assertEqual(h.get_gnss_pin_state(DeviceType.PPS), "selectable")
+
+    def test_gnss_1pps_wins_over_10m_pin(self):
+        # A DPLL device can expose two gnss-type pins: the 1PPS reference
+        # (GNSS_1PPS_IN) and a separate 10 MHz input (GNSS_10M_IN). The 1PPS
+        # pin (by board label) must be selected even when the 10M pin appears
+        # first and is disconnected -- otherwise a healthy selectable 1PPS
+        # standby is misread as disconnected.
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
+        gnss_10m = _FakePin(pin_type="gnss", board_label="GNSS_10M_IN",
+                            state="disconnected", lock="locked-ho-acq")
+        gnss_1pps = _FakePin(pin_type="gnss", board_label="GNSS_1PPS_IN",
+                             state="selectable", lock="locked-ho-acq")
+        h = self._handler([gnss_10m, gnss_1pps])
+        self.assertEqual(h.get_gnss_pin_state(DeviceType.PPS), "selectable")
+        self.assertEqual(h.get_gnss_pin_lock(DeviceType.PPS), "locked-ho-acq")
+
+    def test_no_gnss_pin_returns_undefined(self):
+        # Only a non-GNSS (backhaul) pin present -> GNSS accessors undefined.
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
+        sdp = _FakePin(pin_type="ext", board_label="ETH01_SDP_TIMESYNC_0",
+                       state="connected", lock="locked-ho-acq")
+        h = self._handler([sdp])
+        self.assertEqual(h.get_gnss_pin_state(DeviceType.PPS), "undefined")
+        self.assertEqual(h.get_gnss_pin_lock(DeviceType.PPS), "undefined")
+
+    def test_enum_valued_attributes_unwrapped(self):
+        # pin_state / lock_status are enums on real HW (.value is the string).
+        import enum
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
+
+        class S(enum.Enum):
+            SELECTABLE = "selectable"
+
+        class L(enum.Enum):
+            LOCKED = "locked-ho-acq"
+
+        class T(enum.Enum):
+            GNSS = "gnss"
+        gnss = _FakePin(pin_type=T.GNSS, board_label="GNSS_1PPS_IN",
+                        state=S.SELECTABLE, lock=L.LOCKED)
+        h = self._handler([gnss])
+        self.assertEqual(h.get_gnss_pin_state(DeviceType.PPS), "selectable")
+        self.assertEqual(h.get_gnss_pin_lock(DeviceType.PPS), "locked-ho-acq")
+
+    def test_no_clock_id_returns_undefined(self):
+        # pylint: disable=protected-access
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
+        h = CguHandler("path_no_exists", clock_id=5799633565437375000)
+        h._dpll = _FakeDpll([_FakePin(pin_type="gnss",
+                                      board_label="GNSS_1PPS_IN",
+                                      state="selectable",
+                                      lock="locked-ho-acq")])
+        h._clock_id = None
+        h.refresh_gnss_pins()
+        self.assertEqual(h.get_gnss_pin_state(DeviceType.PPS), "undefined")
+
+    def test_single_snapshot_per_cycle(self):
+        # One refresh_gnss_pins() must do exactly ONE get_all_pins() dump, and
+        # the two accessors (x2 devices) must read the cache without any
+        # further netlink dump. Guards against the per-accessor-dump
+        # regression (4 extra dumps/cycle).
+        # pylint: disable=protected-access
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
+        gnss = _FakePin(pin_type="gnss", board_label="GNSS_1PPS_IN",
+                        state="selectable", lock="locked-ho-acq")
+        h = CguHandler("path_no_exists", clock_id=5799633565437375000)
+        h._dpll = _FakeDpll([gnss])
+        h.refresh_gnss_pins()
+        self.assertEqual(h._dpll.get_all_pins_calls, 1)
+        h.get_gnss_pin_state(DeviceType.EEC)
+        h.get_gnss_pin_lock(DeviceType.EEC)
+        h.get_gnss_pin_state(DeviceType.PPS)
+        h.get_gnss_pin_lock(DeviceType.PPS)
+        # Still 1 -- accessors read the cache, no extra dumps.
+        self.assertEqual(h._dpll.get_all_pins_calls, 1)
+
+    def test_state_and_lock_from_same_snapshot(self):
+        # state and lock for a device must come from the SAME cached pin
+        # object (same instant), so a later netlink change cannot split the
+        # pair. Mutate the DPLL's pins AFTER the snapshot and confirm the
+        # accessors still report the snapshot's values.
+        # pylint: disable=protected-access
+        from trackingfunctionsdk.common.helpers.cgu_handler import DeviceType
+        gnss = _FakePin(pin_type="gnss", board_label="GNSS_1PPS_IN",
+                        state="selectable", lock="locked-ho-acq")
+        h = self._handler([gnss])
+        # Simulate the HW moving on after the snapshot was taken.
+        h._dpll._pins = [_FakePin(pin_type="gnss",
+                                  board_label="GNSS_1PPS_IN",
+                                  state="disconnected", lock="undefined")]
+        # Accessors read the cached snapshot, not the mutated live state.
+        self.assertEqual(h.get_gnss_pin_state(DeviceType.PPS), "selectable")
+        self.assertEqual(h.get_gnss_pin_lock(DeviceType.PPS), "locked-ho-acq")

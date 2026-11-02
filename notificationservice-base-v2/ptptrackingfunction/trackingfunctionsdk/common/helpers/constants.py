@@ -12,6 +12,7 @@ from enum import Enum
 try:
     from pynetlink import LockStatus
     from pynetlink import PinType
+    from pynetlink import PinState
 except ImportError:
     # Create mock LockStatus for testing environments
     class MockLockStatus:
@@ -24,6 +25,13 @@ except ImportError:
         GNSS = "gnss"
         EXT = "ext"
     PinType = MockPinType
+
+    # Mock PinState mirroring the pynetlink DPLL pin-state enum.
+    class MockPinState(Enum):
+        CONNECTED = "connected"
+        DISCONNECTED = "disconnected"
+        SELECTABLE = "selectable"
+    PinState = MockPinState
 
 # phc states constants
 FREERUN_PHC_STATE = "Freerun"
@@ -73,6 +81,12 @@ DPLL_MGR_CONFIG_GLOB = "dpll-mgr-*.json"
 PIN_TYPE_GNSS = PinType.GNSS.value
 PIN_TYPE_EXT = PinType.EXT.value
 TIME_SOURCE_PIN_TYPES = frozenset({PIN_TYPE_GNSS, PIN_TYPE_EXT})
+# DPLL pin states, derived from the pynetlink PinState enum. A reference pin
+# is "present" (a usable source, active or standby) when CONNECTED (the
+# actively-selected master) or SELECTABLE (a healthy standby); DISCONNECTED
+# means the pin is not a usable source.
+GNSS_PIN_STATE_CONNECTED = PinState.CONNECTED.value
+GNSS_PIN_STATE_SELECTABLE = PinState.SELECTABLE.value
 GNSS_DPLL_0 = "DPLL0"
 GNSS_DPLL_1 = "DPLL1"
 
