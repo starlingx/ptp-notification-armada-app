@@ -111,6 +111,11 @@ ptptrackingv2:
   control_timeout: 2
   device:
     simulated: false
+    # maxPtpIndex: highest /dev/ptpN index that the generic-device-plugin lists
+    # (paths /dev/ptp0../dev/ptp<maxPtpIndex>) when no PTP clock can be found in
+    # the host's /sys/class/ptp at pod start. Normally the plugin lists the
+    # clocks it finds (SR-IOV VF clocks excluded) and this value is not used.
+    maxPtpIndex: 127
     # holdover_seconds: Set to override config file (optional, comment out to disable)
     # holdover_seconds: 15
   gnss:

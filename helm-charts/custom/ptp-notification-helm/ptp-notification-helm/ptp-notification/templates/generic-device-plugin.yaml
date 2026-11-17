@@ -7,22 +7,111 @@
 # /dev/ptp* character devices via the device cgroup allow-list, so the
 # ptptrackingv2 container can run phc_ctl without privileged/SYS_ADMIN.
 #
-# SELF-CONTAINED BY DESIGN: all plugin configuration is inlined in this file,
-# not in values.yaml. This plugin is a transitional, chart-local stand-in for a
-# future central platform device plugin. When that lands, removing the plugin is
-# a matter of deleting THIS FILE alone (and pointing ptptrackingv2.privileged=false
-# consumers at the central resource) — nothing else in the chart depends on it.
+# The list of PTP clocks is built at pod start, not hardcoded. An init container
+# (render-config, below) scans the host's /sys/class/ptp and writes the plugin
+# config to an emptyDir; the plugin reads it with --config. Clock numbers are
+# assigned by the kernel at boot and are not stable, so nothing is persisted:
+# every pod start (reboot, application-apply) sees the current numbering.
 #
-# The --device config advertises a single bundled group: one allocatable unit
-# (devic.es/ptp: 1) that injects all present /dev/ptp* devices at once. Every
-# path is optional so the group registers regardless of how many PTP clocks a
-# node has (ptp0..ptp9 covers nodes with many clocks).
+# The config lists every /dev/ptpN whose clock is not an SR-IOV VF clock (a VF
+# PCI device has a 'physfn' link). If no clock is found within 30 seconds it
+# lists /dev/ptp0../dev/ptp<maxPtpIndex> (default 127, see values.yaml).
+#
+# The config advertises a single bundled group: one allocatable unit
+# (devic.es/ptp: 1) that injects all listed /dev/ptp* devices at once. Every
+# path is optional so the group registers regardless of how many of the listed
+# clocks a node has.
+#
+# The list is read once at pod start, and devices are injected into a consumer
+# container only when it is created. After NIC hotplug or a PF driver reload,
+# run 'system application-remove' and 'system application-apply' for this app,
+# which recreates the plugin and consumer pods together. PTP configuration
+# changes alone do not need this.
+#
+# The init container reuses the locationservice-base image (a Debian image with
+# sh and coreutils) that the notification DaemonSet already runs on the same
+# nodes, so no extra image is pulled or added to the app image list.
 #
 # Rendered only in the unprivileged path: the plugin exists solely to give the
 # unprivileged ptptrackingv2 container /dev/ptp* access. When
 # ptptrackingv2.privileged=true the legacy privileged path is used and the
 # plugin is unused, so the whole DaemonSet is gated on privileged=false below.
+{{- /* Script run by the render-config init container. Defined outside the
+     privileged gate; used by the ConfigMap and, through its checksum, by the
+     DaemonSet pod template so a script change rolls the plugin pods. */ -}}
+{{- define "ptp-notification.gdp-render-script" -}}
+#!/bin/sh
+# Render the generic-device-plugin config from the PTP clocks found in sysfs.
+#
+# usage: render-config.sh OUT [PTP_SYSFS_DIR] [MAX_INDEX] [WAIT_SECONDS]
+#
+# Lists every /dev/ptpN whose clock is not an SR-IOV VF clock (a VF PCI device
+# has a 'physfn' link). If no clock is found within WAIT_SECONDS, lists
+# /dev/ptp0../dev/ptp<MAX_INDEX> instead.
+out="$1"
+ptp_dir="${2:-/hostsys/class/ptp}"
+max_index="${3:-127}"
+wait_seconds="${4:-30}"
+
+if [ -z "$out" ]; then
+  echo "usage: $0 OUT [PTP_SYSFS_DIR] [MAX_INDEX] [WAIT_SECONDS]" >&2
+  exit 2
+fi
+
+scan() {
+  for d in "$ptp_dir"/ptp[0-9]*; do
+    [ -e "$d" ] || continue
+    name="${d##*/}"
+    idx="${name#ptp}"
+    case "$idx" in
+      ''|*[!0-9]*) continue ;;
+    esac
+    dev="$(readlink -f "$d/device" 2>/dev/null)"
+    if [ -n "$dev" ] && [ -e "$dev/physfn" ]; then
+      continue
+    fi
+    echo "$idx"
+  done | sort -n
+}
+
+waited=0
+indexes="$(scan)"
+while [ -z "$indexes" ] && [ "$waited" -lt "$wait_seconds" ]; do
+  sleep 2
+  waited=$((waited + 2))
+  indexes="$(scan)"
+done
+
+if [ -z "$indexes" ]; then
+  echo "no PTP clock found in $ptp_dir, listing ptp0..ptp$max_index"
+  indexes="$(seq 0 "$max_index")"
+else
+  echo "PTP clocks found: $(echo $indexes)"
+fi
+
+tmp="$out.tmp"
+{
+  echo "device:"
+  echo "  - name: ptp"
+  echo "    groups:"
+  echo "      - count: 2"
+  echo "        paths:"
+  for i in $indexes; do
+    echo "          - path: /dev/ptp$i"
+    echo "            optional: true"
+  done
+} > "$tmp" && mv "$tmp" "$out"
+{{- end }}
 {{- if not .Values.ptptrackingv2.privileged }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-generic-device-plugin-scripts
+  namespace: {{ .Values.global.namespace }}
+data:
+  render-config.sh: |
+{{ include "ptp-notification.gdp-render-script" . | indent 4 }}
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -43,6 +132,10 @@ spec:
       app.kubernetes.io/instance: {{ .Chart.Name }}
   template:
     metadata:
+      annotations:
+        # Changes when render-config.sh changes, so the plugin pods are
+        # recreated and the init container runs the new script.
+        checksum/scripts: {{ include "ptp-notification.gdp-render-script" . | sha256sum }}
       labels:
         app.kubernetes.io/name: generic-device-plugin
         app.kubernetes.io/instance: {{ .Chart.Name }}
@@ -68,6 +161,47 @@ spec:
       - key: "node-role.kubernetes.io/control-plane"
         operator: "Exists"
         effect: "NoSchedule"
+      imagePullSecrets:
+      - name: {{ .Values.ptptrackingv2.imagePullSecrets }}
+      initContainers:
+      # Short-lived: scans /sys/class/ptp once, writes the plugin config to the
+      # shared emptyDir and exits. No memory limit on purpose (see the plugin
+      # container note below); only cpu is capped.
+      - name: render-config
+        image: "{{ .Values.location.image.repository }}:{{ .Values.location.image.tag }}"
+        imagePullPolicy: {{ .Values.location.image.pullPolicy }}
+        command:
+        - sh
+        - /scripts/render-config.sh
+        - /gdp/config.yaml
+        - /hostsys/class/ptp
+        - "{{ .Values.ptptrackingv2.device.maxPtpIndex | default 127 }}"
+        - "30"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: gdp-scripts
+          mountPath: /scripts
+          readOnly: true
+        - name: gdp-config
+          mountPath: /gdp
+        - name: hostsys
+          mountPath: /hostsys
+          readOnly: true
       containers:
       - name: generic-device-plugin
         image: "docker.io/squat/generic-device-plugin:f7c3291"
@@ -75,39 +209,16 @@ spec:
         args:
         - --domain
         - "devic.es"
-        - --device
-        - |
-          name: ptp
-          groups:
-              # count advertises this same bundled group as multiple allocatable
-              # units (node shows devic.es/ptp: <count>). The PTP clocks are
-              # read-only (phc_ctl cmp), so multiple consumers can safely hold
-              # their own allocation of the full bundle concurrently. count must
-              # be >= the number of pods per node that request devic.es/ptp.
-              # Set to 2 for the two consumers: ptp-notification + temporal
-              # vortex. Raise it if more concurrent consumers are added.
-            - count: 2
-              paths:
-                - path: /dev/ptp0
-                  optional: true
-                - path: /dev/ptp1
-                  optional: true
-                - path: /dev/ptp2
-                  optional: true
-                - path: /dev/ptp3
-                  optional: true
-                - path: /dev/ptp4
-                  optional: true
-                - path: /dev/ptp5
-                  optional: true
-                - path: /dev/ptp6
-                  optional: true
-                - path: /dev/ptp7
-                  optional: true
-                - path: /dev/ptp8
-                  optional: true
-                - path: /dev/ptp9
-                  optional: true
+        # Device list rendered by the render-config init container.
+        # count (2) advertises the bundled group as multiple allocatable
+        # units (node shows devic.es/ptp: 2). The PTP clocks are read-only
+        # (phc_ctl cmp), so multiple consumers can safely hold their own
+        # allocation of the full bundle concurrently. count must be >= the
+        # number of pods per node that request devic.es/ptp (ptp-notification
+        # + temporal vortex). Raise it in render-config.sh if more concurrent
+        # consumers are added.
+        - --config
+        - /gdp/config.yaml
         # No memory LIMIT by design: a prior 20Mi cgroup cap OOM-killed the
         # runc:[2:INIT] bootstrap (CONSTRAINT_MEMCG) before the plugin binary
         # ever exec'd, and only on nodes with many /dev/ptp* clocks (the
@@ -126,7 +237,7 @@ spec:
           limits:
             cpu: 50m
         # Device discovery: the plugin reads the kubelet device-plugin socket
-        # dir and enumerates/stats /dev/ptp* via the hostPath mounts below. It
+        # dir and enumerates/stats the listed /dev/ptp* via the hostPath mounts below. It
         # never opens the PTP clocks (consumer pods do that), but it must stat
         # the device nodes, which are root:root mode 0600 on the host.
         #
@@ -153,6 +264,9 @@ spec:
           mountPath: /var/lib/kubelet/device-plugins
         - name: dev
           mountPath: /dev
+        - name: gdp-config
+          mountPath: /gdp
+          readOnly: true
       volumes:
       - name: device-plugin
         hostPath:
@@ -160,6 +274,18 @@ spec:
       - name: dev
         hostPath:
           path: /dev
+      # Written by the render-config init container, read by the plugin.
+      - name: gdp-config
+        emptyDir: {}
+      - name: gdp-scripts
+        configMap:
+          name: {{ .Chart.Name }}-generic-device-plugin-scripts
+          defaultMode: 0555
+      # Read-only host /sys, mounted in the init container only.
+      - name: hostsys
+        hostPath:
+          path: /sys
+          type: Directory
   updateStrategy:
     type: RollingUpdate
 {{- end }}
