@@ -140,11 +140,43 @@ class OsClockMonitor:
                         self.phc2sys_instance)
             return None
 
+    def _resolve_ha_ro_socket(self):
+        """Resolve the phc2sys HA read-only socket for status queries.
+
+        The HA control socket (ha_phc2sys_com_socket) is not accessible to
+        the non-root container, so query the read-only socket instead.
+        Order of preference:
+          1. ha_phc2sys_com_ro_socket from the phc2sys config [global].
+          2. "<ha_phc2sys_com_socket>ro" if that socket file exists.
+          3. ha_phc2sys_com_socket itself.
+        """
+        com_socket = self.phc2sys_com_socket
+        if self.config is not None and self.config.has_section('global'):
+            ro_socket = self.config['global'].get(
+                'ha_phc2sys_com_ro_socket', None)
+            if ro_socket:
+                LOG.debug("HA read-only socket %s (from %s)",
+                          ro_socket, self.phc2sys_config)
+                return ro_socket
+            if com_socket is None:
+                com_socket = self.config['global'].get(
+                    'ha_phc2sys_com_socket', None)
+
+        if com_socket:
+            default_ro_socket = com_socket + "ro"
+            if os.path.exists(default_ro_socket):
+                LOG.debug("HA read-only socket %s (default)",
+                          default_ro_socket)
+                return default_ro_socket
+
+        return com_socket
+
     def set_phc2sys_ha_interface_and_phc(self):
+        ha_socket = self._resolve_ha_ro_socket()
         self.valid_phc_interfaces = self.query_phc2sys_socket(
-            'valid sources', self.phc2sys_com_socket)
+            'valid sources', ha_socket)
         selected_phc_interface = self.query_phc2sys_socket(
-            'clock source', self.phc2sys_com_socket)
+            'clock source', ha_socket)
         if str(self.valid_phc_interfaces) == 'None':
             LOG.debug(
                 "No valid PHC device found for HA phc2sys selection."
